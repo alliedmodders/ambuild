@@ -33,3 +33,15 @@ def MakePath(*list):
 		path = path.replace('\\\\', '\\')
 	return path
 
+def RemoveFolderAndContents(path):
+	for file in os.listdir(path):
+		subpath = os.path.join(path, file)
+		try:
+			if os.path.isfile(subpath) or os.path.islink(subpath):
+				os.unlink(subpath)
+			elif os.path.isdir(subpath):
+				RemoveFolderAndContents(subpath)
+		except:
+			pass
+	os.rmdir(path)
+

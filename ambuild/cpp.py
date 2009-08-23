@@ -55,7 +55,7 @@ class Compiler:
 
 	def TryVerifyCompiler(self, name, mode):
 		if osutil.IsWindows() and self.VerifyCompiler(name, mode, 'msvc'):
-				return True
+			return True
 		return self.VerifyCompiler(name, mode, 'gcc')
 				
 	def VerifyCompiler(self, name, mode, vendor):
