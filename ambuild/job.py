@@ -1,5 +1,5 @@
 # vim: set ts=2 sw=2 tw=99 noet: 
-from command import Command
+from ambuild.command import Command
 
 class TaskGroup:
 	def __init__(self, cmds, mustBeSerial = True):

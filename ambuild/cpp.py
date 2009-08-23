@@ -2,14 +2,14 @@
 import subprocess
 import os
 import sys
-import osutil
+import ambuild.osutil as osutil
 import re
-import command
+import ambuild.command as command
 
 class Compiler:
 	def Clone(self):
 		c = Compiler()
-		self.env = { }
+		c.env = { }
 		for i in self.env:
 			c.env[i] = self.env[i]
 		c.cc = self.cc

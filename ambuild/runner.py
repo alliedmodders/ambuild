@@ -1,10 +1,10 @@
 # vim: set ts=2 sw=2 tw=99 noet:
 import sys
 import os
-import osutil
-import job
-import cache
-import cpp
+import ambuild.osutil as osutil
+import ambuild.job as job
+import ambuild.cache as cache
+import ambuild.cpp as cpp
 from optparse import OptionParser
 
 def _execfile(file, globals, locals):
@@ -13,16 +13,13 @@ def _execfile(file, globals, locals):
 class Runner:
 	def __init__(self):
 		self.jobs = []
+		self.options = OptionParser()
 
 	def AddJob(self, job):
 		self.jobs.append(job)
 
 	def Build(self):
 		self.mode = 'build'
-		parser = OptionParser()
-		(options, args) = parser.parse_args()
-#		if len(args) == 0:
-#			raise Exception('usage: ambuild.py')
 		self.outputFolder = os.path.abspath(os.getcwd())
 		cacheFolder = os.path.join(self.outputFolder, '.ambuild')
 		if not os.path.isdir(cacheFolder):
@@ -33,7 +30,7 @@ class Runner:
 		self.cache = cache.Cache(cacheFile)
 		self.cache.LoadCache()
 		self.sourceFolder = self.cache['sourceFolder']
-		self.LoadFile(os.path.join(self.sourceFolder, 'ambuild'))
+		self.LoadFile(os.path.join(self.sourceFolder, 'AMBuildScript'))
 		for job in self.jobs:
 			print('Running job: {0}...'.format(job.name))
 			if job.workFolder != None:
@@ -46,13 +43,12 @@ class Runner:
 				osutil.PopFolder()
 			print('Completed job: {0}.'.format(job.name))
 
-	def Configure(self):
+	def Configure(self, folder):
 		self.mode = 'config'
-		parser = OptionParser()
-		(options, args) = parser.parse_args()
-		if len(args) == 0:
-			raise Exception('usage: amconfig.py <folder>')
-		self.sourceFolder = os.path.abspath(args[0])
+		(options, args) = self.options.parse_args()
+		self.options = options
+		self.args = args
+		self.sourceFolder = os.path.abspath(folder)
 		self.outputFolder = os.path.abspath(os.getcwd())
 		cacheFolder = os.path.join(self.outputFolder, '.ambuild')
 		if os.path.isdir(cacheFolder):
@@ -62,10 +58,24 @@ class Runner:
 			raise Exception('could not create .ambuild folder')
 		self.cache = cache.Cache(os.path.join(cacheFolder, 'cache'))
 		self.cache.CacheVariable('sourceFolder', self.sourceFolder)
-		self.LoadFile(os.path.join(self.sourceFolder, 'ambuild'))
+		self.LoadFile(os.path.join(self.sourceFolder, 'AMBuildScript'))
 		self.cache.WriteCache()
+		f = open(os.path.join(self.outputFolder, 'build.py'), 'w')
+		f.write("""
+# vim: set ts=2 sw=2 tw=99 noet:
+import sys
+
+sys.path.append('/home/dvander/sourcemod/ambuild')
+
+import ambuild.runner as runner
+
+run = runner.Runner()
+run.Build()
+		""")
+
 	def Include(self, path, xtras = None):
 		self.LoadFile(os.path.join(self.sourceFolder, path), xtras)
+
 	def LoadFile(self, path, xtras = None):
 		globals = {
 			'AMBuild': self,
