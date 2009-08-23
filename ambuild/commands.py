@@ -2,10 +2,10 @@
 import subprocess
 
 class Command:
-  def __init__(self):
+	def __init__(self):
 		self.stderr = None
 		self.stdout = None
-    self.failureIsFatal = True
+		self.failureIsFatal = True
 	def run(self, master, job):
 		pass
 
@@ -22,15 +22,15 @@ class ShellCommand(Command):
 		self.failureIsFatal = failureIsFatal
 	def run(self, master, job):
 		builder.PrintOut(self.cmdstring)
-		args = { 'args':   self.cmdstring,
+		args = { 'args':	 self.cmdstring,
 		         'stdout': subprocess.PIPE,
 		         'stderr': subprocess.PIPE,
-		         'shell':  True }
+			       'shell':  True }
 		p = subprocess.Popen(**args)
 		stdout, stderr = p.communicate()
 		self.stdout = stdout.decode()
 		self.stderr = stderr.decode()
-		if p.returncode != 0
+		if p.returncode != 0:
 			raise CommandException('terminated with non-zero exitcode {0}'.format(p.returncode))
 
 class DirectCommand(Command):
@@ -40,15 +40,15 @@ class DirectCommand(Command):
 		self.argv = argv
 		self.failureIsFatal = failureIsFatal
 	def run(self, master, job):
-		builder.printOut(self.exe + ' ' + ' '.join(['"' + i '"' for i in argv]))
-		args = { 'args':   self.argv,
-		         'stdout': subprocess.PIPE,
-		         'stdout': subprocess.PIPE,
-	           'shell':  False }
+		builder.printOut(self.exe + ' ' + ' '.join(['"' + i + '"' for i in argv]))
+		args = { 'args':	 self.argv,
+			       'stdout': subprocess.PIPE,
+			       'stdout': subprocess.PIPE,
+		         'shell':  False }
 		p = subprocess.Popen(**args)
 		stdout, stderr = p.communicate()
 		self.stdout = stdout.decode()
 		self.stderr = stderr.decode()
-		if p.returncode != 0
+		if p.returncode != 0:
 			raise CommandException('terminated with non-zero exitcode {0}'.format(p.returncode))
 

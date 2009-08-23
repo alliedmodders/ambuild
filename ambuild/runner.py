@@ -2,7 +2,13 @@
 import sys
 import os
 import osutil
+import job
+import cache
+import cpp
 from optparse import OptionParser
+
+def _execfile(file, globals, locals):
+	exec(compile(open(file).read(), file, 'exec'), globals, locals)
 
 class Runner:
 	def Configure(self):
@@ -13,19 +19,24 @@ class Runner:
 			raise Exception('usage: amconfig.py <folder>')
 		self.sourceFolder = os.path.abspath(args[0])
 		self.outputFolder = os.path.abspath(os.getcwd())
-		cache = os.path.join(self.outputFolder, '.ambuild')
-		if os.path.isdir(cache):
-			osutil.RemoveFolderAndContents(cache)
-		os.mkdir(cache)
-		if not os.path.isdir(cache):
+		cacheFolder = os.path.join(self.outputFolder, '.ambuild')
+		if os.path.isdir(cacheFolder):
+			osutil.RemoveFolderAndContents(cacheFolder)
+		os.mkdir(cacheFolder)
+		if not os.path.isdir(cacheFolder):
 			raise Exception('could not create .ambuild folder')
+		self.cache = cache.Cache(os.path.join(cacheFolder, 'cache'))
 		self.LoadFile(os.path.join(self.sourceFolder, 'ambuild'))
+		self.cache.WriteCache()
 	def Include(self, path, xtras = None):
 		self.LoadFile(os.path.join(self.sourceFolder, path), xtras)
 	def LoadFile(self, path, xtras = None):
 		globals = {
-			'AMBuild': self
+			'AMBuild': self,
+			'Job':     job.Job,
+			'Cpp':     cpp
 		}
 		if xtras != None:
 			globals.update(xtras)
-		execfile(path, globals)
+		_execfile(path, globals, {})
+

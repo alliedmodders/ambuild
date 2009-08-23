@@ -6,9 +6,25 @@ import osutil
 import re
 
 class Compiler:
-	def __init__(self):
+	def __init__(self, name, runner):
 		self.env = { }
-		self.Setup()
+		if runner.mode == 'config':
+			osutil.PushFolder(os.path.join(runner.outputFolder, '.ambuild'))
+			try:
+				self.Setup()
+				self.DetectCCompiler()
+				self.DetectCxxCompiler()
+				osutil.PopFolder()
+			except Exception as e:
+				osutil.PopFolder()
+				raise e
+			runner.cache.CacheVariable(name + '_env', self.env)
+			runner.cache.CacheVariable(name + '_cc', self.cc)
+			runner.cache.CacheVariable(name + '_cxx', self.cxx)
+		else:
+			self.env = runner.cache[name + '_env']
+			self.env = runner.cache[name + '_cc']
+			self.env = runner.cache[name + '_cxx']
 
 	def Setup(self):
 		for var in ['CFLAGS', 'CPPFLAGS', 'CXXFLAGS', 'LDFLAGS', 'EXEFLAGS']:
@@ -44,7 +60,6 @@ class Compiler:
 			if self.TryVerifyCompiler(self.env['CXX'], 'cxx'):
 				return True
 		else:
-
 			list = ['g++', 'c++', 'icc'];
 			if osutil.IsWindows():
 				list[0:0] = ['cl']

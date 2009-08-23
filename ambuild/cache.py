@@ -1,27 +1,26 @@
 # vim: set ts=2 sw=2 tw=99 noet:
 import os
-import cPickle as pickle
+import pickle
 
 class Cache:
-	def __init__(self):
+	def __init__(self, path):
 		self.vars = { }
-	def Initialize(self):
-		os.mkdir('.ambuild')
+		self.path = path
 	def CacheVariable(self, name, value):
 		self.vars[name] = value
 	def WriteCache(self):
-		f = open(osutil.MakePath('.ambuild', 'cache'), 'w')
+		f = open(self.path, 'wb')
 		try:
-			pickle.dump(self.vars)
-		except(Exception e):
+			pickle.dump(self.vars, f)
+		except Exception as e:
 			f.close()
 			raise e
 		f.close
 	def LoadCache(self):
-		f = open(osutil.MakePath('.ambuild', 'cache'), 'r')
+		f = open(self.path, 'r')
 		try:
 			self.vars = pickle.load(f)
-		except(Exception e):
+		except Exception as e:
 			f.close()
 			raise e
 		f.close()

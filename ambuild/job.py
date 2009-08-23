@@ -12,7 +12,7 @@ class Job:
 		self.name = name
 		if workfolder == None:
 			self.workfolder = name
-		else
+		else:
 			self.workfolder = workfolder
 	def AddCommand(self, command):
 		if not isinstance(command, Command):

@@ -45,3 +45,11 @@ def RemoveFolderAndContents(path):
 			pass
 	os.rmdir(path)
 
+Folders = []
+def PushFolder(path):
+	Folders.append(os.path.abspath(os.getcwd()))
+	os.chdir(path)
+
+def PopFolder():
+	os.chdir(Folders.pop())
+
