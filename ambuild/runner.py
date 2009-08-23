@@ -11,6 +11,12 @@ def _execfile(file, globals, locals):
 	exec(compile(open(file).read(), file, 'exec'), globals, locals)
 
 class Runner:
+	def __init__(self):
+		self.jobs = []
+
+	def AddJob(self, job):
+		self.jobs.append(job)
+
 	def Build(self):
 		self.mode = 'build'
 		parser = OptionParser()
@@ -28,6 +34,18 @@ class Runner:
 		self.cache.LoadCache()
 		self.sourceFolder = self.cache['sourceFolder']
 		self.LoadFile(os.path.join(self.sourceFolder, 'ambuild'))
+		for job in self.jobs:
+			print('Running job: {0}...'.format(job.name))
+			if job.workFolder != None:
+				workFolder = os.path.join(self.outputFolder, job.workFolder)
+				if not os.path.isdir(workFolder):
+					os.makedirs(workFolder)
+				osutil.PushFolder(workFolder)
+			job.run(self)
+			if job.workFolder != None:
+				osutil.PopFolder()
+			print('Completed job: {0}.'.format(job.name))
+
 	def Configure(self):
 		self.mode = 'config'
 		parser = OptionParser()

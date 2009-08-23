@@ -4,9 +4,10 @@ import os
 import sys
 import osutil
 import re
+import command
 
 class Compiler:
-	def __init__(self, name, runner):
+	def FromConfig(self, name, runner):
 		self.env = { }
 		if runner.mode == 'config':
 			osutil.PushFolder(os.path.join(runner.outputFolder, '.ambuild'))
@@ -23,8 +24,8 @@ class Compiler:
 			runner.cache.CacheVariable(name + '_cxx', self.cxx)
 		else:
 			self.env = runner.cache[name + '_env']
-			self.env = runner.cache[name + '_cc']
-			self.env = runner.cache[name + '_cxx']
+			self.cc = runner.cache[name + '_cc']
+			self.cxx = runner.cache[name + '_cxx']
 
 	def Setup(self):
 		for var in ['CFLAGS', 'CPPFLAGS', 'CXXFLAGS', 'LDFLAGS', 'EXEFLAGS']:
@@ -149,10 +150,44 @@ int main()
 		print('found {0} version {1}'.format(vendor, version))
 		return True
 
-class CppBuilder:
-	def __init__(self):
-		pass
+	def HasProp(self, item):
+		return item in self.env
 
-class CompileCommand:
-	def __init__(self):
-		Command.__init__(self)
+	def __getitem__(self, key):
+		return self.env[key]
+
+class CompileCommand(command.Command):
+	def __init__(self, compiler, sourceFile):
+		command.Command.__init__(self)
+		self.sourceFile = sourceFile
+		self.compiler = compiler
+
+	def run(self, master, job):
+		root, ext = os.path.splitext(self.sourceFile)
+		compiler = self.compiler
+		if ext == '.c':
+			info = compiler.cc
+			args = [info['command']]
+			if compiler.HasProp('CFLAGS'):
+				args.extend(compiler['CFLAGS'])
+		else:
+			info = compiler.cxx
+			args = [info['command']]
+			if compiler.HasProp('CFLAGS'):
+				args.extend(compiler['CFLAGS'])
+			if compiler.HasProp('CXXFLAGS'):
+				args.extend(compiler['CXXFLAGS'])
+		root = root.replace('/', '_')
+		root = root.replace('\\', '_')
+		root = root + '.o'
+		if info['vendor'] == 'icc' or info['vendor'] == 'gcc' or info['vendor'] == 'tendra':
+			args.extend(['-c', self.sourceFile, '-o', root])
+		elif info['vendor'] == 'msvc':
+			args.extend(['/c', self.sourceFile, '/Fo' + root])
+		print(' '.join(args))
+		p = osutil.CreateProcess(args)
+		if osutil.WaitForProcess(p) != 0:
+			print(p.stdoutText)
+			print(p.stderrText)
+			raise Exception('compilation failed with return code: {0}', p.returncode)
+
