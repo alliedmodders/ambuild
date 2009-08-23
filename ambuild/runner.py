@@ -11,6 +11,23 @@ def _execfile(file, globals, locals):
 	exec(compile(open(file).read(), file, 'exec'), globals, locals)
 
 class Runner:
+	def Build(self):
+		self.mode = 'build'
+		parser = OptionParser()
+		(options, args) = parser.parse_args()
+#		if len(args) == 0:
+#			raise Exception('usage: ambuild.py')
+		self.outputFolder = os.path.abspath(os.getcwd())
+		cacheFolder = os.path.join(self.outputFolder, '.ambuild')
+		if not os.path.isdir(cacheFolder):
+			raise Exception('could not find .ambuild folder')
+		cacheFile = os.path.join(cacheFolder, 'cache')
+		if not os.path.isfile(cacheFile):
+			raise Exception('could not find .ambuild cache file')
+		self.cache = cache.Cache(cacheFile)
+		self.cache.LoadCache()
+		self.sourceFolder = self.cache['sourceFolder']
+		self.LoadFile(os.path.join(self.sourceFolder, 'ambuild'))
 	def Configure(self):
 		self.mode = 'config'
 		parser = OptionParser()
@@ -26,6 +43,7 @@ class Runner:
 		if not os.path.isdir(cacheFolder):
 			raise Exception('could not create .ambuild folder')
 		self.cache = cache.Cache(os.path.join(cacheFolder, 'cache'))
+		self.cache.CacheVariable('sourceFolder', self.sourceFolder)
 		self.LoadFile(os.path.join(self.sourceFolder, 'ambuild'))
 		self.cache.WriteCache()
 	def Include(self, path, xtras = None):
