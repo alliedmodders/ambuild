@@ -15,6 +15,12 @@ class Runner:
 		self.jobs = []
 		self.options = OptionParser()
 
+	def IsWindows(self):
+		return osutil.IsWindows()
+
+	def PrintOut(self, text):
+		print(text)
+
 	def AddJob(self, job):
 		self.jobs.append(job)
 

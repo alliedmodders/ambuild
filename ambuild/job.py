@@ -25,5 +25,10 @@ class Job:
 	def run(self, master):
 		for group in self.tasks:
 			for task in group.cmds:
-				task.run(master, self)
+				try:
+					task.run(master, self)
+					task.spew(master)
+				except Exception as e:
+					task.spew(master)
+					raise e
 

@@ -9,6 +9,14 @@ def IsWindows():
 def IsUnixy():
 	return sys.platform[0:5] == 'linux' or sys.platform == 'darwin'
 
+def SharedLibSuffix():
+	if IsWindows():
+		return '.dll'
+	elif sys.platform == 'darwin':
+		return '.dylib'
+	else:
+		return '.so'
+
 def WaitForProcess(process):
 	out, err = process.communicate()
 	process.stdoutText = out.decode()

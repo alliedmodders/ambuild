@@ -175,38 +175,65 @@ int main()
 	def __getitem__(self, key):
 		return self.env[key]
 
-class CompileCommand(command.Command):
-	def __init__(self, compiler, sourceFile):
-		command.Command.__init__(self)
-		self.sourceFile = sourceFile
+class LibraryBuilder:
+	def __init__(self, binary, runner, compiler):
+		self.sourceFiles = []
+		self.objFiles = []
+		self.binary = binary
+		self.runner = runner
 		self.compiler = compiler
+		self.hadCxxFiles = False
 
-	def run(self, master, job):
-		root, ext = os.path.splitext(self.sourceFile)
+	def AddSourceFiles(self, folder, files):
+		for file in files:
+			sourceFile = os.path.join(folder, file)
+			self.AddSourceFile(sourceFile)
+
+	def SendToJob(self, job):
+		job.AddCommandGroup(self.sourceFiles, False)
+		if self.hadCxxFiles:
+			cc = self.compiler.cxx
+		else:
+			cc = self.compiler.cc
+		args = [cc['command']]
+		args.extend([i for i in self.objFiles])
+		if cc['vendor'] in ['gcc', 'icc', 'tendra']:
+			args.extend(['-shared', '-o', self.binary + osutil.SharedLibSuffix()])
+		job.AddCommand(command.DirectCommand(args))
+
+	def AddSourceFile(self, file):
+		fullFile = os.path.join(self.runner.sourceFolder, file)
+		root, ext = os.path.splitext(fullFile)
 		compiler = self.compiler
+
 		if ext == '.c':
 			info = compiler.cc
-			args = [info['command']]
-			if compiler.HasProp('CFLAGS'):
-				args.extend(compiler['CFLAGS'])
 		else:
 			info = compiler.cxx
-			args = [info['command']]
-			if compiler.HasProp('CFLAGS'):
-				args.extend(compiler['CFLAGS'])
+			self.hadCxxFiles = True
+
+		args = [info['command']]
+
+		if compiler.HasProp('CFLAGS'):
+			args.extend(compiler['CFLAGS'])
+		if compiler.HasProp('CDEFINES'):
+			args.extend(['-D' + define for define in compiler['CDEFINES']])
+
+		if ext != '.c':
 			if compiler.HasProp('CXXFLAGS'):
 				args.extend(compiler['CXXFLAGS'])
-		root = root.replace('/', '_')
-		root = root.replace('\\', '_')
-		root = root + '.o'
+			if compiler.HasProp('CXXINCLUDES'):
+				args.extend(['-I' + include for include in compiler['CXXINCLUDES']])
+
+		objFile = os.path.splitext(file)[0]
+		objFile = objFile.replace('/', '_')
+		objFile = objFile.replace('\\', '_')
+		objFile = objFile.replace('.', '_')
+		objFile = objFile + '.o'
+		self.objFiles.append(objFile)
 		if info['vendor'] == 'icc' or info['vendor'] == 'gcc' or info['vendor'] == 'tendra':
-			args.extend(['-c', self.sourceFile, '-o', root])
+			args.extend(['-c', fullFile, '-o', objFile])
 		elif info['vendor'] == 'msvc':
-			args.extend(['/c', self.sourceFile, '/Fo' + root])
-		print(' '.join(args))
-		p = osutil.CreateProcess(args)
-		if osutil.WaitForProcess(p) != 0:
-			print(p.stdoutText)
-			print(p.stderrText)
-			raise Exception('compilation failed with return code: {0}'.format(p.returncode))
+			args.extend(['/c', fullFile, '/Fo' + objFile])
+		self.sourceFiles.append(command.DirectCommand(args))
 
