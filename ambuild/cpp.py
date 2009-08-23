@@ -7,6 +7,15 @@ import re
 import command
 
 class Compiler:
+	def Clone(self):
+		c = Compiler()
+		self.env = { }
+		for i in self.env:
+			c.env[i] = self.env[i]
+		c.cc = self.cc
+		c.cxx = self.cxx
+		return c
+
 	def FromConfig(self, name, runner):
 		self.env = { }
 		if runner.mode == 'config':
@@ -189,5 +198,5 @@ class CompileCommand(command.Command):
 		if osutil.WaitForProcess(p) != 0:
 			print(p.stdoutText)
 			print(p.stderrText)
-			raise Exception('compilation failed with return code: {0}', p.returncode)
+			raise Exception('compilation failed with return code: {0}'.format(p.returncode))
 
