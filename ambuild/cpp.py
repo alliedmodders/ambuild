@@ -7,6 +7,9 @@ import re
 import ambuild.command as command
 
 class Compiler:
+	def __init__(self):
+		self.env = { }
+
 	def Clone(self):
 		c = Compiler()
 		c.env = { }
@@ -16,25 +19,26 @@ class Compiler:
 		c.cxx = self.cxx
 		return c
 
-	def FromConfig(self, name, runner):
-		self.env = { }
-		if runner.mode == 'config':
-			osutil.PushFolder(os.path.join(runner.outputFolder, '.ambuild'))
-			try:
-				self.Setup()
-				self.DetectCCompiler()
-				self.DetectCxxCompiler()
-				osutil.PopFolder()
-			except Exception as e:
-				osutil.PopFolder()
-				raise e
-			runner.cache.CacheVariable(name + '_env', self.env)
-			runner.cache.CacheVariable(name + '_cc', self.cc)
-			runner.cache.CacheVariable(name + '_cxx', self.cxx)
-		else:
-			self.env = runner.cache[name + '_env']
-			self.cc = runner.cache[name + '_cc']
-			self.cxx = runner.cache[name + '_cxx']
+	def DetectAll(self, runner):
+		osutil.PushFolder(os.path.join(runner.outputFolder, '.ambuild'))
+		try:
+			self.Setup()
+			self.DetectCCompiler()
+			self.DetectCxxCompiler()
+			osutil.PopFolder()
+		except Exception as e:
+			osutil.PopFolder()
+			raise e
+
+	def ToConfig(self, runner, name):
+		runner.cache.CacheVariable(name + '_env', self.env)
+		runner.cache.CacheVariable(name + '_cc', self.cc)
+		runner.cache.CacheVariable(name + '_cxx', self.cxx)
+
+	def FromConfig(self, runner, name):
+		self.env = runner.cache[name + '_env']
+		self.cc = runner.cache[name + '_cc']
+		self.cxx = runner.cache[name + '_cxx']
 
 	def Setup(self):
 		for var in ['CFLAGS', 'CPPFLAGS', 'CXXFLAGS', 'LDFLAGS', 'EXEFLAGS']:
@@ -51,6 +55,12 @@ class Compiler:
 		if not key in os.environ:
 			return
 		self.env[key] = os.environ[key]
+
+	def AddToListVar(self, key, item):
+		if not key in self.env:
+			self.env[key] = [item]
+		else:
+			self.env[key].append(item)
 
 	def DetectCCompiler(self):
 		if 'CC' in self.env:
