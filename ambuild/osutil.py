@@ -61,3 +61,6 @@ def PushFolder(path):
 def PopFolder():
 	os.chdir(Folders.pop())
 
+def IsFileNewer(file, otherFile):
+	return os.path.getmtime(file) > os.path.getmtime(otherFile)
+

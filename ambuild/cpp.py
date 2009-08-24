@@ -41,7 +41,7 @@ class Compiler:
 		self.cxx = runner.cache[name + '_cxx']
 
 	def Setup(self):
-		for var in ['CFLAGS', 'CPPFLAGS', 'CXXFLAGS', 'LDFLAGS', 'EXEFLAGS']:
+		for var in ['CFLAGS', 'CPPFLAGS', 'CXXFLAGS', 'EXEFLAGS']:
 			self.ImportListVar(var)
 		for var in ['CC', 'CXX']:
 			self.ImportVar(var)
@@ -175,22 +175,49 @@ int main()
 	def __getitem__(self, key):
 		return self.env[key]
 
+def ObjectFile(file):
+	objFile = os.path.splitext(file)[0]
+	objFile = objFile.replace('/', '_')
+	objFile = objFile.replace('\\', '_')
+	objFile = objFile.replace('.', '_')
+	objFile = objFile + '.o'
+	return objFile
+
 class LibraryBuilder:
-	def __init__(self, binary, runner, compiler):
+	def __init__(self, binary, runner, job, compiler):
 		self.sourceFiles = []
 		self.objFiles = []
 		self.binary = binary
 		self.runner = runner
 		self.compiler = compiler
 		self.hadCxxFiles = False
+		self.job = job
 
 	def AddSourceFiles(self, folder, files):
 		for file in files:
 			sourceFile = os.path.join(folder, file)
 			self.AddSourceFile(sourceFile)
 
-	def SendToJob(self, job):
-		job.AddCommandGroup(self.sourceFiles, False)
+	def NeedsRelink(self, binaryPath):
+		if not os.path.isfile(binaryPath):
+			return True
+		for i in self.objFiles:
+			objFile = os.path.join(self.runner.outputFolder, self.job.workFolder, i)
+			if not os.path.isfile(objFile):
+				return True
+			if osutil.IsFileNewer(objFile, binaryPath):
+				return True
+		return False
+			
+
+	def SendToJob(self):
+		self.job.AddCommandGroup(self.sourceFiles, False)
+		binaryName = self.binary + osutil.SharedLibSuffix()
+		binaryPath = os.path.join(self.runner.outputFolder, self.job.workFolder, binaryName)
+
+		if not self.NeedsRelink(binaryPath):
+			return
+
 		if self.hadCxxFiles:
 			cc = self.compiler.cxx
 		else:
@@ -198,13 +225,19 @@ class LibraryBuilder:
 		args = [cc['command']]
 		args.extend([i for i in self.objFiles])
 		if cc['vendor'] in ['gcc', 'icc', 'tendra']:
-			args.extend(['-shared', '-o', self.binary + osutil.SharedLibSuffix()])
-		job.AddCommand(command.DirectCommand(args))
+			args.extend(['-shared', '-o', binaryName])
+		self.job.AddCommand(command.DirectCommand(args))
 
 	def AddSourceFile(self, file):
 		fullFile = os.path.join(self.runner.sourceFolder, file)
 		root, ext = os.path.splitext(fullFile)
 		compiler = self.compiler
+		objFile = ObjectFile(file)
+		self.objFiles.append(objFile)
+
+		objFilePath = os.path.join(self.runner.outputFolder, self.job.workFolder, objFile)
+		if os.path.isfile(objFilePath) and osutil.IsFileNewer(objFilePath, fullFile):
+			return
 
 		if ext == '.c':
 			info = compiler.cc
@@ -224,13 +257,6 @@ class LibraryBuilder:
 				args.extend(compiler['CXXFLAGS'])
 			if compiler.HasProp('CXXINCLUDES'):
 				args.extend(['-I' + include for include in compiler['CXXINCLUDES']])
-
-		objFile = os.path.splitext(file)[0]
-		objFile = objFile.replace('/', '_')
-		objFile = objFile.replace('\\', '_')
-		objFile = objFile.replace('.', '_')
-		objFile = objFile + '.o'
-		self.objFiles.append(objFile)
 		if info['vendor'] == 'icc' or info['vendor'] == 'gcc' or info['vendor'] == 'tendra':
 			args.extend(['-c', fullFile, '-o', objFile])
 		elif info['vendor'] == 'msvc':
