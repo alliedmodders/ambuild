@@ -9,6 +9,7 @@ import ambuild.command as command
 class Compiler:
 	def __init__(self):
 		self.env = { }
+		self.env['CXXINCLUDES'] = []
 
 	def Clone(self):
 		c = Compiler()
@@ -18,6 +19,9 @@ class Compiler:
 		c.cc = self.cc
 		c.cxx = self.cxx
 		return c
+
+	def __getitem__(self, key):
+		return self.env[key]
 
 	def DetectAll(self, runner):
 		osutil.PushFolder(os.path.join(runner.outputFolder, '.ambuild'))
@@ -36,7 +40,8 @@ class Compiler:
 		runner.cache.CacheVariable(name + '_cxx', self.cxx)
 
 	def FromConfig(self, runner, name):
-		self.env = runner.cache[name + '_env']
+		env = runner.cache[name + '_env']
+		self.env.update(env)
 		self.cc = runner.cache[name + '_cc']
 		self.cxx = runner.cache[name + '_cxx']
 
