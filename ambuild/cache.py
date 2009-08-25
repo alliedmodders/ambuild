@@ -6,8 +6,10 @@ class Cache:
 	def __init__(self, path):
 		self.vars = { }
 		self.path = path
+
 	def CacheVariable(self, name, value):
 		self.vars[name] = value
+
 	def WriteCache(self):
 		f = open(self.path, 'wb')
 		try:
@@ -16,6 +18,7 @@ class Cache:
 			f.close()
 			raise e
 		f.close
+
 	def LoadCache(self):
 		f = open(self.path, 'rb')
 		try:
@@ -24,6 +27,10 @@ class Cache:
 			f.close()
 			raise e
 		f.close()
+
+	def HasVariable(self, key):
+		return key in self.vars
+
 	def __getitem__(self, key):
 		return self.vars[key]
 

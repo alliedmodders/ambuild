@@ -180,8 +180,73 @@ def ObjectFile(file):
 	objFile = objFile.replace('/', '_')
 	objFile = objFile.replace('\\', '_')
 	objFile = objFile.replace('.', '_')
-	objFile = objFile + '.o'
 	return objFile
+
+class CompileCommand(command.Command):
+	def __init__(self, runner, compiler, file, objFile):
+		command.Command.__init__(self)
+		self.objFile = objFile
+		fullFile = os.path.join(runner.sourceFolder, file)
+		ext = os.path.splitext(fullFile)[1]
+
+		if ext == '.c':
+			info = compiler.cc
+		else:
+			info = compiler.cxx
+			self.hadCxxFiles = True
+
+		args = [info['command']]
+
+		if compiler.HasProp('CFLAGS'):
+			args.extend(compiler['CFLAGS'])
+		if compiler.HasProp('CDEFINES'):
+			args.extend(['-D' + define for define in compiler['CDEFINES']])
+
+		if ext != '.c':
+			if compiler.HasProp('CXXFLAGS'):
+				args.extend(compiler['CXXFLAGS'])
+			if compiler.HasProp('CXXINCLUDES'):
+				args.extend(['-I' + include for include in compiler['CXXINCLUDES']])
+
+		if info['vendor'] == 'icc' or info['vendor'] == 'gcc':
+			args.extend(['-H', '-c', fullFile, '-o', objFile + '.o'])
+
+		self.argv = args
+		self.vendor = info['vendor']
+
+	def run(self, runner, job):
+		p = command.RunDirectCommad(runner, self.argv)
+		self.stdout = p.stdoutText
+		self.stderr = p.stderrText
+		if p.returncode != 0:
+			raise Exception('failed: terminated with non-zero return code {0}'.format(p.returncode))
+		newtext = ''
+		lines = re.split('\n+', self.stderr)
+		check = 0
+		deps = []
+		#Messy logic to get GCC dependencies and strip output from stderr
+		for i in lines:
+			if check == 0:
+				m = re.match('\.+\s+(.+)\s*$', i)
+				if m == None:
+					check = 1
+				else:
+					if os.path.isfile(m.groups()[0]):
+						deps.append(m.groups()[0])
+					else:
+						check = 1
+			if check == 1:
+				if newtext.startswith('Multiple include guards may be useful for:'):
+					check = 2
+			elif check == 2:
+				if not i in deps:
+					newtext += i + '\n'
+					check = 3
+			elif check == 3:
+					newtext += i + '\n'
+		self.stderr = newtext
+		#Phew! We have a list of dependencies, throw them into a cache file.
+		job.CacheVariable(self.objFile, deps)
 
 class LibraryBuilder:
 	def __init__(self, binary, runner, job, compiler):
@@ -209,13 +274,12 @@ class LibraryBuilder:
 				return True
 		return False
 			
-
 	def SendToJob(self):
 		self.job.AddCommandGroup(self.sourceFiles, False)
 		binaryName = self.binary + osutil.SharedLibSuffix()
 		binaryPath = os.path.join(self.runner.outputFolder, self.job.workFolder, binaryName)
 
-		if not self.NeedsRelink(binaryPath):
+		if len(self.sourceFiles) == 0 and not self.NeedsRelink(binaryPath):
 			return
 
 		if self.hadCxxFiles:
@@ -229,37 +293,25 @@ class LibraryBuilder:
 		self.job.AddCommand(command.DirectCommand(args))
 
 	def AddSourceFile(self, file):
-		fullFile = os.path.join(self.runner.sourceFolder, file)
-		root, ext = os.path.splitext(fullFile)
-		compiler = self.compiler
 		objFile = ObjectFile(file)
-		self.objFiles.append(objFile)
+		self.objFiles.append(objFile + '.o')
 
-		objFilePath = os.path.join(self.runner.outputFolder, self.job.workFolder, objFile)
+		objFilePath = os.path.join(self.runner.outputFolder, self.job.workFolder, objFile) + '.o'
+		fullFile = os.path.join(self.runner.sourceFolder, file)
 		if os.path.isfile(objFilePath) and osutil.IsFileNewer(objFilePath, fullFile):
-			return
+			#compute full dependencies, this isn't enough.
+			if self.job.HasVariable(objFile):
+				list = self.job.GetVariable(objFile)
+				checked = True
+				for i in list:
+					if not os.path.isfile(i) or osutil.IsFileNewer(i, objFilePath):
+						print(os.path.getmtime(i))
+						print(os.path.getmtime(objFilePath))
+						checked = False
+						break
+				#if all dependencies checked out, we're good to go.
+				if checked == True:
+					return
 
-		if ext == '.c':
-			info = compiler.cc
-		else:
-			info = compiler.cxx
-			self.hadCxxFiles = True
-
-		args = [info['command']]
-
-		if compiler.HasProp('CFLAGS'):
-			args.extend(compiler['CFLAGS'])
-		if compiler.HasProp('CDEFINES'):
-			args.extend(['-D' + define for define in compiler['CDEFINES']])
-
-		if ext != '.c':
-			if compiler.HasProp('CXXFLAGS'):
-				args.extend(compiler['CXXFLAGS'])
-			if compiler.HasProp('CXXINCLUDES'):
-				args.extend(['-I' + include for include in compiler['CXXINCLUDES']])
-		if info['vendor'] == 'icc' or info['vendor'] == 'gcc' or info['vendor'] == 'tendra':
-			args.extend(['-c', fullFile, '-o', objFile])
-		elif info['vendor'] == 'msvc':
-			args.extend(['/c', fullFile, '/Fo' + objFile])
-		self.sourceFiles.append(command.DirectCommand(args))
+		self.sourceFiles.append(CompileCommand(self.runner, self.compiler, file, objFile))
 

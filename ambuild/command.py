@@ -53,3 +53,17 @@ class DirectCommand(Command):
 		if p.returncode != 0:
 			raise Exception('failure: program terminated with non-zero exitcode {0}'.format(p.returncode))
 
+def RunDirectCommad(runner, argv, exe = None):
+	runner.PrintOut(' '.join([i for i in argv]))
+	args = {'args':   argv,
+          'stdout': subprocess.PIPE,
+          'stderr': subprocess.PIPE,
+          'shell':  False}
+	if exe != None:
+		argv['executable'] = exe
+	p = subprocess.Popen(**args)
+	stdout, stderr = p.communicate()
+	p.stdoutText = stdout.decode()
+	p.stderrText = stderr.decode()
+	return p
+

@@ -2,7 +2,7 @@
 import sys
 import os
 import ambuild.osutil as osutil
-import ambuild.job as job
+from ambuild.job import Job
 import ambuild.cache as cache
 import ambuild.cpp as cpp
 from optparse import OptionParser
@@ -21,8 +21,10 @@ class Runner:
 	def PrintOut(self, text):
 		print(text)
 
-	def AddJob(self, job):
+	def AddJob(self, name, workFolder = None):
+		job = Job(self, name, workFolder)
 		self.jobs.append(job)
+		return job
 
 	def Build(self):
 		self.mode = 'build'
@@ -85,7 +87,6 @@ run.Build()
 	def LoadFile(self, path, xtras = None):
 		globals = {
 			'AMBuild': self,
-			'Job':     job.Job,
 			'Cpp':     cpp
 		}
 		if xtras != None:
