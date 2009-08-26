@@ -10,6 +10,7 @@ class Compiler:
 	def __init__(self):
 		self.env = { }
 		self.env['CXXINCLUDES'] = []
+		self.env['POSTLINKFLAGS'] = []
 
 	def Clone(self):
 		c = Compiler()
@@ -46,7 +47,7 @@ class Compiler:
 		self.cxx = runner.cache[name + '_cxx']
 
 	def Setup(self):
-		for var in ['CFLAGS', 'CPPFLAGS', 'CXXFLAGS', 'EXEFLAGS']:
+		for var in ['CFLAGS', 'CPPFLAGS', 'CXXFLAGS']:
 			self.ImportListVar(var)
 		for var in ['CC', 'CXX']:
 			self.ImportVar(var)
@@ -142,9 +143,9 @@ int main()
 			os.unlink(executable)
 		except:
 			pass
+		if vendor == 'gcc' and mode == 'cxx':
+			args.extend(['-fno-exceptions', '-fno-rtti'])
 		args.extend([filename, '-o', executable])
-		if 'EXEFLAGS' in self.env:
-			args.extend(self.env['EXEFLAGS'])
 		print('Checking {0} compiler (vendor test {1})... '.format(mode, vendor), end = '')
 		p = osutil.CreateProcess(args)
 		if p == None:
@@ -293,6 +294,7 @@ class LibraryBuilder:
 			cc = self.compiler.cc
 		args = [cc['command']]
 		args.extend([i for i in self.objFiles])
+		args.extend(self.compiler['POSTLINKFLAGS'])
 		if cc['vendor'] in ['gcc', 'icc', 'tendra']:
 			args.extend(['-shared', '-o', binaryName])
 		self.job.AddCommand(command.DirectCommand(args))
