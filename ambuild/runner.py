@@ -7,16 +7,18 @@ import ambuild.cache as cache
 import ambuild.cpp as cpp
 from optparse import OptionParser
 
-def _execfile(file, globals, locals):
-	exec(compile(open(file).read(), file, 'exec'), globals, locals)
+def _execfile(file, globals):
+	exec(compile(open(file).read(), file, 'exec'), globals)
 
 class Runner:
 	def __init__(self):
 		self.jobs = []
 		self.options = OptionParser()
-
-	def IsWindows(self):
-		return osutil.IsWindows()
+		self.target = { }
+		if osutil.IsWindows():
+			self.target['platform'] = 'windows'
+		elif sys.platform.startswith('linux'):
+			self.target['platform'] = 'linux'
 
 	def PrintOut(self, text):
 		print(text)
@@ -91,5 +93,5 @@ run.Build()
 		}
 		if xtras != None:
 			globals.update(xtras)
-		_execfile(path, globals, {})
+		_execfile(path, globals)
 
