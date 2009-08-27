@@ -1,4 +1,5 @@
 # vim: set ts=2 sw=2 tw=99 noet:
+import copy
 import subprocess
 import os
 import sys
@@ -14,9 +15,7 @@ class Compiler:
 
 	def Clone(self):
 		c = Compiler()
-		c.env = { }
-		for i in self.env:
-			c.env[i] = self.env[i]
+		c.env = copy.deepcopy(self.env)
 		c.cc = self.cc
 		c.cxx = self.cxx
 		return c
@@ -225,7 +224,7 @@ class CompileCommand(command.Command):
 		self.stdout = p.stdoutText
 		self.stderr = p.stderrText
 		if p.returncode != 0:
-			raise Exception('failed: terminated with non-zero return code {0}'.format(p.returncode))
+			raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
 		newtext = ''
 		lines = re.split('\n+', self.stderr)
 		check = 0
@@ -263,6 +262,9 @@ class LibraryBuilder:
 		self.compiler = compiler
 		self.hadCxxFiles = False
 		self.job = job
+	
+	def AddObjectFiles(self, files):
+		self.objFiles.extend(files)
 
 	def AddSourceFiles(self, folder, files):
 		for file in files:
