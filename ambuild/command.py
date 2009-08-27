@@ -1,4 +1,5 @@
 # vim: set ts=2 sw=2 tw=99 noet: 
+import os
 import subprocess
 
 class Command:
@@ -9,10 +10,19 @@ class Command:
 	def run(self, master, job):
 		pass
 	def spew(self, runner):
-		if len(self.stdout) > 0:
+		if self.stdout != None and len(self.stdout) > 0:
 			runner.PrintOut(self.stdout)
-		if len(self.stderr) > 0:
+		if self.stderr != None and len(self.stderr) > 0:
 			runner.PrintOut(self.stderr)
+
+class SymlinkCommand(Command):
+	def __init__(self, link, target):
+		Command.__init__(self)
+		self.link = link
+		self.target = target
+	def run(self, master, job):
+		master.PrintOut('symlinking {0} as {1}'.format(self.target, self.link))
+		os.symlink(self.target, self.link)
 
 class ShellCommand(Command):
 	def __init__(self, cmdstring, failureIsFatal = True):
