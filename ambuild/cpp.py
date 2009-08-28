@@ -10,6 +10,7 @@ import ambuild.command as command
 class Compiler:
 	def __init__(self):
 		self.env = { }
+		self.env['CINCLUDES'] = []
 		self.env['CXXINCLUDES'] = []
 		self.env['POSTLINKFLAGS'] = []
 
@@ -206,6 +207,8 @@ class CompileCommand(command.Command):
 			args.extend(compiler['CFLAGS'])
 		if compiler.HasProp('CDEFINES'):
 			args.extend(['-D' + define for define in compiler['CDEFINES']])
+		if compiler.HasProp('CINCLUDES'):
+			args.extend(['-I' + include for include in compiler['CINCLUDES']])
 
 		if ext != '.c':
 			if compiler.HasProp('CXXFLAGS'):
@@ -236,7 +239,7 @@ class CompileCommand(command.Command):
 				if m == None:
 					check = 1
 				else:
-					if os.path.isfile(m.groups()[0]):
+					if FileExists(m.groups()[0]):
 						deps.append(m.groups()[0])
 					else:
 						check = 1
@@ -253,7 +256,30 @@ class CompileCommand(command.Command):
 		#Phew! We have a list of dependencies, throw them into a cache file.
 		job.CacheVariable(self.objFile, deps)
 
-class LibraryBuilder:
+FILE_CACHE = { }
+
+def FileExists(file):
+	if file in FILE_CACHE:
+		return True
+	if os.path.isfile(file):
+		GetFileTime(file)
+		return True
+	return False
+
+def GetFileTime(file):
+	if file in FILE_CACHE:
+		return FILE_CACHE[file]
+	time = os.path.getmtime(file)
+	FILE_CACHE[file] = time
+	return time
+
+def IsFileNewer(this, that):
+	this = GetFileTime(this)
+	if type(that) == str:
+		that = GetFileTime(that)
+	return this > that
+
+class BinaryBuilder:
 	def __init__(self, binary, runner, job, compiler):
 		self.sourceFiles = []
 		self.objFiles = []
@@ -262,6 +288,7 @@ class LibraryBuilder:
 		self.compiler = compiler
 		self.hadCxxFiles = False
 		self.job = job
+		self.mostRecentDepends = 0
 	
 	def AddObjectFiles(self, files):
 		self.objFiles.extend(files)
@@ -271,20 +298,28 @@ class LibraryBuilder:
 			sourceFile = os.path.join(folder, file)
 			self.AddSourceFile(sourceFile)
 
+	def RebuildIfNewer(self, file):
+		time = GetFileTime(file)
+		if time > self.mostRecentDepends:
+			self.mostRecentDepends = time
+
 	def NeedsRelink(self, binaryPath):
-		if not os.path.isfile(binaryPath):
+		if not FileExists(binaryPath):
 			return True
 		for i in self.objFiles:
 			objFile = os.path.join(self.runner.outputFolder, self.job.workFolder, i)
-			if not os.path.isfile(objFile):
+			if not FileExists(objFile):
 				return True
-			if osutil.IsFileNewer(objFile, binaryPath):
+			if IsFileNewer(objFile, binaryPath):
 				return True
 		return False
 			
-	def SendToJob(self):
+	def _SendToJob(self, type):
 		self.job.AddCommandGroup(self.sourceFiles, False)
-		binaryName = self.binary + osutil.SharedLibSuffix()
+		if type == 'shared':
+			binaryName = self.binary + osutil.SharedLibSuffix()
+		elif type == 'executable':
+			binaryName = self.binary + osutil.ExecutableSuffix()
 		binaryPath = os.path.join(self.runner.outputFolder, self.job.workFolder, binaryName)
 
 		if len(self.sourceFiles) == 0 and not self.NeedsRelink(binaryPath):
@@ -298,7 +333,9 @@ class LibraryBuilder:
 		args.extend([i for i in self.objFiles])
 		args.extend(self.compiler['POSTLINKFLAGS'])
 		if cc['vendor'] in ['gcc', 'icc', 'tendra']:
-			args.extend(['-shared', '-o', binaryName])
+			if type == 'shared':
+				args.append('-shared')
+			args.extend(['-o', binaryName])
 		self.job.AddCommand(command.DirectCommand(args))
 
 	def AddSourceFile(self, file):
@@ -307,13 +344,14 @@ class LibraryBuilder:
 
 		objFilePath = os.path.join(self.runner.outputFolder, self.job.workFolder, objFile) + '.o'
 		fullFile = os.path.join(self.runner.sourceFolder, file)
-		if os.path.isfile(objFilePath) and osutil.IsFileNewer(objFilePath, fullFile):
+		if FileExists(objFilePath) and IsFileNewer(objFilePath, fullFile) and \
+		   GetFileTime(objFilePath) > self.mostRecentDepends:
 			#compute full dependencies, this isn't enough.
 			if self.job.HasVariable(objFile):
 				list = self.job.GetVariable(objFile)
 				checked = True
 				for i in list:
-					if not os.path.isfile(i) or osutil.IsFileNewer(i, objFilePath):
+					if not FileExists(i) or IsFileNewer(i, objFilePath):
 						checked = False
 						break
 				#if all dependencies checked out, we're good to go.
@@ -321,4 +359,18 @@ class LibraryBuilder:
 					return
 
 		self.sourceFiles.append(CompileCommand(self.runner, self.compiler, file, objFile))
+
+class LibraryBuilder(BinaryBuilder):
+	def __init__(self, binary, runner, job, compiler):
+		BinaryBuilder.__init__(self, binary, runner, job, compiler)
+	
+	def SendToJob(self):
+		self._SendToJob('shared')
+
+class ExecutableBuilder(BinaryBuilder):
+	def __init__(self, binary, runner, job, compiler):
+		BinaryBuilder.__init__(self, binary, runner, job, compiler)
+	
+	def SendToJob(self):
+		self._SendToJob('executable')
 
