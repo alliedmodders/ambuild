@@ -314,8 +314,6 @@ class LibraryBuilder:
 				checked = True
 				for i in list:
 					if not os.path.isfile(i) or osutil.IsFileNewer(i, objFilePath):
-						print(os.path.getmtime(i))
-						print(os.path.getmtime(objFilePath))
 						checked = False
 						break
 				#if all dependencies checked out, we're good to go.
