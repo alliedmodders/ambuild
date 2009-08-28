@@ -9,6 +9,12 @@ def IsWindows():
 def IsUnixy():
 	return sys.platform[0:5] == 'linux' or sys.platform == 'darwin'
 
+def ExecutableSuffix():
+	if IsWindows():
+		return '.exe'
+	else:
+		return ''
+
 def SharedLibSuffix():
 	if IsWindows():
 		return '.dll'
@@ -60,9 +66,6 @@ def PushFolder(path):
 
 def PopFolder():
 	os.chdir(Folders.pop())
-
-def IsFileNewer(file, otherFile):
-	return os.path.getmtime(file) > os.path.getmtime(otherFile)
 
 #from http://codeliberates.blogspot.com/2008/05/detecting-cpuscores-in-python.html
 def NumberOfCPUs():
