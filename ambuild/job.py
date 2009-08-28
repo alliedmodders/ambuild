@@ -1,5 +1,7 @@
 # vim: set ts=2 sw=2 tw=99 noet: 
 import os
+import traceback
+import ambuild.worker as worker
 from ambuild.cache import Cache
 from ambuild.command import Command
 
@@ -7,6 +9,25 @@ class TaskGroup:
 	def __init__(self, cmds, mustBeSerial = True):
 		self.cmds = cmds
 		self.mustBeSerial = mustBeSerial
+
+class AsyncRun:
+	def __init__(self, master, job, task):
+		self.master = master
+		self.task = task
+		self.job = job
+	def run(self):
+		spewed = False
+		try:
+			self.task.run(self.master, self.job)
+			spewed = True
+			self.task.spew(self.master)
+		except Exception as e:
+			try:
+				if not spewed:
+					self.task.spew(self.master)
+			except:
+				pass
+			raise Exception(str(e) + '\n' + traceback.format_exc())
 
 class Job:
 	def __init__(self, runner, name, workFolder = None):
@@ -45,14 +66,20 @@ class Job:
 
 	def run(self, master):
 		for group in self.tasks:
-			for task in group.cmds:
-				try:
-					task.run(master, self)
-					task.spew(master)
-				except Exception as e:
-					task.spew(master)
-					#Write the cache lazily at last possible moment
+			if 1: #group.mustBeSerial:
+				for task in group.cmds:
+					r = AsyncRun(master, self, task)
+					try:
+						r.run()
+					except Exception as e:
+						self.cache.WriteCache()
+						raise e
+			else:
+				pool = worker.WorkerPool(master.numCPUs * 4)
+				tasks = [AsyncRun(master, self, task) for task in group.cmds]
+				failed = pool.RunJobs(tasks)
+				if len(failed) > 0:
 					self.cache.WriteCache()
-					raise e
+					raise failed[0]['e']
 		self.cache.WriteCache()
 
