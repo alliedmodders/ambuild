@@ -15,6 +15,7 @@ class Runner:
 		self.jobs = []
 		self.options = OptionParser()
 		self.target = { }
+		self.numCPUs = osutil.NumberOfCPUs()
 		if osutil.IsWindows():
 			self.target['platform'] = 'windows'
 		elif sys.platform.startswith('linux'):
@@ -24,6 +25,7 @@ class Runner:
 		print(text)
 
 	def AddJob(self, name, workFolder = None):
+		print('Adding job {0}.'.format(name))
 		job = Job(self, name, workFolder)
 		self.jobs.append(job)
 		return job
@@ -48,7 +50,11 @@ class Runner:
 				if not os.path.isdir(workFolder):
 					os.makedirs(workFolder)
 				osutil.PushFolder(workFolder)
-			job.run(self)
+			try:
+				job.run(self)
+			except Exception as e:
+				print('Job failed: {0}'.format(str(e)))
+				break
 			if job.workFolder != None:
 				osutil.PopFolder()
 			print('Completed job: {0}.'.format(job.name))
