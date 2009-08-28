@@ -275,7 +275,7 @@ class BinaryBuilder:
 		self.hadCxxFiles = False
 		self.job = job
 		self.mostRecentDepends = 0
-		self.RebuildIfNewer(runner.CallerScript(2))
+		self.RebuildIfNewer(runner.CallerScript(3))
 	
 	def AddObjectFiles(self, files):
 		self.objFiles.extend(files)
