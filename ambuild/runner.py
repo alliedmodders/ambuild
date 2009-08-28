@@ -30,6 +30,9 @@ class Runner:
 		self.jobs.append(job)
 		return job
 
+	def CallerScript(self, num = 1):
+		return sys._getframe(num).f_code.co_filename
+
 	def Build(self):
 		self.mode = 'build'
 		self.outputFolder = os.path.abspath(os.getcwd())

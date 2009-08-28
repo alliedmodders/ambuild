@@ -256,28 +256,14 @@ class CompileCommand(command.Command):
 		#Phew! We have a list of dependencies, throw them into a cache file.
 		job.CacheVariable(self.objFile, deps)
 
-FILE_CACHE = { }
-
 def FileExists(file):
-	if file in FILE_CACHE:
-		return True
-	if os.path.isfile(file):
-		GetFileTime(file)
-		return True
-	return False
+	return osutil.FileExists(file)
 
 def GetFileTime(file):
-	if file in FILE_CACHE:
-		return FILE_CACHE[file]
-	time = os.path.getmtime(file)
-	FILE_CACHE[file] = time
-	return time
+	return osutil.GetFileTime(file)
 
 def IsFileNewer(this, that):
-	this = GetFileTime(this)
-	if type(that) == str:
-		that = GetFileTime(that)
-	return this > that
+	return osutil.IsFileNewer(this, that)
 
 class BinaryBuilder:
 	def __init__(self, binary, runner, job, compiler):
@@ -289,6 +275,7 @@ class BinaryBuilder:
 		self.hadCxxFiles = False
 		self.job = job
 		self.mostRecentDepends = 0
+		self.RebuildIfNewer(runner.CallerScript(2))
 	
 	def AddObjectFiles(self, files):
 		self.objFiles.extend(files)
