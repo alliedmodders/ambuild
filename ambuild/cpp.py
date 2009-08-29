@@ -7,6 +7,24 @@ import ambuild.osutil as osutil
 import re
 import ambuild.command as command
 
+class Vendor:
+	def __init__(self, name, version, command, objSuffix):
+		self.name = name
+		self.version = version
+		self.command = command
+		self.objSuffix = objSuffix
+
+class MSVC(Vendor):
+	def __init__(self, command, version):
+		Vendor.__init__(self, 'mvsc', version, command, '.obj')
+
+class GCC(Vendor):
+	def __init__(self, version):
+		Vendor.__init__(self, 'gcc', version, command, '.o')
+		parts = version.split('.')
+		self.majorVersion = parts[0]
+		self.minorVersion = parts[1]
+
 class Compiler:
 	def __init__(self):
 		self.env = { }
@@ -17,8 +35,8 @@ class Compiler:
 	def Clone(self):
 		c = Compiler()
 		c.env = copy.deepcopy(self.env)
-		c.cc = self.cc
-		c.cxx = self.cxx
+		c.cc = copy.deepcopy(self.cc)
+		c.cxx = copy.deepcopy(self.cxx)
 		return c
 
 	def __getitem__(self, key):
@@ -154,7 +172,8 @@ int main()
 		if osutil.WaitForProcess(p) != 0:
 			print('failed with return code {0}'.format(p.returncode))
 			return False
-		p = osutil.CreateProcess([executable], executable = osutil.MakePath('.', 'test'))
+		exe = osutil.MakePath('.', 'test' + osutil.ExecutableSuffix())
+		p = osutil.CreateProcess([executable], executable = exe)
 		if p == None:
 			print('failed to create executable')
 			return False
@@ -168,10 +187,17 @@ int main()
 		if lines[1] != mode:
 			print('requested {0} compiler, found {1}'.format(mode, lines[1]))
 		vendor, version = lines[0].split(' ')
+		if vendor == 'gcc':
+			v = GCC(name, version)
+		elif vendor == 'msvc':
+			v = MSVC(name, version)
+		else:
+			print('Unknown vendor {0}'.format(vendor))
+			return False
 		if mode == 'c':
-			self.cc = { 'vendor': vendor, 'version': version, 'command': name }
+			self.cc = v
 		elif mode == 'cxx':
-			self.cxx = { 'vendor': vendor, 'version': version, 'command': name }
+			self.cxx = v
 		print('found {0} version {1}'.format(vendor, version))
 		return True
 
@@ -201,38 +227,73 @@ class CompileCommand(command.Command):
 			info = compiler.cxx
 			self.hadCxxFiles = True
 
-		args = [info['command']]
+		args = [info.command]
 
 		if compiler.HasProp('CFLAGS'):
 			args.extend(compiler['CFLAGS'])
 		if compiler.HasProp('CDEFINES'):
-			args.extend(['-D' + define for define in compiler['CDEFINES']])
+			if isinstance(info, MSVC):
+				for define in compiler['CDEFINES']:
+					args.extend(['/D', '"' + define + '"'])
+			else:
+				args.extend(['-D' + define for define in compiler['CDEFINES']])
 		if compiler.HasProp('CINCLUDES'):
-			args.extend(['-I' + include for include in compiler['CINCLUDES']])
+			if isinstance(info, MSVC):
+				for include in compiler['CINCLUDES']:
+					args.extend(['/I', '"' + include + '"'])
+			else:
+				args.extend(['-I' + include for include in compiler['CINCLUDES']])
 
 		if ext != '.c':
 			if compiler.HasProp('CXXFLAGS'):
 				args.extend(compiler['CXXFLAGS'])
 			if compiler.HasProp('CXXINCLUDES'):
-				args.extend(['-I' + include for include in compiler['CXXINCLUDES']])
+				if isinstance(info, MSVC):
+					for include in compiler['CXXINCLUDES']:
+						args.extend(['/I', '"' + include + '"'])
+				else:
+					args.extend(['-I' + include for include in compiler['CXXINCLUDES']])
 
-		if info['vendor'] == 'icc' or info['vendor'] == 'gcc':
-			args.extend(['-H', '-c', fullFile, '-o', objFile + '.o'])
+		if isinstance(info, GCC):
+			args.extend(['-H', '-c', fullFile, '-o', objFile + info.objSuffix])
+		elif isinstance(info, MSVC):
+			args.extend(['/showIncludes', '/c', fullFile, '/Fo' + objFile + info.objSuffix])
 
 		self.argv = args
-		self.vendor = info['vendor']
+		self.vendor = info
 
 	def run(self, runner, job):
-		p = command.RunDirectCommad(runner, self.argv)
-		self.stdout = p.stdoutText
-		self.stderr = p.stderrText
-		if p.returncode != 0:
-			raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
+		if isinstance(self.vendor, GCC):
+			p = command.RunDirectCommad(runner, self.argv)
+			self.stdout = p.stdoutText
+			self.stderr = p.stderrText
+			if p.returncode != 0:
+				raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
+			deps = self.ParseDepsGCC()
+		elif isinstance(self.vendor, MSVC):
+			p = subprocess.Popen(self.argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+			deps = []
+			self.stdout = ''
+			self.stderr = ''
+			temp = ''
+			for line in p.stdout:
+				line = line.decode()
+				m = re.match('Note: including file:\s+(.+)$', line)
+				if m != None:
+					deps.append(m.groups()[0])
+				else:
+					temp += line
+			if p.wait() != 0:
+				self.stderr = temp
+				raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
+		job.CacheVariable(self.objFile, deps)
+	
+	def ParseDepsGCC(self):
 		newtext = ''
 		lines = re.split('\n+', self.stderr)
 		check = 0
 		deps = []
-		#Messy logic to get GCC dependencies and strip output from stderr
+		#Messy logic to get dependencies and strip output from stderr
 		for i in lines:
 			if check == 0:
 				m = re.match('\.+\s+(.+)\s*$', i)
@@ -253,8 +314,7 @@ class CompileCommand(command.Command):
 			elif check == 3:
 					newtext += i + '\n'
 		self.stderr = newtext
-		#Phew! We have a list of dependencies, throw them into a cache file.
-		job.CacheVariable(self.objFile, deps)
+		return deps
 
 def FileExists(file):
 	return osutil.FileExists(file)
@@ -316,20 +376,28 @@ class BinaryBuilder:
 			cc = self.compiler.cxx
 		else:
 			cc = self.compiler.cc
-		args = [cc['command']]
+		args = [cc.command]
 		args.extend([i for i in self.objFiles])
 		args.extend(self.compiler['POSTLINKFLAGS'])
-		if cc['vendor'] in ['gcc', 'icc', 'tendra']:
+		if isinstance(cc, GCC):
 			if type == 'shared':
 				args.append('-shared')
 			args.extend(['-o', binaryName])
+		elif isinstance(cc, MSVC):
+			pass
 		self.job.AddCommand(command.DirectCommand(args))
 
 	def AddSourceFile(self, file):
 		objFile = ObjectFile(file)
-		self.objFiles.append(objFile + '.o')
+		ext = os.path.splitext(file)[1]
+		if ext == '.c':
+			suffix = self.compiler.cc.objSuffix
+		else:
+			suffix = self.compiler.cxx.objSuffix
+		self.objFiles.append(objFile + suffix)
 
-		objFilePath = os.path.join(self.runner.outputFolder, self.job.workFolder, objFile) + '.o'
+		objFilePath = os.path.join(self.runner.outputFolder, self.job.workFolder, objFile) + \
+		              suffix
 		fullFile = os.path.join(self.runner.sourceFolder, file)
 		if FileExists(objFilePath) and IsFileNewer(objFilePath, fullFile) and \
 		   GetFileTime(objFilePath) > self.mostRecentDepends:

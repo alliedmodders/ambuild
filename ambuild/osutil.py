@@ -79,7 +79,7 @@ def NumberOfCPUs():
 		else: # OSX:
 			return int(os.popen2("sysctl -n hw.ncpu")[1].read())
 	# Windows:
-	if os.environ.has_key("NUMBER_OF_PROCESSORS"):
+	if 'NUMBER_OF_PROCSSORS' in os.environ:
 		ncpus = int(os.environ["NUMBER_OF_PROCESSORS"]);
 		if ncpus > 0:
 			return ncpus

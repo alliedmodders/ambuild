@@ -75,5 +75,7 @@ def RunDirectCommad(runner, argv, exe = None):
 	stdout, stderr = p.communicate()
 	p.stdoutText = stdout.decode()
 	p.stderrText = stderr.decode()
+	p.realout = stdout
+	p.realerr = stderr
 	return p
 
