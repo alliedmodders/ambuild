@@ -348,8 +348,9 @@ class BinaryBuilder:
 		self.hadCxxFiles = False
 		self.job = job
 		self.mostRecentDepends = 0
+		self.mostRecentLink = 0
 		self.RebuildIfNewer(runner.CallerScript(3))
-		self.env = {'POSTLINKFLAGS': []}
+		self.env = {'POSTLINKFLAGS': [], 'CXXINCLUDES': []}
 
 	def __getitem__(self, key):
 		return self.env[key]
@@ -367,6 +368,11 @@ class BinaryBuilder:
 		if time > self.mostRecentDepends:
 			self.mostRecentDepends = time
 
+	def RelinkIfNewer(self, file):
+		time = GetFileTime(file)
+		if time > self.mostRecentLink:
+			self.mostRecentLink = time
+
 	def NeedsRelink(self, binaryPath):
 		if not FileExists(binaryPath):
 			return True
@@ -376,6 +382,8 @@ class BinaryBuilder:
 				return True
 			if IsFileNewer(objFile, binaryPath):
 				return True
+		if self.mostRecentLink > GetFileTime(binaryPath):
+			return True
 		return False
 
 	def __getitem__(self, key):
@@ -413,9 +421,37 @@ class BinaryBuilder:
 			args.append('/PDB:"' + self.binary + '.pdb' + '"')
 		self.job.AddCommand(command.DirectCommand(args))
 
+	def AddResourceFile(self, file, env):
+		if self.runner.target['platform'] != 'windows':
+			return
+		objFile = ObjectFile(file) + '.res'
+
+		self.objFiles.append(objFile)
+
+		objFilePath = os.path.join(self.runner.outputFolder, self.job.workFolder, objFile)
+		fullFile = os.path.join(self.runner.sourceFolder, file)
+		if FileExists(objFilePath) and IsFileNewer(objFilePath, fullFile) and \
+		   GetFileTime(objFilePath) > self.mostRecentDepends:
+			 #:TODO: we need to deduce RC dependencies
+			 return
+
+		args = ['rc']
+
+		for e in [env, self.env, self.compiler.env]:
+			if 'RCDEFINES' in e:
+				for define in e['RCDEFINES']:
+					args.extend(['/d', define])
+			if 'RCINCLUDES' in e:
+				for include in e['RCINCLUDES']:
+					args.extend(['/i', include])
+			
+		args.extend(['/fo' + objFile, fullFile])
+		self.sourceFiles.append(command.DirectCommand(args))
+
 	def AddSourceFile(self, file):
 		objFile = ObjectFile(file)
 		ext = os.path.splitext(file)[1]
+
 		if ext == '.c':
 			suffix = self.compiler.cc.objSuffix
 		else:
@@ -445,6 +481,7 @@ class BinaryBuilder:
 class LibraryBuilder(BinaryBuilder):
 	def __init__(self, binary, runner, job, compiler):
 		BinaryBuilder.__init__(self, binary, runner, job, compiler)
+		self.binaryFile = binary + osutil.SharedLibSuffix()
 	
 	def SendToJob(self):
 		self._SendToJob('shared')
@@ -452,6 +489,7 @@ class LibraryBuilder(BinaryBuilder):
 class ExecutableBuilder(BinaryBuilder):
 	def __init__(self, binary, runner, job, compiler):
 		BinaryBuilder.__init__(self, binary, runner, job, compiler)
+		self.binaryFile = binary + osutil.ExecutableSuffix()
 	
 	def SendToJob(self):
 		self._SendToJob('executable')
