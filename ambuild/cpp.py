@@ -292,7 +292,8 @@ class CompileCommand(command.Command):
 				line = line.decode()
 				m = re.match('Note: including file:\s+(.+)$', line)
 				if m != None:
-					deps.append(m.groups()[0])
+					file = m.groups()[0].strip()
+					deps.append(file)
 				else:
 					temp += line
 			if p.wait() != 0:
@@ -348,6 +349,10 @@ class BinaryBuilder:
 		self.job = job
 		self.mostRecentDepends = 0
 		self.RebuildIfNewer(runner.CallerScript(3))
+		self.env = {'POSTLINKFLAGS': []}
+
+	def __getitem__(self, key):
+		return self.env[key]
 	
 	def AddObjectFiles(self, files):
 		self.objFiles.extend(files)
@@ -372,6 +377,9 @@ class BinaryBuilder:
 			if IsFileNewer(objFile, binaryPath):
 				return True
 		return False
+
+	def __getitem__(self, key):
+		return self.env[key]
 			
 	def _SendToJob(self, type):
 		self.job.AddCommandGroup(self.sourceFiles, False)
@@ -390,14 +398,16 @@ class BinaryBuilder:
 			cc = self.compiler.cc
 		args = [cc.command]
 		args.extend([i for i in self.objFiles])
+		if isinstance(cc, MSVC):
+			args.append('/link')
 		args.extend(self.compiler['POSTLINKFLAGS'])
+		args.extend(self.env['POSTLINKFLAGS'])
 		if isinstance(cc, GCC):
 			if type == 'shared':
 				args.append('-shared')
 			args.extend(['-o', binaryName])
 		elif isinstance(cc, MSVC):
-			args.append('/link')
-			args.append('/OUT:"' + binaryName + '"')
+			args.append('/OUT:' + binaryName)
 			if type == 'shared':
 				args.append('/DLL')
 			args.append('/PDB:"' + self.binary + '.pdb' + '"')

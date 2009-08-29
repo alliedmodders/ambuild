@@ -74,12 +74,12 @@ class Job:
 					except Exception as e:
 						self.cache.WriteCache()
 						raise e
+					self.cache.WriteCache()
 			else:
 				pool = worker.WorkerPool(master.numCPUs * 4)
 				tasks = [AsyncRun(master, self, task) for task in group.cmds]
 				failed = pool.RunJobs(tasks)
+				self.cache.WriteCache()
 				if len(failed) > 0:
-					self.cache.WriteCache()
 					raise failed[0]['e']
-		self.cache.WriteCache()
 
