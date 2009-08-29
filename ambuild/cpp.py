@@ -14,9 +14,26 @@ class Vendor:
 		self.command = command
 		self.objSuffix = objSuffix
 
+	def AddIncludes(self, args, workPath, folders):
+		for folder in folders:
+			self.AddInclude(args, workPath, folder)
+
 class MSVC(Vendor):
 	def __init__(self, command, version):
-		Vendor.__init__(self, 'mvsc', version, command, '.obj')
+		Vendor.__init__(self, 'msvc', version, command, '.obj')
+
+	def AddInclude(self, args, workPath, folder):
+		#Hack - try and get a relative path because CL, with either 
+		#/Zi or /ZI, combined with subprocess, apparently tries and
+		#looks for paths like c:\bleh\"c:\bleh" <-- wtf
+		#.. this according to Process Monitor
+		workPath = os.path.normcase(workPath)
+		folder = os.path.normcase(folder)
+		workdrive = os.path.splitdrive(workPath)[0]
+		incdrive = os.path.splitdrive(folder)[0]
+		if workdrive == incdrive:
+			folder = os.path.relpath(folder, workPath)
+		args.extend(['/I', folder])
 
 class GCC(Vendor):
 	def __init__(self, version):
@@ -24,6 +41,9 @@ class GCC(Vendor):
 		parts = version.split('.')
 		self.majorVersion = parts[0]
 		self.minorVersion = parts[1]
+
+	def AddInclude(self, args, workPath, folder):
+		args.extend(['-I', os.path.normpath(folder)])
 
 class Compiler:
 	def __init__(self):
@@ -215,7 +235,7 @@ def ObjectFile(file):
 	return objFile
 
 class CompileCommand(command.Command):
-	def __init__(self, runner, compiler, file, objFile):
+	def __init__(self, runner, compiler, file, objFile, workFolder):
 		command.Command.__init__(self)
 		self.objFile = objFile
 		fullFile = os.path.join(runner.sourceFolder, file)
@@ -233,26 +253,17 @@ class CompileCommand(command.Command):
 			args.extend(compiler['CFLAGS'])
 		if compiler.HasProp('CDEFINES'):
 			if isinstance(info, MSVC):
-				for define in compiler['CDEFINES']:
-					args.extend(['/D', '"' + define + '"'])
+				args.extend(['/D' + define for define in compiler['CDEFINES']])
 			else:
 				args.extend(['-D' + define for define in compiler['CDEFINES']])
 		if compiler.HasProp('CINCLUDES'):
-			if isinstance(info, MSVC):
-				for include in compiler['CINCLUDES']:
-					args.extend(['/I', '"' + include + '"'])
-			else:
-				args.extend(['-I' + include for include in compiler['CINCLUDES']])
+			info.AddIncludes(args, workFolder, compiler['CINCLUDES'])
 
 		if ext != '.c':
 			if compiler.HasProp('CXXFLAGS'):
 				args.extend(compiler['CXXFLAGS'])
 			if compiler.HasProp('CXXINCLUDES'):
-				if isinstance(info, MSVC):
-					for include in compiler['CXXINCLUDES']:
-						args.extend(['/I', '"' + include + '"'])
-				else:
-					args.extend(['-I' + include for include in compiler['CXXINCLUDES']])
+				info.AddIncludes(args, workFolder, compiler['CXXINCLUDES'])
 
 		if isinstance(info, GCC):
 			args.extend(['-H', '-c', fullFile, '-o', objFile + info.objSuffix])
@@ -271,6 +282,7 @@ class CompileCommand(command.Command):
 				raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
 			deps = self.ParseDepsGCC()
 		elif isinstance(self.vendor, MSVC):
+			runner.PrintOut(' '.join([i for i in self.argv]))
 			p = subprocess.Popen(self.argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 			deps = []
 			self.stdout = ''
@@ -384,7 +396,11 @@ class BinaryBuilder:
 				args.append('-shared')
 			args.extend(['-o', binaryName])
 		elif isinstance(cc, MSVC):
-			pass
+			args.append('/link')
+			args.append('/OUT:"' + binaryName + '"')
+			if type == 'shared':
+				args.append('/DLL')
+			args.append('/PDB:"' + self.binary + '.pdb' + '"')
 		self.job.AddCommand(command.DirectCommand(args))
 
 	def AddSourceFile(self, file):
@@ -413,7 +429,8 @@ class BinaryBuilder:
 				if checked == True:
 					return
 
-		self.sourceFiles.append(CompileCommand(self.runner, self.compiler, file, objFile))
+		workFolder = os.path.join(self.runner.outputFolder, self.job.workFolder)
+		self.sourceFiles.append(CompileCommand(self.runner, self.compiler, file, objFile, workFolder))
 
 class LibraryBuilder(BinaryBuilder):
 	def __init__(self, binary, runner, job, compiler):
