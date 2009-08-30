@@ -36,7 +36,7 @@ class MSVC(Vendor):
 		args.extend(['/I', folder])
 
 class GCC(Vendor):
-	def __init__(self, version):
+	def __init__(self, command, version):
 		Vendor.__init__(self, 'gcc', version, command, '.o')
 		parts = version.split('.')
 		self.majorVersion = parts[0]
