@@ -83,9 +83,6 @@ class Runner:
 		f.write("""
 # vim: set ts=2 sw=2 tw=99 noet:
 import sys
-
-sys.path.append('/home/dvander/sourcemod/ambuild')
-
 import ambuild.runner as runner
 
 run = runner.Runner()
