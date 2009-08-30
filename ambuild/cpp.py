@@ -39,8 +39,8 @@ class GCC(Vendor):
 	def __init__(self, command, version):
 		Vendor.__init__(self, 'gcc', version, command, '.o')
 		parts = version.split('.')
-		self.majorVersion = parts[0]
-		self.minorVersion = parts[1]
+		self.majorVersion = int(parts[0])
+		self.minorVersion = int(parts[1])
 
 	def AddInclude(self, args, workPath, folder):
 		args.extend(['-I', os.path.normpath(folder)])
