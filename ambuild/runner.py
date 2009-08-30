@@ -57,7 +57,7 @@ class Runner:
 				job.run(self)
 			except Exception as e:
 				print('Job failed: {0}'.format(str(e)))
-				break
+				sys.exit(1)
 			if job.workFolder != None:
 				osutil.PopFolder()
 			print('Completed job: {0}.'.format(job.name))
