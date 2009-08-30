@@ -275,7 +275,7 @@ class CompileCommand(command.Command):
 
 	def run(self, runner, job):
 		if isinstance(self.vendor, GCC):
-			p = command.RunDirectCommad(runner, self.argv)
+			p = command.RunDirectCommand(runner, self.argv)
 			self.stdout = p.stdoutText
 			self.stderr = p.stderrText
 			if p.returncode != 0:
