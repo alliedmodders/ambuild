@@ -30,7 +30,7 @@ class ShellCommand(Command):
 		self.cmdstring = cmdstring
 		self.failureIsFatal = failureIsFatal
 	def run(self, master, job):
-		builder.PrintOut(self.cmdstring)
+		master.PrintOut(self.cmdstring)
 		args = { 'args':	 self.cmdstring,
 		         'stdout': subprocess.PIPE,
 		         'stderr': subprocess.PIPE,
