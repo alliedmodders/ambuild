@@ -20,6 +20,8 @@ class Runner:
 			self.target['platform'] = 'windows'
 		elif sys.platform.startswith('linux'):
 			self.target['platform'] = 'linux'
+		elif sys.platform.startswith('darwin'):
+			self.target['platform'] = 'darwin'
 
 	def PrintOut(self, text):
 		print(text)

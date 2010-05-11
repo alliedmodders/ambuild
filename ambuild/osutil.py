@@ -2,6 +2,7 @@
 import os
 import sys
 import subprocess
+import multiprocessing
 
 def IsWindows():
 	return sys.platform == 'win32' or sys.platform == 'cygwin'
@@ -67,23 +68,8 @@ def PushFolder(path):
 def PopFolder():
 	os.chdir(Folders.pop())
 
-#from http://codeliberates.blogspot.com/2008/05/detecting-cpuscores-in-python.html
 def NumberOfCPUs():
-	# Linux, Unix and MacOS:
-	if hasattr(os, "sysconf"):
-		if 'SC_NPROCESSORS_ONLN' in os.sysconf_names:
-			# Linux & Unix:
-			ncpus = os.sysconf("SC_NPROCESSORS_ONLN")
-			if isinstance(ncpus, int) and ncpus > 0:
-				return ncpus
-		else: # OSX:
-			return int(os.popen2("sysctl -n hw.ncpu")[1].read())
-	# Windows:
-	if 'NUMBER_OF_PROCSSORS' in os.environ:
-		ncpus = int(os.environ["NUMBER_OF_PROCESSORS"]);
-		if ncpus > 0:
-			return ncpus
-	return 1 # Default
+	return multiprocessing.cpu_count()
 
 FILE_CACHE = { }
 
