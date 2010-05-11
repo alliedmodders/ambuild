@@ -43,17 +43,20 @@ class ShellCommand(Command):
 			raise Exception('terminated with non-zero exitcode {0}'.format(p.returncode))
 
 class DirectCommand(Command):
-	def __init__(self, argv, exe = None, failureIsFatal = True):
+	def __init__(self, argv, exe = None, failureIsFatal = True, env = None):
 		Command.__init__(self)
 		self.exe = exe
 		self.argv = argv
 		self.failureIsFatal = failureIsFatal
+		self.env = env
 	def run(self, runner, job):
 		runner.PrintOut(' '.join(['"' + i + '"' for i in self.argv]))
 		args = { 'args':	 self.argv,
 			       'stdout': subprocess.PIPE,
 			       'stderr': subprocess.PIPE,
 		         'shell':  False }
+		if self.env != None:
+			args['env'] = self.env
 		if self.exe != None:
 			args['executable'] = self.exe
 		p = subprocess.Popen(**args)
