@@ -49,7 +49,7 @@ class DirectCommand(Command):
 		self.argv = argv
 		self.failureIsFatal = failureIsFatal
 	def run(self, runner, job):
-		runner.PrintOut(' '.join([i for i in self.argv]))
+		runner.PrintOut(' '.join(['"' + i + '"' for i in self.argv]))
 		args = { 'args':	 self.argv,
 			       'stdout': subprocess.PIPE,
 			       'stderr': subprocess.PIPE,

@@ -101,10 +101,16 @@ class Compiler:
 		self.env[key] = os.environ[key]
 
 	def AddToListVar(self, key, item):
-		if not key in self.env:
-			self.env[key] = [item]
+		if type(item) == list:
+			if not key in self.env:
+				self.env[key] = [].extend(item)
+			else:
+				self.env[key].extend(item)
 		else:
-			self.env[key].append(item)
+			if not key in self.env:
+				self.env[key] = [item]
+			else:
+				self.env[key].append(item)
 
 	def DetectCCompiler(self):
 		if 'CC' in self.env:
