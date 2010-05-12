@@ -418,7 +418,10 @@ class BinaryBuilder:
 		args.extend(self.env['POSTLINKFLAGS'])
 		if isinstance(cc, GCC):
 			if type == 'shared':
-				args.append('-shared')
+				if self.runner.target['platform'] == 'darwin':
+					args.append('-dynamiclib')
+				else:
+					args.append('-shared')
 			args.extend(['-o', binaryName])
 		elif isinstance(cc, MSVC):
 			args.append('/OUT:' + binaryName)
