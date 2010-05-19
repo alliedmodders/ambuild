@@ -401,10 +401,27 @@ class BinaryBuilder:
 			binaryName = self.binary + osutil.SharedLibSuffix()
 		elif type == 'executable':
 			binaryName = self.binary + osutil.ExecutableSuffix()
+		elif type == 'static':
+			binaryName = osutil.StaticLibPrefix() + self.binary + osutil.StaticLibSuffix()
 		binaryPath = os.path.join(self.runner.outputFolder, self.job.workFolder, binaryName)
 
 		if len(self.sourceFiles) == 0 and not self.NeedsRelink(binaryPath):
 			return
+
+		if type == 'static':
+			if osutil.IsUnixy():
+				args = ['ar']
+				args.append('rcs');
+				args.append(binaryName)
+				args.extend([i for i in self.objFiles])
+				self.job.AddCommand(command.DirectCommand(args))
+				return
+			else:
+				args = ['lib.exe']
+				args.append('/OUT:' + binaryName)
+				args.extend([i for i in self.objFiles])
+				self.job.AddCommand(command.DirectCommand(args))
+				return
 
 		if self.hadCxxFiles:
 			cc = self.compiler.cxx
@@ -502,4 +519,13 @@ class ExecutableBuilder(BinaryBuilder):
 	
 	def SendToJob(self):
 		self._SendToJob('executable')
+
+class StaticLibraryBuilder(BinaryBuilder):
+	def __init__(self, binary, runner, job, compiler):
+		BinaryBuilder.__init__(self, binary, runner, job, compiler)
+		self.binaryFile = osutil.StaticLibPrefix() + binary + osutil.StaticLibSuffix()
+
+	def SendToJob(self):
+		self._SendToJob('static')
+
 

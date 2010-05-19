@@ -24,6 +24,17 @@ def SharedLibSuffix():
 	else:
 		return '.so'
 
+def StaticLibSuffix():
+	if IsUnixy():
+		return '.a'
+	return '.lib'
+
+def StaticLibPrefix():
+	if IsWindows():
+		return ''
+	else:
+		return 'lib'
+
 def WaitForProcess(process):
 	out, err = process.communicate()
 	process.stdoutText = out.decode()
