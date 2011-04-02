@@ -311,6 +311,7 @@ class CompileCommand(command.Command):
 		newtext = ''
 		lines = re.split('\n+', self.stderr)
 		check = 0
+		strip = False
 		deps = []
 		#Messy logic to get dependencies and strip output from stderr
 		for i in lines:
@@ -319,18 +320,27 @@ class CompileCommand(command.Command):
 				if m == None:
 					check = 1
 				else:
-					if FileExists(m.groups()[0]):
-						deps.append(m.groups()[0])
+					file = m.groups()[0]
+					if FileExists(file):
+						strip = True
+						if file not in deps:
+							deps.append(file)
 					else:
 						check = 1
 			if check == 1:
-				if newtext.startswith('Multiple include guards may be useful for:'):
+				if len(deps) == 0:
+					# No deps found yet so make sure to still check for them above
+					check = 0
+				elif i.startswith('Multiple include guards may be useful for:'):
 					check = 2
+					strip = True
+				else:
+					strip = False
 			elif check == 2:
 				if not i in deps:
-					newtext += i + '\n'
+					strip = False 
 					check = 3
-			elif check == 3:
+			if not strip and i != '':
 					newtext += i + '\n'
 		self.stderr = newtext
 		return deps
