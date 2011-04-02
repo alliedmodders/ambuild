@@ -35,15 +35,23 @@ class MSVC(Vendor):
 			folder = os.path.relpath(folder, workPath)
 		args.extend(['/I', folder])
 
-class GCC(Vendor):
-	def __init__(self, command, version):
-		Vendor.__init__(self, 'gcc', version, command, '.o')
+class CompatGCC(Vendor):
+	def __init__(self, name, command, version):
+		Vendor.__init__(self, name, version, command, '.o')
 		parts = version.split('.')
 		self.majorVersion = int(parts[0])
 		self.minorVersion = int(parts[1])
 
 	def AddInclude(self, args, workPath, folder):
 		args.extend(['-I', os.path.normpath(folder)])
+
+class GCC(CompatGCC):
+	def __init__(self, command, version):
+		CompatGCC.__init__(self, 'gcc', command, version)
+
+class Clang(CompatGCC):
+	def __init__(self, command, version):
+		CompatGCC.__init__(self, 'clang', command, version)
 
 class Compiler:
 	def __init__(self):
@@ -117,7 +125,7 @@ class Compiler:
 			if self.TryVerifyCompiler(self.env['CC'], 'c'):
 				return True
 		else:
-			list = ['cc', 'icc']
+			list = ['gcc', 'clang', 'cc', 'icc']
 			if osutil.IsWindows():
 				list[0:0] = ['cl']
 			for i in list:
@@ -130,7 +138,7 @@ class Compiler:
 			if self.TryVerifyCompiler(self.env['CXX'], 'cxx'):
 				return True
 		else:
-			list = ['g++', 'c++', 'icc'];
+			list = ['g++', 'clang++', 'c++', 'icc'];
 			if osutil.IsWindows():
 				list[0:0] = ['cl']
 			for i in list:
@@ -161,6 +169,8 @@ int main()
 {
 #if defined __ICC
 	printf("icc %d\\n", __ICC);
+#elif defined __clang__
+	printf("clang %d.%d\\n", __clang_major__, __clang_minor__);
 #elif defined __GNUC__
 	printf("gcc %d.%d\\n", __GNUC__, __GNUC_MINOR__);
 #elif defined _MSC_VER
@@ -215,6 +225,8 @@ int main()
 		vendor, version = lines[0].split(' ')
 		if vendor == 'gcc':
 			v = GCC(name, version)
+		elif vendor == 'clang':
+			v = Clang(name, version)
 		elif vendor == 'msvc':
 			v = MSVC(name, version)
 		else:
@@ -271,7 +283,7 @@ class CompileCommand(command.Command):
 			if compiler.HasProp('CXXINCLUDES'):
 				info.AddIncludes(args, workFolder, compiler['CXXINCLUDES'])
 
-		if isinstance(info, GCC):
+		if isinstance(info, CompatGCC):
 			args.extend(['-H', '-c', fullFile, '-o', objFile + info.objSuffix])
 		elif isinstance(info, MSVC):
 			args.extend(['/showIncludes', '/c', fullFile, '/Fo' + objFile + info.objSuffix])
@@ -280,7 +292,7 @@ class CompileCommand(command.Command):
 		self.vendor = info
 
 	def run(self, runner, job):
-		if isinstance(self.vendor, GCC):
+		if isinstance(self.vendor, CompatGCC):
 			p = command.RunDirectCommand(runner, self.argv)
 			self.stdout = p.stdoutText
 			self.stderr = p.stderrText
@@ -443,7 +455,7 @@ class BinaryBuilder:
 			args.append('/link')
 		args.extend(self.compiler['POSTLINKFLAGS'])
 		args.extend(self.env['POSTLINKFLAGS'])
-		if isinstance(cc, GCC):
+		if isinstance(cc, CompatGCC):
 			if type == 'shared':
 				if self.runner.target['platform'] == 'darwin':
 					args.append('-dynamiclib')
