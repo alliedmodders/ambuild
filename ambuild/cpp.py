@@ -340,13 +340,11 @@ class CompileCommand(command.Command):
 					else:
 						check = 1
 			if check == 1:
-				if len(deps) == 0:
-					# No deps found yet so make sure to still check for them above
-					check = 0
-				elif i.startswith('Multiple include guards may be useful for:'):
+				if i.startswith('Multiple include guards may be useful for:'):
 					check = 2
 					strip = True
 				else:
+					check = 0
 					strip = False
 			elif check == 2:
 				if not i in deps:
