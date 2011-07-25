@@ -126,7 +126,9 @@ class Compiler:
 				return True
 		else:
 			list = ['gcc', 'clang', 'cc', 'icc']
-			if osutil.IsWindows():
+			if osutil.IsMac():
+				list = ['clang', 'gcc', 'cc', 'icc']
+			elif osutil.IsWindows():
 				list[0:0] = ['cl']
 			for i in list:
 				if self.TryVerifyCompiler(i, 'c'):
@@ -138,8 +140,10 @@ class Compiler:
 			if self.TryVerifyCompiler(self.env['CXX'], 'cxx'):
 				return True
 		else:
-			list = ['g++', 'clang++', 'c++', 'icc'];
-			if osutil.IsWindows():
+			list = ['g++', 'clang++', 'c++', 'icc']
+			if osutil.IsMac():
+				list = ['clang++', 'g++', 'c++', 'icc']
+			elif osutil.IsWindows():
 				list[0:0] = ['cl']
 			for i in list:
 				if self.TryVerifyCompiler(i, 'cxx'):

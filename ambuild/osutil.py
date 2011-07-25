@@ -7,8 +7,11 @@ import multiprocessing
 def IsWindows():
 	return sys.platform == 'win32' or sys.platform == 'cygwin'
 
+def IsMac():
+	return sys.platform == 'darwin'
+
 def IsUnixy():
-	return sys.platform[0:5] == 'linux' or sys.platform == 'darwin'
+	return sys.platform[0:5] == 'linux' or IsMac()
 
 def ExecutableSuffix():
 	if IsWindows():
