@@ -1,5 +1,6 @@
 # vim: set ts=2 sw=2 tw=99 noet: 
 import os
+import shutil
 import subprocess
 
 class Command:
@@ -22,7 +23,11 @@ class SymlinkCommand(Command):
 		self.target = target
 	def run(self, master, job):
 		master.PrintOut('symlinking {0} as {1}'.format(self.target, self.link))
-		os.symlink(self.target, self.link)
+		try:
+			os.symlink(self.target, self.link)
+		except:
+			master.PrintOut('symlinking failed; copying instead, {0} as {1}'.format(self.target, self.link))
+			shutil.copyfile(self.target, self.link)
 
 class ShellCommand(Command):
 	def __init__(self, cmdstring, failureIsFatal = True):
