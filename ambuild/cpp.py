@@ -193,10 +193,10 @@ int main()
 }
 """)
 		file.close()
-		if mode == 'c':
-			executable = 'test' + osutil.ExecutableSuffix()
-		elif mode == 'cxx':
-			executable = 'testp' + osutil.ExecutableSuffix()
+		if osutil.IsWindows():
+			executable = 'test.exe'
+		else:
+			executable = 'test'
 		try:
 			os.unlink(executable)
 		except:
@@ -212,7 +212,7 @@ int main()
 		if osutil.WaitForProcess(p) != 0:
 			print('failed with return code {0}'.format(p.returncode))
 			return False
-		exe = osutil.MakePath('.', executable)
+		exe = osutil.MakePath('.', 'test' + osutil.ExecutableSuffix())
 		p = osutil.CreateProcess([executable], executable = exe)
 		if p == None:
 			print('failed to create executable')
