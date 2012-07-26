@@ -452,7 +452,7 @@ class BinaryBuilder:
 			cc = self.compiler.cxx
 		else:
 			cc = self.compiler.cc
-		args = [cc.command]
+		args = cc.command.split(' ')
 		args.extend([i for i in self.objFiles])
 		if isinstance(cc, MSVC):
 			args.append('/link')
