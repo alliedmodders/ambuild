@@ -270,7 +270,7 @@ class CompileCommand(command.Command):
 			info = compiler.cxx
 			self.hadCxxFiles = True
 
-		args = [info.command]
+		args = info.command.split(' ')
 
 		if compiler.HasProp('CFLAGS'):
 			args.extend(compiler['CFLAGS'])
