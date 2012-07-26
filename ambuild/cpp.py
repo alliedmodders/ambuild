@@ -156,7 +156,7 @@ class Compiler:
 		return self.VerifyCompiler(name, mode, 'gcc')
 				
 	def VerifyCompiler(self, name, mode, vendor):
-		args = [name]
+		args = name.split(' ')
 		if 'CPPFLAGS' in self.env:
 			args.extend(self.env['CPPFLAGS'])
 		if 'CFLAGS' in self.env:
@@ -205,6 +205,7 @@ int main()
 			args.extend(['-fno-exceptions', '-fno-rtti'])
 		args.extend([filename, '-o', executable])
 		print('Checking {0} compiler (vendor test {1})... '.format(mode, vendor), end = '')
+		print(args)
 		p = osutil.CreateProcess(args)
 		if p == None:
 			print('not found')
