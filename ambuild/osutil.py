@@ -85,21 +85,14 @@ def PopFolder():
 def NumberOfCPUs():
 	return multiprocessing.cpu_count()
 
-FILE_CACHE = { }
-
 def FileExists(file):
-	if file in FILE_CACHE:
-		return True
 	if os.path.isfile(file):
 		GetFileTime(file)
 		return True
 	return False
 
 def GetFileTime(file):
-	if file in FILE_CACHE:
-		return FILE_CACHE[file]
 	time = os.path.getmtime(file)
-	FILE_CACHE[file] = time
 	return time
 
 def IsFileNewer(this, that):
