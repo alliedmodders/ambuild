@@ -369,6 +369,17 @@ def GetFileTime(file):
 def IsFileNewer(this, that):
 	return osutil.IsFileNewer(this, that)
 
+class LinkCommand(command.DirectCommand):
+	def __init__(self, args, binary, outfile):
+		command.DirectCommand.__init__(self, args)
+		self.binary = binary
+		self.outfile = outfile
+
+	def run(self, runner, job):
+		if not self.binary.NeedsRelink(self.outfile):
+			return
+		command.DirectCommand.run(self, runner, job)
+
 class BinaryBuilder:
 	def __init__(self, binary, runner, job, compiler):
 		self.sourceFiles = []
@@ -379,7 +390,8 @@ class BinaryBuilder:
 		self.hadCxxFiles = False
 		self.job = job
 		self.mostRecentDepends = 0
-		self.mostRecentLink = 0
+		self.relinkQueue = []
+		self.alwaysRelink = False
 		self.RebuildIfNewer(runner.CallerScript(3))
 		self.env = {'POSTLINKFLAGS': [], 'CXXINCLUDES': []}
 
@@ -400,21 +412,28 @@ class BinaryBuilder:
 			self.mostRecentDepends = time
 
 	def RelinkIfNewer(self, file):
-		time = GetFileTime(file)
-		if time > self.mostRecentLink:
-			self.mostRecentLink = time
+		self.relinkQueue.append(file)
 
 	def NeedsRelink(self, binaryPath):
+		if self.alwaysRelink:
+			return True
+
 		if not FileExists(binaryPath):
 			return True
+
+		ourTime = GetFileTime(binaryPath)
+
 		for i in self.objFiles:
 			objFile = os.path.join(self.runner.outputFolder, self.job.workFolder, i)
 			if not FileExists(objFile):
 				return True
-			if IsFileNewer(objFile, binaryPath):
+			if IsFileNewer(objFile, ourTime):
 				return True
-		if self.mostRecentLink > GetFileTime(binaryPath):
-			return True
+
+		for file in self.relinkQueue:
+			if IsFileNewer(file, ourTime):
+				return True
+
 		return False
 
 	def __getitem__(self, key):
@@ -430,8 +449,8 @@ class BinaryBuilder:
 			binaryName = osutil.StaticLibPrefix() + self.binary + osutil.StaticLibSuffix()
 		binaryPath = os.path.join(self.runner.outputFolder, self.job.workFolder, binaryName)
 
-		if len(self.sourceFiles) == 0 and not self.NeedsRelink(binaryPath):
-			return
+		if len(self.sourceFiles) > 0:
+			self.alwaysRelink = True
 
 		if type == 'static':
 			if osutil.IsUnixy():
@@ -439,13 +458,13 @@ class BinaryBuilder:
 				args.append('rcs');
 				args.append(binaryName)
 				args.extend([i for i in self.objFiles])
-				self.job.AddCommand(command.DirectCommand(args))
+				self.job.AddCommand(LinkCommand(args, self, binaryPath))
 				return
 			else:
 				args = ['lib.exe']
 				args.append('/OUT:' + binaryName)
 				args.extend([i for i in self.objFiles])
-				self.job.AddCommand(command.DirectCommand(args))
+				self.job.AddCommand(LinkCommand(args, self, binaryPath))
 				return
 
 		if self.hadCxxFiles:
@@ -470,7 +489,7 @@ class BinaryBuilder:
 			if type == 'shared':
 				args.append('/DLL')
 			args.append('/PDB:"' + self.binary + '.pdb' + '"')
-		self.job.AddCommand(command.DirectCommand(args))
+		self.job.AddCommand(LinkCommand(args, self, binaryPath))
 
 	def AddResourceFile(self, file, env):
 		if self.runner.target['platform'] != 'windows':
