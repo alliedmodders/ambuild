@@ -174,7 +174,11 @@ int main()
 #if defined __ICC
 	printf("icc %d\\n", __ICC);
 #elif defined __clang__
+# if defined(__clang_major__) && defined(__clang_minor__)
 	printf("clang %d.%d\\n", __clang_major__, __clang_minor__);
+# else
+	printf("clang 1.%d\\n", __GNUC_MINOR__);
+# endif
 #elif defined __GNUC__
 	printf("gcc %d.%d\\n", __GNUC__, __GNUC_MINOR__);
 #elif defined _MSC_VER
