@@ -1,4 +1,5 @@
 # vim: set ts=2 sw=2 tw=99 noet:
+from __future__ import print_function
 import copy
 import subprocess
 import os
