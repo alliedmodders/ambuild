@@ -256,11 +256,7 @@ int main()
 		return self.env[key]
 
 def ObjectFile(file):
-	objFile = os.path.splitext(file)[0]
-	objFile = objFile.replace('/', '_')
-	objFile = objFile.replace('\\', '_')
-	objFile = objFile.replace('.', '_')
-	return objFile
+	return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0]);
 
 class CompileCommand(command.Command):
 	def __init__(self, runner, compiler, file, objFile, workFolder):
