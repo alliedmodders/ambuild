@@ -31,7 +31,8 @@ class Builder(object):
     self.visit_id_ = self.cx.graph.nextVisitId()
 
     # Find the set of leaf nodes in the graph - the set of nodes which have
-    # no dependencies.
+    # no dependencies. This algorithm is not perfect; it simply peels each
+    # layer of leaf nodes off the graph. It is conservative.
     leafs = []
     for dmg_node in self.damage_graph_.nodes:
       if not len(dmg_node.children):
@@ -49,18 +50,27 @@ class Builder(object):
   def computeNextLeafSet(self, current_leafs):
     tasks = []
     new_leafs = []
-    for leaf in current_leafs:
+    while len(current_leafs):
+      leaf = current_leafs.pop()
       task = self.createTask(leaf)
       if task:
         tasks.append(task)
 
-      # If generating this node would mean it's now safe to generate any of
-      # our child nodes, add those nodes to the next processing set.
+      # Search for any parents of this node, and mark off that we computed
+      # one of its dependencies.
       for parent in leaf.parents:
         assert parent.unmet > 0
         parent.unmet -= 1
+        # If we're the last dependency...
         if parent.unmet == 0:
-          new_leafs.append(parent)
+          # If the current leaf generated a task, that's a dependency, so we
+          # add its parent to the *next* round of tasks.
+          if task:
+            new_leafs.append(parent)
+          # Otherwise, the node generated no task, so we can immediately add
+          # our parent to the current round of tasks.
+          else:
+            current_leafs.append(parent)
 
     if len(tasks):
       self.steps.append(tasks)

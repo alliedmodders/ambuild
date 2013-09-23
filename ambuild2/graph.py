@@ -137,7 +137,9 @@ class GraphProxy(object):
 
   def printNode(self, node, depth):
     print(('  ' * depth) + '- ' + node.path)
-    for input in node.inputs:
+    for input in node.static_inputs:
+      self.printNode(input, depth + 1)
+    for input in node.dynamic_inputs:
       self.printNode(input, depth + 1)
 
   def printGraph(self):
