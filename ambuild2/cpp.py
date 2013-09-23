@@ -282,6 +282,8 @@ def CompileGCC(argv, path):
   out = stdout.decode()
   err = stderr.decode()
 
+  out = (' '.join([i for i in argv])) + out
+
   new_err, deps = ParseGCCDeps(err)
 
   if p.returncode != 0:

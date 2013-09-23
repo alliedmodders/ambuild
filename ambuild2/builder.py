@@ -118,8 +118,13 @@ class Builder(object):
       task_id = reply['task_id']
       dmg_node = self.tasks[task_id]
       handler = dmg_node.node.handler
-      if not handler.update(self.cx, dmg_node, dmg_node.node, reply):
+      try:
+        if not handler.update(self.cx, dmg_node, dmg_node.node, reply):
+          build_failed = True
+      except:
         build_failed = True
+
+      if build_failed:
         continue
 
       # If the build hasn't failed, try to keep building more stuff.
