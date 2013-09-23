@@ -27,9 +27,11 @@ class ProcessChild(object):
       msg_handler = handlers.Find(msg_type)
       reply = msg_handler.build(self, message)
       if not reply:
-        reply['stdout'] = ''
-        reply['stderr'] = 'No error reported'
-        reply['ok'] = False
+        reply = {
+          'stdout': '',
+          'stderr': 'No error reported',
+          'ok': False
+        }
       reply['task_id'] = message['task_id']
       self.send_reply(reply)
 

@@ -1,5 +1,6 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
 import os
+import traceback
 from damage import Damage
 from procman import ProcessManager
 import multiprocessing as mp
@@ -24,13 +25,16 @@ class Builder(object):
     return task_data
 
   def computeSteps(self):
+    # Commit dirty nodes.
+    self.cx.graph.commitDirty([dmg_node.node for dmg_node in self.damage_graph_.nodes])
+
     self.visit_id_ = self.cx.graph.nextVisitId()
 
     # Find the set of leaf nodes in the graph - the set of nodes which have
     # no dependencies.
     leafs = []
     for dmg_node in self.damage_graph_.nodes:
-      if not len(dmg_node.parents):
+      if not len(dmg_node.children):
         leafs.append(dmg_node)
 
     # Find each set of independent tasks in the dependency graph, and create
@@ -52,11 +56,11 @@ class Builder(object):
 
       # If generating this node would mean it's now safe to generate any of
       # our child nodes, add those nodes to the next processing set.
-      for child in leaf.children:
-        assert child.unmet > 0
-        child.unmet -= 1
-        if child.unmet == 0:
-          new_leafs.append(child)
+      for parent in leaf.parents:
+        assert parent.unmet > 0
+        parent.unmet -= 1
+        if parent.unmet == 0:
+          new_leafs.append(parent)
 
     if len(tasks):
       self.steps.append(tasks)
@@ -73,9 +77,6 @@ class Builder(object):
         print(' : ' + self.tasks[task_id].node.path)
 
   def build(self):
-    # Commit dirty nodes.
-    self.cx.graph.commitDirty([dmg_node.node for dmg_node in self.damage_graph_.nodes])
-
     num_processes = int(mp.cpu_count() * 1.5)
     manager = ProcessManager(num_processes)
 
@@ -106,7 +107,7 @@ class Builder(object):
       expecting_replies += 1
 
     build_failed = False
-    while expecting_replies or ((not build_failed) and (not group.empty())):
+    while expecting_replies or ((not build_failed) and len(group)):
       process, reply = manager.waitForReply()
 
       # If we don't see a reply, then all the processes died.
@@ -121,14 +122,15 @@ class Builder(object):
       try:
         if not handler.update(self.cx, dmg_node, dmg_node.node, reply):
           build_failed = True
-      except:
+      except Exception as exn:
         build_failed = True
+        traceback.print_exc()
 
       if build_failed:
         continue
 
       # If the build hasn't failed, try to keep building more stuff.
-      if (not build_failed) and (not group.empty()):
+      if (not build_failed) and len(group):
         message = group.pop()
         process.send(message)
         expecting_replies += 1

@@ -13,6 +13,15 @@ class DatabaseChild(object):
     self.input = input
     self.cn = None
     self.idcache = { }
+    self.messageMap = {
+      'connect': lambda message: self.recvConnect(message),
+      'register': lambda message: self.recvRegister(message),
+      'addedge': lambda message: self.recvEdgeCmd(message),
+      'dropedge': lambda message: self.recvEdgeCmd(message),
+      'commit': lambda message: self.recvCommit(message),
+      'unmarkDirty': lambda message: self.recvUnmarkDirty(message),
+      'commitDirty': lambda message: self.recvCommitDirty(message),
+    }
 
   @staticmethod
   def startup(input):
@@ -34,50 +43,46 @@ class DatabaseChild(object):
     return proxy_id
 
   def recvMessage(self, message):
-    if message['msg'] == 'connect':
-      return self.recvConnect(message)
-    if message['msg'] == 'register':
-      return self.recvRegister(message)
-    if message['msg'] == 'addedge':
-      return self.recvAddEdge(message)
-    if message['msg'] == 'commit':
-      return self.recvCommit(message)
-    if message['msg'] == 'unmarkDirty':
-      return self.recvUnmarkDirty(message)
-    if message['msg'] == 'commitDirty':
-      return self.recvCommitDirty(message)
-    raise Exception('Unknown message type! ' + message['msg'])
+    msg_type = message['msg_type']
+    self.messageMap[msg_type](message)
 
   def recvRegister(self, message):
     path = message['path']
     node_type = message['node_type']
     assert path not in self.idcache
 
+    dirty = message['dirty']
+    stamp = message['stamp']
+
     if message['data'] == None:
-      query = "INSERT INTO nodes (path, node_type, stamp, dirty) VALUES (?, ?, 0, 1)"
-      cursor = self.cn.execute(query, (path, node_type))
+      query = "INSERT INTO nodes (path, node_type, stamp, dirty) VALUES (?, ?, ?, ?)"
+      cursor = self.cn.execute(query, (path, node_type, stamp, dirty))
     else:
       blob = pickle.dumps(message['data'])
       # Python 2, str == bytes, sqlite3 expects buffers.
       # Python 3, str != bytes, sqlite3 expects bytes.
       if type(blob) == str:
         blob = buffer(blob)
-      query = "INSERT INTO nodes (path, node_type, stamp, dirty, data) VALUES (?, ?, 0, 1, ?)"
-      cursor = self.cn.execute(query, (path, node_type, blob))
+      query = "INSERT INTO nodes (path, node_type, stamp, dirty, data) VALUES (?, ?, ?, ?, ?)"
+      cursor = self.cn.execute(query, (path, node_type, stamp, dirty, blob))
     self.idcache[path] = cursor.lastrowid
 
-  def recvAddEdge(self, message):
+  def recvEdgeCmd(self, message):
     input = message['input']
     output = message['output']
     input_id = self.getIdForProxy(input)
     output_id = self.getIdForProxy(output)
-    query = "INSERT INTO edges (output_id, input_id) VALUES (?, ?)"
-    self.cn.execute(query, (output_id, input_id))
+    generated = message['generated']
+    if message['msg_type'] == 'addedge':
+      query = "INSERT INTO edges (output_id, input_id, generated) VALUES (?, ?, ?)"
+    else:
+      query = "DELETE FROM edges WHERE output_id = ? AND input_id = ? AND generated = ?"
+    self.cn.execute(query, (output_id, input_id, generated))
 
   def recvUnmarkDirty(self, message):
     node_id = self.getIdForProxy(message['proxy_id'])
     stamp = message['stamp']
-    query = "UPDATE nodes SET stamp = ? AND dirty = 1 WHERE rowid = ?"
+    query = "UPDATE nodes SET stamp = ?, dirty = 0 WHERE rowid = ?"
     self.cn.execute(query, (stamp, node_id))
     self.cn.commit()
 
@@ -104,29 +109,40 @@ class DatabaseParent(object):
         args=(self.input, )
     )
     self.child.start()
-    self.input.put({'msg': 'connect', 'path': path})
+    self.input.put({'msg_type': 'connect', 'path': path})
 
-  def registerNode(self, node_type, path, data):
+  def registerNode(self, node_type, path, data, dirty, stamp):
     self.input.put({
-      'msg': 'register',
+      'msg_type': 'register',
       'node_type': node_type,
       'path': path,
-      'data': data
+      'data': data,
+      'dirty': int(dirty),
+      'stamp': stamp
     })
 
     # Registration is asynchronous, so we don't have an ID representation yet.
     return None
 
-  def registerEdge(self, output, input):
+  def registerEdge(self, output, input, generated):
     self.input.put({
-      'msg': 'addedge',
+      'msg_type': 'addedge',
       'input': input,
-      'output': output
+      'output': output,
+      'generated': int(generated),
+    })
+
+  def unregisterEdge(self, output, input, generated):
+    self.input.put({
+      'msg_type': 'dropedge',
+      'input': input,
+      'output': output,
+      'generated': int(generated)
     })
 
   def unmarkDirty(self, proxy_id, stamp):
     self.input.put({
-      'msg': 'unmarkDirty',
+      'msg_type': 'unmarkDirty',
       'proxy_id': proxy_id,
       'stamp': stamp
     })
@@ -136,12 +152,12 @@ class DatabaseParent(object):
       return
 
     self.input.put({
-      'msg': 'commitDirty',
+      'msg_type': 'commitDirty',
       'proxies': proxy_list
     })
 
   def commit(self):
-    self.input.put({'msg': 'commit'})
+    self.input.put({'msg_type': 'commit'})
 
   def close(self):
     self.input.put('die')
@@ -151,29 +167,20 @@ class DatabaseParent(object):
     with sqlite3.connect(self.path) as cn:
       nodes = {}
       cursor = cn.execute("SELECT rowid, path, node_type, stamp, data, dirty FROM nodes")
-      for row in cursor:
-        rowid = row[0]
-        path = row[1]
-        node_type = row[2]
-        stamp = row[3]
-        if not row[4] or len(row[4]) == 0:
+      for rowid, path, node_type, stamp, blob, dirty in cursor:
+        if not blob or len(blob) == 0:
           data = None
-        elif type(row[4]) == bytes:
-          data = pickle.loads(row[4])
+        elif type(blob) == bytes:
+          data = pickle.loads(blob)
         else:
-          data = pickle.loads(str(row[4]))
-        if row[5]:
-          dirty = True
-        else:
-          dirty = False
-        nodes[rowid] = graph.importNode(node_type, path, rowid, stamp, dirty, data)
+          data = pickle.loads(str(blob))
+        nodes[rowid] = graph.importNode(node_type, path, rowid, data, bool(dirty), stamp)
 
-      cursor = cn.execute("SELECT output_id, input_id FROM edges")
-      for row in cursor:
-        output_node = nodes[row[0]]
-        input_node = nodes[row[1]]
-        output_node.inputs.add(input_node)
-        input_node.children.add(output_node)
+      cursor = cn.execute("SELECT output_id, input_id, generated FROM edges")
+      for output_id, input_id, generated in cursor:
+        output_node = nodes[output_id]
+        input_node = nodes[input_id]
+        output_node.addDependency(input_node, generated)
 
 def CreateDatabase(path):
   cn = sqlite3.connect(path)
@@ -192,7 +199,8 @@ def CreateDatabase(path):
       CREATE TABLE IF NOT EXISTS edges(
         output_id INTEGER NOT NULL,
         input_id INTEGER NOT NULL,
-        UNIQUE (output_id, input_id)
+        generated INTEGER NOT NULL,
+        UNIQUE (output_id, input_id, generated)
       );
   """
   cn.execute(query)

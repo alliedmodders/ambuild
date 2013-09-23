@@ -14,8 +14,8 @@ class DamageNode(object):
 
   def addChild(self, node):
     self.children.add(node)
+    self.unmet += 1
     node.parents.add(self)
-    node.unmet += 1
 
 class Damage(object):
   def __init__(self, graph):
@@ -55,7 +55,7 @@ class Damage(object):
     dmg_node = DamageNode(node)
     self.seen[node] = dmg_node
 
-    for child in node.inputs:
+    for child in node.children:
       if child.visit_id == visit_id:
         parent = self.seen[child]
       else:

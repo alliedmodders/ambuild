@@ -2,9 +2,11 @@
 
 MessageHandlers_ = {}
 
-def Register(clasp):
-  assert clasp.msg_type not in MessageHandlers_
-  MessageHandlers_[clasp.msg_type] = clasp
+def Register(clasp, msg_type=None):
+  if not msg_type:
+    msg_type = clasp.msg_type
+  assert msg_type not in MessageHandlers_
+  MessageHandlers_[msg_type] = clasp
 
 def Find(name):
   return MessageHandlers_[name]

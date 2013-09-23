@@ -286,6 +286,15 @@ def CompileGCC(argv, path):
 
   new_err, deps = ParseGCCDeps(err)
 
+  # Adjust any dependencies relative to the current folder, to be relative
+  # to the output folder instead.
+  base = os.path.split(path)[0]
+  paths = []
+  for inc_path in deps:
+    if not os.path.isabs(inc_path):
+      inc_path = os.path.normpath(os.path.join(base, inc_path))
+    paths.append(inc_path)
+
   if p.returncode != 0:
     return {
       'ok': False,
@@ -297,11 +306,11 @@ def CompileGCC(argv, path):
     'ok': True,
     'stdout': out,
     'stderr': new_err,
-    'deps': deps
+    'deps': paths
   }
 
 class CxxHandler(handlers.Handler):
-  msg_type = 'cxx-c'
+  msg_type = 'cxx:obj'
 
   @staticmethod
   def build(process, message):
@@ -328,7 +337,13 @@ class CxxHandler(handlers.Handler):
     if not reply['ok']:
       return False
 
-    raise Exception('egg')
+    # Make a node for everything in the new set.
+    deps = set()
+    for path in reply['deps']:
+      deps.add(cx.graph.findOrAddSource(path, dirty=True))
+    cx.graph.updateDynamicDependencies(node, deps)
+    cx.graph.unmarkDirty(node)
+    return True
 
   @staticmethod
   def createNodeData(argv, cctype):
@@ -338,7 +353,7 @@ class CxxHandler(handlers.Handler):
     }
 
 class LinkHandler(handlers.Handler):
-  msg_type = 'cxx-link'
+  msg_type = 'cxx:bin'
 
   @staticmethod
   def build(process, message):
