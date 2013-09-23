@@ -49,6 +49,8 @@ class Context(object):
                       help="Show the computed change graph and then exit.")
     parser.add_option("--show-steps", dest="show_steps", action="store_true", default=False,
                       help="Show the computed build steps and then exit.")
+    parser.add_option("-j", "--jobs", dest="jobs", type="int", default=0,
+                      help="Number of worker processes. Minimum number is 1; default is #cores * 1.5.")
     options, args = parser.parse_args()
 
     if options.show_graph:
@@ -64,5 +66,5 @@ class Context(object):
     if options.show_steps:
       builder.printSteps()
       return True
-    return builder.build()
+    return builder.build(options.jobs)
 

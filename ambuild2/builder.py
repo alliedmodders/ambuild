@@ -86,8 +86,10 @@ class Builder(object):
         task_id = task['task_id']
         print(' : ' + self.tasks[task_id].node.path)
 
-  def build(self):
-    num_processes = int(mp.cpu_count() * 1.5)
+  def build(self, num_processes):
+    if num_processes <= 0:
+      num_processes = int(mp.cpu_count() * 1.5)
+
     manager = ProcessManager(num_processes)
 
     build_succeeded = True

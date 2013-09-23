@@ -365,6 +365,9 @@ class LinkHandler(handlers.Handler):
       'data': node.data
     }
 
+  def update(cx, dmg_node, node, reply):
+    return False
+
   @staticmethod
   def createNodeData(binary):
     return None
