@@ -39,19 +39,20 @@ class Preparer(object):
   def Add(self, n):
     n.generate(self, self.graph)
 
+  def execFile(self, path):
+    with open(path) as fp:
+      chars = fp.read()
+      code = compile(chars, path, 'exec')
+    exec(code, {
+      'builder': self
+    })
+
   def generateGraph(self):
     self.currentSourcePath = self.sourcePath
     self.currentOutputFolder = ''
 
-    # We temporarily disable bytecode generation, since Python 2 drops
-    # annoying files all over the place with just 'c' appended.
-    if sys.version_info[0] < 3:
-      sys.dont_write_bytecode = True
     root = os.path.join(self.sourcePath, 'AMBuildScript')
-    script = imp.load_source(root, root)
-    script.DefineJobs(self)
-    if sys.version_info[0] < 3:
-      sys.dont_write_bytecode = False
+    self.execFile(root)
     self.server.commit()
 
   def generateBuildPy(self):
