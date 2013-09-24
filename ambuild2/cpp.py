@@ -272,18 +272,7 @@ def ParseGCCDeps(text):
   return new_text, deps
 
 def CompileGCC(argv, path):
-  p = subprocess.Popen(
-      args=argv,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.PIPE,
-      shell=False
-  )
-  stdout, stderr = p.communicate()
-  out = stdout.decode()
-  err = stderr.decode()
-
-  out = (' '.join([i for i in argv])) + out
-
+  p, out, err = util.Execute(argv)
   new_err, deps = ParseGCCDeps(err)
 
   # Adjust any dependencies relative to the current folder, to be relative
@@ -330,11 +319,7 @@ class CxxHandler(handlers.Handler):
 
   @staticmethod
   def update(cx, dmg_node, node, reply):
-    if len(reply['stdout']):
-      print(reply['stdout'])
-    if len(reply['stderr']):
-      print(reply['stderr'])
-    if not reply['ok']:
+    if not handlers.Handler.checkReply(cx, dmg_node, node, reply):
       return False
 
     # Make a node for everything in the new set.
@@ -357,20 +342,25 @@ class LinkHandler(handlers.Handler):
 
   @staticmethod
   def build(process, message):
-    print(message)
+    argv = message['argv']
+    p, out, err = util.Execute(argv)
+    return {
+      'ok': p.returncode == 0,
+      'stdout': out,
+      'stderr': err
+    }
 
   @staticmethod
   def createTask(cx, builder, node):
     return {
-      'data': node.data
+      'argv': node.data
     }
 
   def update(cx, dmg_node, node, reply):
-    return False
-
-  @staticmethod
-  def createNodeData(binary):
-    return None
+    if not handlers.Handler.checkReply(cx, dmg_node, node, reply):
+      return False
+    cx.graph.unmarkDirty(node)
+    return True
 
 handlers.Register(CxxHandler)
 handlers.Register(LinkHandler)
@@ -383,6 +373,8 @@ class BinaryBuilder(graph.NodeBuilder):
     self.sources = []
     self.sourcePath = compiler.cx.currentSourcePath
     self.outputFolder = compiler.cx.currentOutputFolder
+    self.used_cxx = False
+    self.linker = None
 
   def generate(self, cx, graph):
     # Construct an absolute path to our output folder.
@@ -391,13 +383,24 @@ class BinaryBuilder(graph.NodeBuilder):
     self.default_c_env = CCommandEnv(outputPath, self.compiler, self.compiler.cc)
     self.default_cxx_env = CCommandEnv(outputPath, self.compiler, self.compiler.cxx)
 
-    binPath = os.path.join(self.outputFolder, self.binary)
-    data = LinkHandler.createNodeData(self.binary)
-    binNode = graph.addNode(LinkHandler, binPath, data)
+    children = [self.generateItem(cx, graph, item) for item in self.sources]
 
-    for item in self.sources:
-      objNode = self.generateItem(cx, graph, item)
-      graph.addDependency(binNode, objNode)
+    if not self.linker:
+      if self.used_cxx:
+        self.linker = self.compiler.cxx
+      else:
+        self.linker = self.compiler.cc
+
+    argv = self.linker.command.split(' ')
+    for child in children:
+      if child.handler != CxxHandler:
+        continue
+      folder, name = os.path.split(child.path)
+      argv.append(name)
+
+    parent = self.generateBinary(cx, graph, argv)
+    for child in children:
+      graph.addDependency(parent, child)
 
   def generateItem(self, cx, graph, item):
     fparts = os.path.splitext(item)
@@ -406,6 +409,7 @@ class BinaryBuilder(graph.NodeBuilder):
       cenv = self.default_c_env
     else:
       cenv = self.default_cxx_env
+      self.used_cxx = True
 
     if isinstance(cenv.compiler, MSVC):
       cctype = 'msvc'
@@ -427,3 +431,17 @@ class Program(BinaryBuilder):
   def __init__(self, compiler, binary):
     super(Program, self).__init__(compiler, binary)
 
+  def generateBinary(self, cx, graph, argv):
+    name = self.binary + util.ExecutableSuffix()
+    path = os.path.join(self.outputFolder, self.binary)
+
+    if isinstance(self.linker, MSVC):
+      argv.append('/link')
+    argv.extend(self.compiler.linkflags)
+    if isinstance(self.linker, MSVC):
+      argv.append('/OUT:' + name)
+      argv.append('/PDB:"' + self.binary + '.pdb"')
+    else:
+      argv.extend(['-o', name])
+
+    return graph.addNode(LinkHandler, path, argv)

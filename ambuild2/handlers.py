@@ -33,6 +33,17 @@ class Handler(object):
   def createTask(cx, builder, node):
     raise Exception("must be overridden!")
 
+  # Helper method for handling output.
+  @staticmethod
+  def checkReply(cx, dmg_node, node, reply):
+    if len(reply['stdout']):
+      print(reply['stdout'])
+    if len(reply['stderr']):
+      print(reply['stderr'])
+    if not reply['ok']:
+      return False
+    return True
+
 # A special handler is defined for nodes that are purely source files.
 class SourceHandler(object):
   msg_type = 'src:'

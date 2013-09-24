@@ -104,23 +104,16 @@ class Guard:
   def __exit__(self, type, value, traceback):
     self.obj.close()
 
-def Execute(argv, exe=None):
-  print(' '.join([i for i in argv]))
-  args = {
-    'args': argv,
-    'stdout': subprocess.PIPE,
-    'stderr': subprocess.PIPE,
-    'shell': False
-  }
-  if exe:
-    argv['executable'] = exe
-  p = subprocess.Popen(**args)
+def Execute(argv):
+  p = subprocess.Popen(
+      args=argv,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      shell=False
+  )
   stdout, stderr = p.communicate()
-  return {
-    'process': p,
-    'stdout': stdout.decode(),
-    'stderr': stderr.decode(),
-    'oldstdout': stdout,
-    'oldstderr': stderr
-  }
+  out = stdout.decode()
+  err = stderr.decode()
 
+  out = (' '.join([i for i in argv])) + out
+  return p, out, err
