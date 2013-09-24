@@ -93,7 +93,14 @@ class Builder(object):
       return True
 
     if num_processes <= 0:
-      num_processes = int(mp.cpu_count() * 1.5)
+      # Using 1 process will be strictly worse than an in-process build,
+      # since we incur the additional overhead of message passing. So we
+      # create two processes just because. Someday we should be able to
+      # switch over to an in-process manager.
+      if mp.cpu_count() == 1:
+        num_processes = 2
+      else:
+        num_processes = int(mp.cpu_count() * 1.5)
 
     # Don't create more processes than we'll need.
     if len(self.tasks) < num_processes:
