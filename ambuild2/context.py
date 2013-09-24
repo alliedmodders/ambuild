@@ -2,6 +2,7 @@
 import os
 import sys
 import imp
+import time
 import database
 import cpp, graph, util
 from damage import Damage
@@ -61,7 +62,7 @@ class Context(object):
       damage = Damage(self.graph)
       damage.printChanges()
       return True
-
+    
     builder = Builder(self)
     if options.show_steps:
       builder.printSteps()

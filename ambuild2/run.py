@@ -1,8 +1,7 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
 from __future__ import print_function
-import sys
-import os
 import util
+import os, sys
 from prep import Preparer
 from context import Context
 from optparse import OptionParser

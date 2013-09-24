@@ -1,5 +1,6 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
 import os
+import time
 import traceback
 from damage import Damage
 from procman import ProcessManager
@@ -87,8 +88,16 @@ class Builder(object):
         print(' : ' + self.tasks[task_id].node.path)
 
   def build(self, num_processes):
+    # Early bailout if there is nothing to do.
+    if not len(self.tasks):
+      return True
+
     if num_processes <= 0:
       num_processes = int(mp.cpu_count() * 1.5)
+
+    # Don't create more processes than we'll need.
+    if len(self.tasks) < num_processes:
+      num_processes = len(self.tasks)
 
     manager = ProcessManager(num_processes)
 

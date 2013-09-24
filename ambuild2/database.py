@@ -1,5 +1,6 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
 import os
+import time
 try:
   import cPickle as pickle
 except:
@@ -30,7 +31,7 @@ class DatabaseChild(object):
 
   def run(self):
     while True:
-      obj = self.input.get()
+      obj = self.input.recv()
       if obj == 'die':
         if self.cn:
           self.cn.close()
@@ -84,35 +85,45 @@ class DatabaseChild(object):
     stamp = message['stamp']
     query = "UPDATE nodes SET stamp = ?, dirty = 0 WHERE rowid = ?"
     self.cn.execute(query, (stamp, node_id))
-    self.cn.commit()
+    self.commit()
+
+  def recvCommit(self, message):
+    self.commit()
+
+  def recvConnect(self, message):
+    self.cn = sqlite3.connect(message['path'])
+    self.cn.execute("PRAGMA journal_mode = WAL;")
+
+    # This is technically not as safe, but we'd rather get the massive
+    # performance win. If an OS crash or power outage cases db corruption,
+    # the build could become corrupt? But so could any file write, really.
+    self.cn.execute("PRAGMA synchronous = OFF;")
 
   def recvCommitDirty(self, message):
     query = "UPDATE nodes SET dirty = 1 WHERE rowid = ?"
     for proxy_id in message['proxies']:
       node_id = self.getIdForProxy(proxy_id)
       self.cn.execute(query, (node_id,))
-    self.cn.commit()
+    self.commit()
 
-  def recvCommit(self, message):
+  def commit(self):
     self.cn.commit()
-
-  def recvConnect(self, message):
-    self.cn = sqlite3.connect(message['path'])
 
 # Parent process view of the database.
 class DatabaseParent(object):
   def __init__(self, path):
+    receiver, sender = mp.Pipe()
     self.path = path
-    self.input = mp.Queue()
+    self.sender = sender
     self.child = mp.Process(
         target=DatabaseChild.startup,
-        args=(self.input, )
+        args=(receiver, )
     )
     self.child.start()
-    self.input.put({'msg_type': 'connect', 'path': path})
+    self.sender.send({'msg_type': 'connect', 'path': path})
 
   def registerNode(self, node_type, path, data, dirty, stamp):
-    self.input.put({
+    self.sender.send({
       'msg_type': 'register',
       'node_type': node_type,
       'path': path,
@@ -125,7 +136,7 @@ class DatabaseParent(object):
     return None
 
   def registerEdge(self, output, input, generated):
-    self.input.put({
+    self.sender.send({
       'msg_type': 'addedge',
       'input': input,
       'output': output,
@@ -133,7 +144,7 @@ class DatabaseParent(object):
     })
 
   def unregisterEdge(self, output, input, generated):
-    self.input.put({
+    self.sender.send({
       'msg_type': 'dropedge',
       'input': input,
       'output': output,
@@ -141,7 +152,7 @@ class DatabaseParent(object):
     })
 
   def unmarkDirty(self, proxy_id, stamp):
-    self.input.put({
+    self.sender.send({
       'msg_type': 'unmarkDirty',
       'proxy_id': proxy_id,
       'stamp': stamp
@@ -151,16 +162,16 @@ class DatabaseParent(object):
     if not len(proxy_list):
       return
 
-    self.input.put({
+    self.sender.send({
       'msg_type': 'commitDirty',
       'proxies': proxy_list
     })
 
   def commit(self):
-    self.input.put({'msg_type': 'commit'})
+    self.sender.send({'msg_type': 'commit'})
 
   def close(self):
-    self.input.put('die')
+    self.sender.send('die')
     self.child.join()
 
   def importGraph(self, graph):
