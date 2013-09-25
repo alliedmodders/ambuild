@@ -2,7 +2,7 @@
 from __future__ import print_function
 import util
 import os, sys
-from prep import Preparer
+from frontend.prep import Preparer
 from context import Context
 from optparse import OptionParser
 
