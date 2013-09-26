@@ -5,15 +5,16 @@ import subprocess
 import re, os, copy
 
 class Vendor(object):
-  def __init__(self, name, version, command, objSuffix):
+  def __init__(self, name, version, behavior, command, objSuffix):
     self.name = name
     self.version = version
+    self.behavior = behavior
     self.command = command
     self.objSuffix = objSuffix
 
 class MSVC(Vendor):
   def __init__(self, command, version):
-    super(MSVC, self).__init__('msvc', version, command, '.obj')
+    super(MSVC, self).__init__('msvc', version, 'msvvc', command, '.obj')
     self.definePrefix = '/D'
 
   def formatInclude(self, outputPath, includePath):
@@ -34,7 +35,7 @@ class MSVC(Vendor):
 
 class CompatGCC(Vendor):
   def __init__(self, name, command, version):
-    super(CompatGCC, self).__init__(name, version, command, '.o')
+    super(CompatGCC, self).__init__(name, version, 'gcc', command, '.o')
     parts = version.split('.')
     self.majorVersion = int(parts[0])
     self.minorVersion = int(parts[1])

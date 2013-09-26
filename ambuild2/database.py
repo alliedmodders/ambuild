@@ -193,28 +193,4 @@ class DatabaseParent(object):
         input_node = nodes[input_id]
         output_node.addDependency(input_node, generated)
 
-def CreateDatabase(path):
-  cn = sqlite3.connect(path)
-  query = """
-      CREATE TABLE IF NOT EXISTS nodes(
-        path TEXT NOT NULL PRIMARY KEY,
-        node_type VARCHAR(64) NOT NULL,
-        stamp REAL NOT NULL,
-        dirty INT NOT NULL,
-        data BLOB,
-        UNIQUE (path, node_type)
-      );
-  """
-  cn.execute(query)
-  query = """
-      CREATE TABLE IF NOT EXISTS edges(
-        output_id INTEGER NOT NULL,
-        input_id INTEGER NOT NULL,
-        generated INTEGER NOT NULL,
-        UNIQUE (output_id, input_id, generated)
-      );
-  """
-  cn.execute(query)
-  cn.commit()
-  cn.close()
 

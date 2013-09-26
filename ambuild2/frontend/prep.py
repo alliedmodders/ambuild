@@ -32,4 +32,6 @@ class Preparer(object):
       sys.stderr.write('Unrecognized build generator: ' + options.generator + '\n')
       sys.exit(1)
 
-    builder.Generate()
+    if not builder.Generate():
+      sys.stderr.write('Configure failed.\n')
+      sys.exit(1)

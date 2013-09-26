@@ -3,6 +3,14 @@ import os
 import sys
 import subprocess
 import multiprocessing
+try:
+  import __builtin__ as builtins
+except:
+  import builtins
+try:
+  import cPickle as pickle
+except:
+  import pickle
 
 def Platform():
   if IsWindows():
@@ -117,3 +125,12 @@ def Execute(argv):
 
   out = (' '.join([i for i in argv])) + out
   return p, out, err
+
+def typeof(x):
+  return builtins.type(x)
+
+if str == bytes:
+  # Python 2.7. sqlite blob is buffer
+  BlobType = buffer
+else:
+  BlobType = bytes

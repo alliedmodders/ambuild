@@ -47,7 +47,7 @@ class Context(object):
 
   def Add(self, taskbuilder):
     taskbuilder.finish(self)
-    self.generator.addCxxTasks(taskbuilder)
+    self.generator.addCxxTasks(self, taskbuilder)
 
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
@@ -83,6 +83,11 @@ class Generator(object):
     })
 
     self.popContext()
+
+  def Generate(self):
+    self.preGenerate()
+    self.parseBuildScripts()
+    return self.postGenerate()
 
   def DetectCompilers(self):
     if self.compiler:
