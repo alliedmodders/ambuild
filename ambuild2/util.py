@@ -134,3 +134,8 @@ if str == bytes:
   BlobType = buffer
 else:
   BlobType = bytes
+
+def Unpickle(blob):
+  if type(blob) != bytes:
+    blob = bytes(blob)
+  return pickle.loads(blob)

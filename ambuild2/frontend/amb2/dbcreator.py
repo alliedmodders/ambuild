@@ -71,11 +71,15 @@ class Database(object):
         blob = None
       else:
         blob = util.BlobType(util.pickle.dumps(node.blob))
+      if node.folder == None:
+        folder_id = None
+      else:
+        folder_id = node.folder.id
 
       query = """
         INSERT INTO nodes (type, generated, path, folder, data) VALUES (?, ?, ?, ?, ?)
       """
-      cursor = self.cn.execute(query, (node.type, int(node.generated), node.path, node.folder, blob))
+      cursor = self.cn.execute(query, (node.type, int(node.generated), node.path, folder_id, blob))
       node.id = cursor.lastrowid
 
     # Add all edges.

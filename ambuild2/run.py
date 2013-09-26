@@ -6,8 +6,8 @@ from frontend.prep import Preparer
 from context import Context
 from optparse import OptionParser
 
-def Build(sourcePath, buildPath):
-  with Context(sourcePath=sourcePath, buildPath=buildPath) as cx:
+def Build(buildPath):
+  with Context(buildPath=buildPath) as cx:
     return cx.Build()
 
 def PrepareBuild(sourcePath, buildPath=None):

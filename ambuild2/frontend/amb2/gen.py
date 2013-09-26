@@ -40,6 +40,7 @@ class Generator(base_gen.Generator):
       cxxNode = self.graph.addCommand(type=nodetypes.Cxx,
                                       folder=folderNode,
                                       data=cxxData)
+      self.graph.addDependency(cxxNode, srcNode)
       self.graph.addDependency(objNode, cxxNode)
       self.graph.addDependency(linkCmd, objNode)
 

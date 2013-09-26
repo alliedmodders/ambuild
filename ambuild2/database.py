@@ -1,97 +1,17 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
-import os
-import time
-try:
-  import cPickle as pickle
-except:
-  import pickle
+# vim: set sts=2 ts=8 sw=2 tw=99 et: 
+import util
 import sqlite3
-import multiprocessing as mp
+from nodetypes import Node
 
-# Child process view of the database.
-class DatabaseChild(object):
-  def __init__(self, input):
-    self.input = input
+class Database(object):
+  def __init__(self, path):
+    self.path = path
     self.cn = None
-    self.idcache = { }
-    self.messageMap = {
-      'connect': lambda message: self.recvConnect(message),
-      'register': lambda message: self.recvRegister(message),
-      'addedge': lambda message: self.recvEdgeCmd(message),
-      'dropedge': lambda message: self.recvEdgeCmd(message),
-      'commit': lambda message: self.recvCommit(message),
-      'unmarkDirty': lambda message: self.recvUnmarkDirty(message),
-      'commitDirty': lambda message: self.recvCommitDirty(message),
-    }
+    self.node_cache_ = { }
 
-  @staticmethod
-  def startup(input):
-    child = DatabaseChild(input)
-    child.run()
-
-  def run(self):
-    while True:
-      obj = self.input.recv()
-      if obj == 'die':
-        if self.cn:
-          self.cn.close()
-        return
-      self.recvMessage(obj)
-
-  def getIdForProxy(self, proxy_id):
-    if type(proxy_id) == str:
-      return self.idcache[proxy_id]
-    return proxy_id
-
-  def recvMessage(self, message):
-    msg_type = message['msg_type']
-    self.messageMap[msg_type](message)
-
-  def recvRegister(self, message):
-    path = message['path']
-    node_type = message['node_type']
-    assert path not in self.idcache
-
-    dirty = message['dirty']
-    stamp = message['stamp']
-
-    if message['data'] == None:
-      query = "INSERT INTO nodes (path, node_type, stamp, dirty) VALUES (?, ?, ?, ?)"
-      cursor = self.cn.execute(query, (path, node_type, stamp, dirty))
-    else:
-      blob = pickle.dumps(message['data'])
-      # Python 2, str == bytes, sqlite3 expects buffers.
-      # Python 3, str != bytes, sqlite3 expects bytes.
-      if type(blob) == str:
-        blob = buffer(blob)
-      query = "INSERT INTO nodes (path, node_type, stamp, dirty, data) VALUES (?, ?, ?, ?, ?)"
-      cursor = self.cn.execute(query, (path, node_type, stamp, dirty, blob))
-    self.idcache[path] = cursor.lastrowid
-
-  def recvEdgeCmd(self, message):
-    input = message['input']
-    output = message['output']
-    input_id = self.getIdForProxy(input)
-    output_id = self.getIdForProxy(output)
-    generated = message['generated']
-    if message['msg_type'] == 'addedge':
-      query = "INSERT INTO edges (output_id, input_id, generated) VALUES (?, ?, ?)"
-    else:
-      query = "DELETE FROM edges WHERE output_id = ? AND input_id = ? AND generated = ?"
-    self.cn.execute(query, (output_id, input_id, generated))
-
-  def recvUnmarkDirty(self, message):
-    node_id = self.getIdForProxy(message['proxy_id'])
-    stamp = message['stamp']
-    query = "UPDATE nodes SET stamp = ?, dirty = 0 WHERE rowid = ?"
-    self.cn.execute(query, (stamp, node_id))
-    self.commit()
-
-  def recvCommit(self, message):
-    self.commit()
-
-  def recvConnect(self, message):
-    self.cn = sqlite3.connect(message['path'])
+  def connect(self):
+    assert not self.cn
+    self.cn = sqlite3.connect(self.path)
     self.cn.execute("PRAGMA journal_mode = WAL;")
 
     # This is technically not as safe, but we'd rather get the massive
@@ -99,98 +19,113 @@ class DatabaseChild(object):
     # the build could become corrupt? But so could any file write, really.
     self.cn.execute("PRAGMA synchronous = OFF;")
 
-  def recvCommitDirty(self, message):
-    query = "UPDATE nodes SET dirty = 1 WHERE rowid = ?"
-    for proxy_id in message['proxies']:
-      node_id = self.getIdForProxy(proxy_id)
-      self.cn.execute(query, (node_id,))
-    self.commit()
+  def close(self):
+    self.cn.close()
+    self.cn = None
+
+  def __enter__(self):
+    self.connect()
+    return self
+
+  def __exit__(self, type, value, traceback):
+    self.close()
 
   def commit(self):
     self.cn.commit()
 
-# Parent process view of the database.
-class DatabaseParent(object):
-  def __init__(self, path):
-    receiver, sender = mp.Pipe()
-    self.path = path
-    self.sender = sender
-    self.child = mp.Process(
-        target=DatabaseChild.startup,
-        args=(receiver, )
-    )
-    self.child.start()
-    self.sender.send({'msg_type': 'connect', 'path': path})
+  def query_node(self, id):
+    if id in self.node_cache_:
+      return self.node_cache_[id]
 
-  def registerNode(self, node_type, path, data, dirty, stamp):
-    self.sender.send({
-      'msg_type': 'register',
-      'node_type': node_type,
-      'path': path,
-      'data': data,
-      'dirty': int(dirty),
-      'stamp': stamp
-    })
+    query = "select type, stamp, dirty, generated, path, folder, data from nodes where rowid = ?"
+    cursor = self.cn.execute(query, (id,))
+    return self.import_node(id, cursor.fetchone())
 
-    # Registration is asynchronous, so we don't have an ID representation yet.
-    return None
+  def import_node(self, id, row):
+    assert id not in self.node_cache_
 
-  def registerEdge(self, output, input, generated):
-    self.sender.send({
-      'msg_type': 'addedge',
-      'input': input,
-      'output': output,
-      'generated': int(generated),
-    })
+    if not row[5]:
+      folder = None
+    else:
+      folder = self.query_node(row[5])
+    if not row[6]:
+      blob = None
+    else:
+      blob = util.Unpickle(row[6])
 
-  def unregisterEdge(self, output, input, generated):
-    self.sender.send({
-      'msg_type': 'dropedge',
-      'input': input,
-      'output': output,
-      'generated': int(generated)
-    })
+    node = Node(id=id,
+                type=row[0],
+                path=row[4],
+                blob=blob,
+                folder=folder,
+                stamp=row[1],
+                dirty=bool(row[2]),
+                generated=bool(row[3]))
+    self.node_cache_[id] = node
+    return node
 
-  def unmarkDirty(self, proxy_id, stamp):
-    self.sender.send({
-      'msg_type': 'unmarkDirty',
-      'proxy_id': proxy_id,
-      'stamp': stamp
-    })
+  def query_incoming(self, node):
+    if node.incoming:
+      return node.incoming
 
-  def commitDirty(self, proxy_list):
-    if not len(proxy_list):
-      return
+    query = "select incoming from edges where outgoing = ?"
+    node.incoming = []
+    for incoming_id, in self.cn.execute(query, (node.id,)):
+      incoming = self.query_node(incoming_id)
+      node.incoming.append(incoming)
+    return node.incoming
 
-    self.sender.send({
-      'msg_type': 'commitDirty',
-      'proxies': proxy_list
-    })
+  def query_outgoing(self, node):
+    if node.outgoing:
+      return node.outgoing
 
-  def commit(self):
-    self.sender.send({'msg_type': 'commit'})
+    query = "select outgoing from edges where incoming = ?"
+    node.outgoing = []
+    for outgoing_id, in self.cn.execute(query, (node.id,)):
+      outgoing = self.query_node(outgoing_id)
+      node.outgoing.append(outgoing)
+    return node.outgoing
 
-  def close(self):
-    self.sender.send('die')
-    self.child.join()
+  # Intended to be called before any nodes are imported.
+  def query_known_dirty(self, aggregate):
+    query = """
+      select type, stamp, dirty, generated, path, folder, data, rowid
+      from nodes
+      where dirty = 1
+      and type != 'mkd'
+    """
+    for row in self.cn.execute(query):
+      id = row[7]
+      node = self.import_node(id, row)
+      aggregate(node)
 
-  def importGraph(self, graph):
-    with sqlite3.connect(self.path) as cn:
-      nodes = {}
-      cursor = cn.execute("SELECT rowid, path, node_type, stamp, data, dirty FROM nodes")
-      for rowid, path, node_type, stamp, blob, dirty in cursor:
-        if not blob or len(blob) == 0:
-          data = None
-        elif type(blob) == bytes:
-          data = pickle.loads(blob)
-        else:
-          data = pickle.loads(str(blob))
-        nodes[rowid] = graph.importNode(node_type, path, rowid, data, bool(dirty), stamp)
+  # Query all nodes that are not dirty, but need to be checked. Intended to
+  # be called after query_dirty, and returns a mutually exclusive list.
+  def query_maybe_dirty(self, aggregate):
+    query = """
+      select type, stamp, dirty, generated, path, folder, data, rowid
+      from nodes
+      where dirty = 0
+      and (type == 'src' or type == 'out' or type == 'cpa')
+    """
+    for row in self.cn.execute(query):
+      id = row[7]
+      node = self.import_node(id, row)
+      aggregate(node)
 
-      cursor = cn.execute("SELECT output_id, input_id, generated FROM edges")
-      for output_id, input_id, generated in cursor:
-        output_node = nodes[output_id]
-        input_node = nodes[input_id]
-        output_node.addDependency(input_node, generated)
+  def printGraph(self):
+    # Find all mkdir nodes.
+    query = "select path from nodes where type = 'mkd'"
+    for path, in self.cn.execute(query):
+      print(' : mkdir \"' + path + '\"')
+    # Find all other nodes that have no outgoing edges.
+    query = "select rowid from nodes where rowid not in (select incoming from edges) and type != 'mkd'"
+    for id, in self.cn.execute(query):
+      node = self.query_node(id)
+      self.printGraphNode(node, 0)
 
+  def printGraphNode(self, node, indent):
+    print(('  ' * indent) + ' - ' + node.format())
 
+    for incoming in self.query_incoming(node):
+      self.printGraphNode(incoming, indent + 1)
