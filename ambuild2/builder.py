@@ -12,7 +12,7 @@ class Builder(object):
     self.tasks = []
     self.steps = []
     self.visit_id_ = 0
-    self.damage_graph_ = Damage(cx.graph)
+    self.damage_graph_ = Damage(cx.db)
 
     self.computeSteps()
 
