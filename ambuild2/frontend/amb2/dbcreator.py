@@ -21,7 +21,7 @@ class Database(object):
       CREATE TABLE nodes(
         type VARCHAR(4) NOT NULL,
         stamp REAL NOT NULL DEFAULT 0.0,
-        dirty INT NOT NULL DEFAULT 1,
+        dirty INT NOT NULL DEFAULT 0,
         generated INT NOT NULL,
         path TEXT,
         folder INT,
@@ -77,7 +77,7 @@ class Database(object):
         folder_id = node.folder.id
 
       query = """
-        INSERT INTO nodes (type, generated, path, folder, data) VALUES (?, ?, ?, ?, ?)
+        INSERT INTO nodes (type, generated, path, folder, data, dirty) VALUES (?, ?, ?, ?, ?, 1)
       """
       cursor = self.cn.execute(query, (node.type, int(node.generated), node.path, folder_id, blob))
       node.id = cursor.lastrowid

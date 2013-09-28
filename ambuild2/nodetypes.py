@@ -27,7 +27,7 @@ Copy = 'cp'
 #
 # To ensure proper ordering, any files in the folder that are dependent on a
 # build action, will have their copy node properly depending on that action.
-Folder = 'cpa'
+CopyFolder = 'cpa'
 
 # Link nodes are a special command node, representing a symlink, from a source
 # to a destination. On operating systems where symlinking is not available or
@@ -79,8 +79,13 @@ class Node(object):
     self.incoming = None
     self.outgoing = None
 
-    # If this node has a damage entry, we cache it here.
-    self.damage = None
+    # If this node has a graph entry, we cache it here.
+    self.graph_node = None
+
+  def isCommand(self):
+    return (self.type != Source and
+            self.type != Output and
+            self.type != CopyFolder)
 
   def format(self):
     if self.type == Source or self.type == Output:

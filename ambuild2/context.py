@@ -1,12 +1,7 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
-import os
-import sys
-import imp
 import time
-import database
-import util
-from damage import Damage
-from builder import Builder
+import os, sys, imp
+import util, database, damage
 from optparse import OptionParser
 
 class Context(object):
@@ -34,6 +29,8 @@ class Context(object):
                       help="Show the dependency graph and then exit.")
     parser.add_option("--show-damage", dest="show_damage", action="store_true", default=False,
                       help="Show the computed change graph and then exit.")
+    parser.add_option("--show-commands", dest="show_commands", action="store_true", default=False,
+                      help="Show the computed command graph and then exit.")
     parser.add_option("--show-steps", dest="show_steps", action="store_true", default=False,
                       help="Show the computed build steps and then exit.")
     parser.add_option("-j", "--jobs", dest="jobs", type="int", default=0,
@@ -44,10 +41,15 @@ class Context(object):
       self.db.printGraph()
       return True
 
+    dmg_graph = damage.ComputeDamageGraph(self.db)
+
     # If we get here, we have to compute damage.
     if options.show_damage:
-      damage = Damage(self.db)
-      damage.printDamage()
+      dmg_graph.printGraph()
+      return True
+
+    if options.show_commands:
+      dmg_graph.printCommands()
       return True
     
     builder = Builder(self)
