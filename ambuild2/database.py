@@ -14,11 +14,6 @@ class Database(object):
     self.cn = sqlite3.connect(self.path)
     self.cn.execute("PRAGMA journal_mode = WAL;")
 
-    # This is technically not as safe, but we'd rather get the massive
-    # performance win. If an OS crash or power outage cases db corruption,
-    # the build could become corrupt? But so could any file write, really.
-    self.cn.execute("PRAGMA synchronous = OFF;")
-
   def close(self):
     self.cn.close()
     self.cn = None
