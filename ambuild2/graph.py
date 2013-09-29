@@ -14,6 +14,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+import nodetypes
 
 class GraphNode(object):
   def __init__(self, entry):
@@ -32,6 +33,8 @@ class Graph(object):
     self.db = database
     self.leafs = set()
     self.roots = set()
+    self.nodes = []
+    self.outputs = []
     self.commands = []
     self.worklist = []
 
@@ -43,6 +46,9 @@ class Graph(object):
     self.roots.add(graph_node)
     if graph_node.isCommand():
       self.commands.append(graph_node)
+    self.nodes.append(graph_node)
+    if entry.type == nodetypes.Output:
+      self.outputs.append(graph_node)
 
     self.worklist.append(graph_node)
     return graph_node

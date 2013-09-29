@@ -1,6 +1,6 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et: 
-import os
-import sys
+import errno
+import os, sys
 import subprocess
 import multiprocessing
 try:
@@ -17,18 +17,44 @@ def Platform():
     return 'windows'
   if IsMac():
     return 'mac'
-  if sys.platform[0:5] == 'linux':
+  if IsLinux():
     return 'linux'
+  if IsFreeBSD():
+    return 'freebsd'
+  if IsOpenBSD():
+    return 'openbsd'
+  if IsNetBSD():
+    return 'netbsd'
+  if IsSolaris():
+    return 'solaris'
   return 'unknown'
+
+def IsLinux():
+  return sys.platform[0:5] == 'linux'
+
+def IsFreeBSD():
+  return sys.platform[0:7] == 'freebsd'
+
+def IsNetBSD():
+  return sys.platform[0:6] == 'netbsd'
+
+def IsOpenBSD():
+  return sys.platform[0:7] == 'openbsd'
 
 def IsWindows():
   return sys.platform == 'win32' or sys.platform == 'cygwin'
 
 def IsMac():
-  return sys.platform == 'darwin'
+  return sys.platform == 'darwin' or sys.platform[0:6] == 'Darwin'
+
+def IsSolaris():
+  return sys.platform[0:5] == 'sunos'
 
 def IsUnixy():
-  return sys.platform[0:5] == 'linux' or IsMac()
+  return not IsWindows()
+
+def IsBSD():
+  return IsMac() or IsFreeBSD() or IsOpenBSD() or IsNetBSD()
 
 def ExecutableSuffix():
   if IsWindows():
@@ -139,3 +165,4 @@ def Unpickle(blob):
   if type(blob) != bytes:
     blob = bytes(blob)
   return pickle.loads(blob)
+
