@@ -17,6 +17,9 @@
 import sys
 import multiprocessing as mp
 
+# A channel is two-way IPC connection; it has a read and write pipe. The read
+# pipe is multiplexed by the ProcessManager and automatically forwarded to
+# the listener object. The send() function can access the write pipe directly.
 class Channel(object):
   def __init__(self, listener=None):
     super(Channel, self).__init__()
@@ -25,6 +28,8 @@ class Channel(object):
   def send(self, message):
     raise Exception('must be implemented')
 
+# A ProcessHost is the parent process's view of a child process. It
+# encapsulates the process ID, various state, and an IPC channel.
 class ProcessHost(object):
   def __init__(self, id):
     super(ProcessHost, self).__init__()
@@ -44,6 +49,10 @@ class ProcessHost(object):
     self.proc.join()
     self.channel.close()
 
+# A ChildListener listens for events in a child process, that come from the
+# parent process. Although it is derived, it is never explicitly instantiated.
+# Rather, the derived type is given to ProcessManager.spawn(), and a singleton
+# is automatically created in the child process.
 class ChildListener(object):
   def __init__(self, manager):
     super(ChildListener, self).__init__()
@@ -58,6 +67,11 @@ class ChildListener(object):
   def receiveError(self, error):
     raise Exception('Unhandled error: ' + error)
 
+# A ParentListener listens for child process messages sent to a parent process.
+# The lisener must handle incoming messages; if for any reason it fails to
+# process a message, the child process is killed and an error is reported.
+# ParentListeners are instantiated manually and given directly to spawn() -
+# one listener can be re-used many times.
 class ParentListener(object):
   def __init__(self):
     super(ParentListener, self).__init__()
@@ -75,12 +89,17 @@ class ParentListener(object):
   def receiveError(self, error):
     raise Exception('Unhandled error: ' + error)
 
+# A process manager handles multiplexing IPC communication. It also owns the
+# set of child processes. There should only be one ProcessManager per process.
 class ProcessManager(object):
   def __init__(self, channel=None):
     self.children = set()
     self.parent = channel
 
   def close(self):
+    children = [child for child in self.children]
+    for child in children:
+      self.kill(child)
     if self.parent:
       self.parent.close()
 
