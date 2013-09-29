@@ -33,12 +33,47 @@ class ProcessHost(object):
     self.proc = None
     self.channel = None
 
+  @property
+  def listener(self):
+    return self.channel.listener
+
   def send(self, message):
     self.channel.send(message)
 
   def close(self):
     self.proc.join()
     self.channel.close()
+
+class ChildListener(object):
+  def __init__(self, manager):
+    super(ChildListener, self).__init__()
+    self.manager = manager
+
+  # Called when a message is received from the parent process.
+  def receiveMessage(self, message):
+    raise Exception('Unhandled message: ' + str(message))
+
+  # Called when the parent connection has died; this will result in the
+  # child process terminating.
+  def receiveError(self, error):
+    raise Exception('Unhandled error: ' + error)
+
+class ParentListener(object):
+  def __init__(self):
+    super(ParentListener, self).__init__()
+
+  # Called when a connection is being established.
+  def receiveConnect(self, child):
+    pass
+
+  # Called when a message has been received. The child is a ProcessHost
+  # object corresponding to the parent side of the child process's connection.
+  def receiveMessage(self, child, message):
+    raise Exception('Unhandled message: ' + str(message))
+
+  # Called when an error has occurred and the channel will be closed.
+  def receiveError(self, error):
+    raise Exception('Unhandled error: ' + error)
 
 class ProcessManager(object):
   def __init__(self, channel=None):
@@ -55,6 +90,7 @@ class ProcessManager(object):
   def spawn(self, parent_type, child_type):
     id = len(self.children)
     child = self.spawn_internal(id, parent_type, child_type)
+    child.listener.receiveConnect(child)
     self.children.add(child)
     self.registerHost(child)
 
@@ -80,3 +116,8 @@ class ProcessManager(object):
 
   def pump(self):
     raise Exception('must be implemented!')
+
+  def shouldPoll(self):
+    if not self.parent and not len(self.children):
+      return False
+    return True

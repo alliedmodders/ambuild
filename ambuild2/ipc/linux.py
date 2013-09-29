@@ -40,7 +40,7 @@ def ChildMain(reader, writer, child_type):
   manager.pump()
 
 class LinuxHost(ProcessHost):
-  def __init__(self, id, parent_type, child_type):
+  def __init__(self, id, parent_listener, child_type):
     super(LinuxHost, self).__init__(id)
 
     # Create pipes.
@@ -58,8 +58,7 @@ class LinuxHost(ProcessHost):
     child_write.close()
 
     # Instantiate the parent listener and channel.
-    listener = parent_type(self)
-    self.channel = LinuxChannel(parent_read, parent_write, listener)
+    self.channel = LinuxChannel(parent_read, parent_write, parent_listener)
 
 class LinuxProcessManager(ProcessManager):
   def __init__(self, parent=None):
@@ -74,8 +73,8 @@ class LinuxProcessManager(ProcessManager):
       self.unregisterChannel(self.parent)
     super(LinuxProcessManager, self).close()
 
-  def spawn_internal(self, id, parent_type, child_type):
-    return LinuxHost(id, parent_type, child_type)
+  def spawn_internal(self, id, parent_listener, child_type):
+    return LinuxHost(id, parent_listener, child_type)
 
   def registerHost(self, host):
     self.registerChannel(host, host.channel)
@@ -95,10 +94,17 @@ class LinuxProcessManager(ProcessManager):
     self.ep.unregister(fd)
 
   def pump(self):
+    while self.shouldPoll():
+      self.poll()
+
+  def poll(self):
     for fd, event in self.ep.poll():
       host, channel = self.fdmap[fd]
       if event & (select.EPOLLERR | select.EPOLLHUP):
         self.handleDead(host, channel)
       else:
         message = channel.reader.recv()
-        channel.listener.receiveMessage(message)
+        try:
+          channel.listener.receiveMessage(host, message)
+        except Exception as exn:
+          self.handleError(host, exn)
