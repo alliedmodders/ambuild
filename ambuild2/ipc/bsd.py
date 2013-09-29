@@ -65,7 +65,6 @@ class BSDHost(ProcessHost):
 
     # Instantiate the parent listener and channel.
     self.channel = PipeChannel(parent_read, parent_write, parent_listener)
-    self.child_channel.close()
 
   def close(self):
     self.child_channel.close()
