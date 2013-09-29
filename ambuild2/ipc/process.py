@@ -35,6 +35,7 @@ class ProcessHost(object):
     super(ProcessHost, self).__init__()
     self.id = id
     self.closing = False
+    self.terminating = False
     self.proc = None
     self.channel = None
 
@@ -42,12 +43,27 @@ class ProcessHost(object):
   def listener(self):
     return self.channel.listener
 
+  @property
+  def pid(self):
+    return self.proc.pid
+
   def send(self, message):
     self.channel.send(message)
 
   def close(self):
+    if self.proc.is_alive():
+      # To avoid a potential deadlock, we terminate the process before joining.
+      self.proc.terminate()
     self.proc.join()
     self.channel.close()
+
+  # An abrupt termination.
+  def terminate(self):
+    if self.terminating:
+      return
+    self.closing = True
+    self.terminating = True
+    self.proc.terminate()
 
 # A ChildListener listens for events in a child process, that come from the
 # parent process. Although it is derived, it is never explicitly instantiated.
@@ -65,7 +81,7 @@ class ChildListener(object):
   # Called when the parent connection has died; this will result in the
   # child process terminating.
   def receiveError(self, error):
-    raise Exception('Unhandled error: ' + error)
+    pass
 
 # A ParentListener listens for child process messages sent to a parent process.
 # The lisener must handle incoming messages; if for any reason it fails to
@@ -86,7 +102,7 @@ class ParentListener(object):
     raise Exception('Unhandled message: ' + str(message))
 
   # Called when an error has occurred and the channel will be closed.
-  def receiveError(self, error):
+  def receiveError(self, child, error):
     raise Exception('Unhandled error: ' + error)
 
 # A process manager handles multiplexing IPC communication. It also owns the
@@ -120,17 +136,22 @@ class ProcessManager(object):
     self.unregisterHost(host)
     host.close()
 
+  def handleError(self, host, channel, exn):
+    if host:
+      host.terminate()
+
   def handleDead(self, host, channel):
     if not host:
       assert channel == self.parent
       
       # Our parent crashed or something. Just exit.
+      channel.listener.receiveError('process died')
       sys.stderr.write('Parent process died, exiting.\n')
       sys.exit(1)
     else:
       # One of our children died.
       if not host.closing:
-        channel.listener.receiveError('process died')
+        channel.listener.receiveError(host, 'process died')
       self.cleanup(host)
 
   def pump(self):

@@ -24,6 +24,6 @@ if util.IsWindows():
 elif util.IsLinux():
   from ipc.linux import LinuxProcessManager as ProcessManager
 elif util.IsBSD():
-  from ipc.kqueue import KQProcessManager as ProcessManager
+  from ipc.bsd import BSDProcessManager as ProcessManager
 else:
   raise Exception('Unknown platform: ' + util.Platform())

@@ -85,6 +85,8 @@ def PopFolder():
 def NumberOfCPUs():
 	return multiprocessing.cpu_count()
 
+Test = { }
+
 def FileExists(file):
 	if os.path.isfile(file):
 		GetFileTime(file)

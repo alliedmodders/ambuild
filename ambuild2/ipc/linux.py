@@ -21,9 +21,9 @@ from ipc.process import ProcessHost, ProcessManager, Channel
 # Linux multiprocess support is implemented using epoll() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.
 
-class LinuxChannel(Channel):
+class PipeChannel(Channel):
   def __init__(self, reader, writer, listener=None):
-    super(LinuxChannel, self).__init__(listener)
+    super(PipeChannel, self).__init__(listener)
     self.reader = reader
     self.writer = writer
 
@@ -37,7 +37,7 @@ class LinuxChannel(Channel):
 def ChildMain(reader, writer, child_type):
   print('Spawned child process: ' + str(os.getpid()))
   # Create a process manager.
-  channel = LinuxChannel(reader, writer)
+  channel = PipeChannel(reader, writer)
   manager = LinuxProcessManager(channel)
   channel.listener = child_type(manager)
   manager.pump()
@@ -61,7 +61,7 @@ class LinuxHost(ProcessHost):
     child_write.close()
 
     # Instantiate the parent listener and channel.
-    self.channel = LinuxChannel(parent_read, parent_write, parent_listener)
+    self.channel = PipeChannel(parent_read, parent_write, parent_listener)
 
 class LinuxProcessManager(ProcessManager):
   def __init__(self, parent=None):
@@ -75,6 +75,7 @@ class LinuxProcessManager(ProcessManager):
     if self.parent:
       self.unregisterChannel(self.parent)
     super(LinuxProcessManager, self).close()
+    self.ep.close()
 
   def spawn_internal(self, id, parent_listener, child_type):
     return LinuxHost(id, parent_listener, child_type)
@@ -89,7 +90,7 @@ class LinuxProcessManager(ProcessManager):
     self.ep.register(fd, events)
 
   def unregisterHost(self, host):
-    self.ep.unregister(host.channel.reader)
+    self.unregisterChannel(host.channel)
 
   def unregisterChannel(self, channel):
     fd = channel.reader.fileno()
