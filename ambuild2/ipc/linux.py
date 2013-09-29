@@ -93,10 +93,6 @@ class LinuxProcessManager(ProcessManager):
     del self.fdmap[fd]
     self.ep.unregister(fd)
 
-  def pump(self):
-    while self.shouldPoll():
-      self.poll()
-
   def poll(self):
     for fd, event in self.ep.poll():
       host, channel = self.fdmap[fd]

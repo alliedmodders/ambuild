@@ -115,7 +115,8 @@ class ProcessManager(object):
       self.cleanup(host)
 
   def pump(self):
-    raise Exception('must be implemented!')
+    while self.shouldPoll():
+      self.poll()
 
   def shouldPoll(self):
     if not self.parent and not len(self.children):
