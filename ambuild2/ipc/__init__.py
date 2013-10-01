@@ -26,5 +26,6 @@ elif util.IsLinux():
   from ipc.linux import LinuxMessagePump as MessagePump
 elif util.IsBSD():
   from ipc.bsd import BSDProcessManager as ProcessManager
+  from ipc.bsd import BSDMessagePump as MessagePump
 else:
   raise Exception('Unknown platform: ' + util.Platform())

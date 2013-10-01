@@ -16,14 +16,15 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import select, os, sys
 import multiprocessing as mp
-from ipc.process import ProcessHost, ProcessManager, Channel
+from ipc.process import ProcessHost, ProcessManager, Channel, MessagePump, Error
+from ipc.process import ChildWrapperListener, Special
 
 # BSD multiprocess support is implemented using kqueue() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.
 
 class PipeChannel(Channel):
-  def __init__(self, reader, writer, listener=None):
-    super(PipeChannel, self).__init__(listener)
+  def __init__(self, reader, writer):
+    super(PipeChannel, self).__init__()
     self.reader = reader
     self.writer = writer
 
@@ -34,124 +35,71 @@ class PipeChannel(Channel):
   def send(self, message):
     self.writer.send(message)
 
-def ChildMain(reader, writer, child_type):
+def ChildMain(channel, listener_type, *args):
   print('Spawned child process: ' + str(os.getpid()))
   # Create a process manager.
-  channel = PipeChannel(reader, writer)
-  manager = BSDProcessManager(channel)
-  channel.listener = child_type(manager)
-  manager.pump()
-
-class BSDHost(ProcessHost):
-  def __init__(self, id, parent_listener, child_type):
-    super(BSDHost, self).__init__(id)
-
-    # Create pipes.
-    child_read, parent_write = mp.Pipe(duplex=False)
-    parent_read, child_write = mp.Pipe(duplex=False)
-
-    self.proc = mp.Process(
-      target=ChildMain,
-      args=(child_read, child_write, child_type)
-    )
-    self.proc.start()
-
-    # Unlike Linux, BSD systems have an old bug where if a descriptor is only
-    # alive because it is in a message queue, it can be garbage collected in
-    # the kernel. This doesn't make much sense, but we deal. The optimal
-    # solution would be waiting for an ACK from the child; here we just keep
-    # the descriptors alive until the process is dead.
-    self.child_channel = PipeChannel(child_read, child_write, None)
-
-    # Instantiate the parent listener and channel.
-    self.channel = PipeChannel(parent_read, parent_write, parent_listener)
-
-  def close(self):
-    self.child_channel.close()
-    super(BSDHost, self).close()
+  bmp = BSDMessagePump()
+  listener = listener_type(bmp)
+  listener = ChildWrapperListener(listener)
+  bmp.addChannel(channel, listener)
+  channel.send(Special.Connected)
+  bmp.pump()
 
 class BSDMessagePump(MessagePump):
   def __init__(self):
-    self
-
-class BSDProcessManager(ProcessManager):
-  def __init__(self, parent=None):
-    super(BSDProcessManager, self).__init__(parent)
     self.kq = select.kqueue()
     self.fdmap = {}
     self.pidmap = {}
-    if parent:
-      self.registerChannel(None, parent)
 
   def close(self):
-    if self.parent:
-      self.unregisterChannel(self.parent)
-    super(BSDProcessManager, self).close()
+    super(BSDMessagePump, self).close()
     self.kq.close()
 
-  def spawn_internal(self, id, parent_listener, child_type):
-    return BSDHost(id, parent_listener, child_type)
-
-  def registerHost(self, host):
-    self.registerChannel(host, host.channel)
-
-  def registerChannel(self, host, channel):
+  def addChannel(self, channel, listener):
     fd = channel.reader.fileno()
-    events = [
-      select.kevent(
-        ident=fd,
-        filter=select.KQ_FILTER_READ,
-        flags=select.KQ_EV_ADD|select.KQ_EV_ENABLE
-      )
-    ]
-    if host:
-      events.append(select.kevent(
-        ident=host.pid,
-        filter=select.KQ_FILTER_PROC,
-        flags=select.KQ_EV_ADD|select.KQ_EV_ENABLE,
-        fflags=select.KQ_NOTE_EXIT
-      ))
-      self.pidmap[host.pid] = host
-    self.fdmap[fd] = (host, channel)
-    r = self.kq.control(events, 0)
+    event = select.kevent(
+      ident=fd,
+      filter=select.KQ_FILTER_READ,
+      flags=select.KQ_EV_ADD
+    )
+    self.fdmap[fd] = (channel, listener)
+    self.kq.control([event], 0)
 
-  def unregisterHost(self, host):
-    self.unregisterChannel(host, host.channel)
-
-  def unregisterChannel(self, host, channel):
+  def dropChannel(self, channel):
     fd = channel.reader.fileno()
+    event = select.kevent(
+      ident=fd,
+      filter=select.KQ_FILTER_READ,
+      flags=select.KQ_EV_DELETE
+    )
+    self.kq.control([event], 0)
     del self.fdmap[fd]
-    events = [
-      select.kevent(
-        ident=fd,
-        filter=select.KQ_FILTER_READ,
-        flags=select.KQ_EV_DELETE
-      )
-    ]
-    if host:
-      # Note: Darwin appears to automatically remove the event once the exit
-      # event has been delivered, so we don't remove it here.
-      del self.pidmap[host.pid]
-    self.kq.control(events, 0)
 
-  def handleEOF(self, host, channel):
-    if not host:
-      sys.stderr.write('Received EOF from parent process, exiting...\n')
-      sys.exit(1)
+  def addPid(self, pid, channel, listener):
+    event = select.kevent(
+      ident=pid,
+      filter=select.KQ_FILTER_PROC,
+      flags=select.KQ_EV_ADD,
+      fflags=select.KQ_NOTE_EXIT
+    )
+    self.pidmap[pid] = (channel, listener)
+    self.kq.control([event], 0)
 
-    # If the process didn't die, but we received EOF, we have to be careful.
-    # Calling join() could deadlock since the process could have closed the
-    # pipe but then locked up. To get around these, we terminate(), and wait
-    # for the process signal.
-    if not host.closing:
-      host.listener.receiveError(host, 'eof')
-      host.terminate()
+  def dropPid(self, pid):
+    event = select.kevent(
+      ident=pid,
+      filter=select.KQ_FILTER_PROC,
+      flags=select.KQ_EV_DELETE,
+      fflags=select.KQ_NOTE_EXIT
+    )
+    del self.pidmap[pid]
+    self.kq.control([event], 0)
 
-  def poll(self):
-    max_events = 0
-    if self.parent:
-      max_events = 1
-    max_events += len(self.children)
+  def shouldProcessEvents(self):
+    return len(self.pidmap) + len(self.fdmap)
+
+  def processEvents(self):
+    max_events = len(self.pidmap) + len(self.fdmap)
 
     events = self.kq.control(None, max_events, None)
 
@@ -162,27 +110,87 @@ class BSDProcessManager(ProcessManager):
         next_events.append(event)
         continue
 
-      host, channel = self.fdmap[event.ident]
+      channel, listener = self.fdmap[event.ident]
 
       # We can receive EOF even if there are more bytes to read, so we always
       # attempt a message read anyway.
       try:
         message = channel.reader.recv()
       except:
-        self.handleEOF(host, host.channel)
+        listener.receiveError(channel, Error.EOF)
         continue
 
       try:
-        channel.listener.receiveMessage(host, message)
+        if message == Special.Connected:
+          listener.receiveConnected(channel)
+        else:
+          listener.receiveMessage(channel, message)
       except Exception as exn:
-        self.handleError(host, channel, exn)
+        listener.receiveError(channel, Error.User)
 
       if event.flags & select.KQ_EV_EOF:
-        self.handleEOF(host, host.channel)
+        listener.receiveError(channel, Error.EOF)
 
     # Now handle pid death.
     for event in next_events:
       assert event.filter == select.KQ_FILTER_PROC
-      host = self.pidmap[event.ident]
-      self.handleDead(host, host.channel)
+      channel, listener = self.pidmap[event.ident]
+      listener.receiveError(channel, Error.Killed)
+      del self.pidmap[event.ident]
 
+class BSDHost(ProcessHost):
+  def __init__(self, id, proc, channel, child_channel):
+    super(BSDHost, self).__init__(id, proc, channel)
+    self.child_channel = child_channel
+
+  def receiveConnected(self):
+    super(BSDHost, self).receiveConnected()
+    self.child_channel.close()
+    self.child_channel = None
+
+  def close(self):
+    super(BSDHost, self).close()
+    if self.child_channel:
+      self.child_channel.close()
+
+class BSDProcessManager(ProcessManager):
+  def __init__(self, pump):
+    super(BSDProcessManager, self).__init__(pump)
+
+  def create_process_and_pipe(self, id, listener, child_type, args):
+    # Create pipes.
+    child_read, parent_write = mp.Pipe(duplex=False)
+    parent_read, child_write = mp.Pipe(duplex=False)
+
+    channel = PipeChannel(parent_read, parent_write)
+    child_channel = PipeChannel(child_read, child_write)
+
+    # Watch for changes on the parent channel.
+    self.pump.addChannel(channel, listener)
+
+    # Spawn the process.
+    proc = mp.Process(
+      target=ChildMain,
+      args=(child_channel, child_type) + args
+    )
+    proc.start()
+
+    # Unlike Linux, BSD systems have an old bug where if a descriptor is only
+    # alive because it is in a message queue, it can be garbage collected in
+    # the kernel. This doesn't make much sense, but we deal by waiting for an
+    # ACK from the child process to close the child fds.
+    #
+    # This also means there is a race condition, where the child process could
+    # die before it sends its ACK, and therefore the pipe will never be closed
+    # and we'll wait forever on it.
+    #
+    # To address this, we watch for PID death via kqueue.
+    self.pump.addPid(proc.pid, channel, listener)
+
+    return BSDHost(id, proc, channel, child_channel)
+
+  def close_process(self, host, error):
+    self.pump.dropChannel(host.channel)
+    if error != Error.Killed:
+      self.pump.dropPid(host.pid)
+    host.close()

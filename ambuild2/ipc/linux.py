@@ -17,7 +17,7 @@
 import select, os
 import multiprocessing as mp
 from ipc.process import ProcessHost, ProcessManager, Channel, MessagePump, Error
-from ipc.process import ChildWrapperListener
+from ipc.process import ChildWrapperListener, Special
 
 # Linux multiprocess support is implemented using epoll() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.
@@ -42,6 +42,7 @@ def ChildMain(channel, listener_type, *args):
   listener = listener_type(lmp)
   listener = ChildWrapperListener(listener)
   lmp.addChannel(channel, listener)
+  channel.send(Special.Connected)
   lmp.pump()
 
 class LinuxMessagePump(MessagePump):
@@ -51,6 +52,7 @@ class LinuxMessagePump(MessagePump):
     self.fdmap = {}
 
   def close(self):
+    super(LinuxMessagePump, self).close()
     self.ep.close()
 
   def addChannel(self, channel, listener):
@@ -108,3 +110,7 @@ class LinuxProcessManager(ProcessManager):
     child_channel.close()
 
     return ProcessHost(id, proc, channel)
+
+  def close_process(self, host, error):
+    self.pump.dropChannel(host.channel)
+    host.close()

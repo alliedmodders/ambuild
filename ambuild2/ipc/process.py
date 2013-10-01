@@ -20,6 +20,10 @@ import multiprocessing as mp
 class Error:
   EOF = 'eof'
   User = 'badmsg'
+  Killed = 'killed'
+
+class Special:
+  Connected = 'ack!'
 
 # A channel is two-way IPC connection; it has a read and write pipe. The read
 # pipe is multiplexed by a MessagePump. The send() function can access the
@@ -81,6 +85,10 @@ class ParentListener(object):
   def receiveConnect(self, child):
     pass
 
+  # Called when a connection has successfully been established.
+  def receiveConnected(self, child):
+    pass
+
   # Called when a message has been received. The child is a ProcessHost
   # object corresponding to the parent side of the child process's connection.
   def receiveMessage(self, child, message):
@@ -117,8 +125,8 @@ class ProcessHost(object):
   def __init__(self, id, proc, channel):
     super(ProcessHost, self).__init__()
     self.id = id
-    self.closing = False
-    self.terminating = False
+    self.closing = False      # Indicates intent to terminate.
+    self.terminating = False  # Indicates forceful termination.
     self.proc = proc
     self.channel = channel
 
@@ -128,6 +136,9 @@ class ProcessHost(object):
 
   def send(self, message):
     self.channel.send(message)
+
+  def receiveConnected(self):
+    pass
 
   def close(self):
     if self.proc.is_alive():
@@ -168,13 +179,17 @@ class ParentWrapperListener(MessageListener):
     self.child = child
     self.listener.receiveConnect(child)
 
+  def receiveConnected(self, channel):
+    self.child.receiveConnected()
+    self.listener.receiveConnected(self.child)
+
   def receiveMessage(self, channel, message):
     self.listener.receiveMessage(self.child, message)
 
   def receiveError(self, channel, error):
     if not self.child.closing:
       self.listener.receiveError(self.child, error)
-    self.procman.cleanup(self.child)
+    self.procman.cleanup(self.child, error)
 
 # A process manager handles multiplexing IPC communication. It also owns the
 # set of child processes. There should only be one ProcessManager per process.
@@ -206,12 +221,13 @@ class ProcessManager(object):
     )
     self.children.add(child)
 
+    self.last_id_ += 1
+
     # Tell the listener that we've probably connected.
     listener.receiveConnect(child)
 
   ## Internal functions.
 
-  def cleanup(self, host):
+  def cleanup(self, host, error):
     self.children.remove(host)
-    self.pump.dropChannel(host.channel)
-    host.close()
+    self.close_process(host, error)
