@@ -121,10 +121,7 @@ class BSDMessagePump(MessagePump):
         continue
 
       try:
-        if message == Special.Connected:
-          listener.receiveConnected(channel)
-        else:
-          listener.receiveMessage(channel, message)
+        listener.receiveMessage(channel, message)
       except Exception as exn:
         listener.receiveError(channel, Error.User)
 

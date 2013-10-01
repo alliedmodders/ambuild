@@ -179,12 +179,12 @@ class ParentWrapperListener(MessageListener):
     self.child = child
     self.listener.receiveConnect(child)
 
-  def receiveConnected(self, channel):
-    self.child.receiveConnected()
-    self.listener.receiveConnected(self.child)
-
   def receiveMessage(self, channel, message):
-    self.listener.receiveMessage(self.child, message)
+    if message == Special.Connected:
+      self.child.receiveConnected()
+      self.listener.receiveConnected(self.child)
+    else:
+      self.listener.receiveMessage(self.child, message)
 
   def receiveError(self, channel, error):
     if not self.child.closing:
