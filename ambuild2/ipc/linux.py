@@ -16,14 +16,15 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import select, os
 import multiprocessing as mp
-from ipc.process import ProcessHost, ProcessManager, Channel
+from ipc.process import ProcessHost, ProcessManager, Channel, MessagePump, Error
+from ipc.process import ChildWrapperListener
 
 # Linux multiprocess support is implemented using epoll() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.
 
 class PipeChannel(Channel):
-  def __init__(self, reader, writer, listener=None):
-    super(PipeChannel, self).__init__(listener)
+  def __init__(self, reader, writer):
+    super(PipeChannel, self).__init__()
     self.reader = reader
     self.writer = writer
 
@@ -34,77 +35,76 @@ class PipeChannel(Channel):
   def send(self, message):
     self.writer.send(message)
 
-def ChildMain(reader, writer, child_type):
+def ChildMain(channel, listener_type, *args):
   print('Spawned child process: ' + str(os.getpid()))
   # Create a process manager.
-  channel = PipeChannel(reader, writer)
-  manager = LinuxProcessManager(channel)
-  channel.listener = child_type(manager)
-  manager.pump()
+  lmp = LinuxMessagePump()
+  listener = listener_type(lmp)
+  listener = ChildWrapperListener(listener)
+  lmp.addChannel(channel, listener)
+  lmp.pump()
 
-class LinuxHost(ProcessHost):
-  def __init__(self, id, parent_listener, child_type):
-    super(LinuxHost, self).__init__(id)
+class LinuxMessagePump(MessagePump):
+  def __init__(self):
+    super(LinuxMessagePump, self).__init__()
+    self.ep = select.epoll()
+    self.fdmap = {}
 
+  def close(self):
+    self.ep.close()
+
+  def addChannel(self, channel, listener):
+    fd = channel.reader.fileno()
+    events = select.EPOLLIN | select.EPOLLERR | select.EPOLLHUP
+
+    self.ep.register(fd, events)
+    self.fdmap[fd] = (channel, listener)
+
+  def dropChannel(self, channel):
+    fd = channel.reader.fileno()
+    self.ep.unregister(fd)
+    del self.fdmap[fd]
+
+  def shouldProcessEvents(self):
+    return len(self.fdmap)
+
+  def processEvents(self):
+    for fd, event in self.ep.poll():
+      channel, listener = self.fdmap[fd]
+      if event & (select.EPOLLERR | select.EPOLLHUP):
+        listener.receiveError(channel, Error.EOF)
+        continue
+
+      message = channel.reader.recv()
+      try:
+        listener.receiveMessage(channel, message)
+      except Exception as exn:
+        listener.receiveError(channel, Error.User)
+
+class LinuxProcessManager(ProcessManager):
+  def __init__(self, pump):
+    super(LinuxProcessManager, self).__init__(pump)
+
+  def create_process_and_pipe(self, id, listener, child_type, args):
     # Create pipes.
     child_read, parent_write = mp.Pipe(duplex=False)
     parent_read, child_write = mp.Pipe(duplex=False)
 
-    self.proc = mp.Process(
+    # Create the parent listener channel and register it.
+    channel = PipeChannel(parent_read, parent_write)
+    self.pump.addChannel(channel, listener)
+
+    # Create the child channel.
+    child_channel = PipeChannel(child_read, child_write)
+
+    # Spawn the process.
+    proc = mp.Process(
       target=ChildMain,
-      args=(child_read, child_write, child_type)
+      args=(child_channel, child_type) + args
     )
-    self.proc.start()
+    proc.start()
 
     # We don't need the child descriptors anymore.
-    child_read.close()
-    child_write.close()
+    child_channel.close()
 
-    # Instantiate the parent listener and channel.
-    self.channel = PipeChannel(parent_read, parent_write, parent_listener)
-
-class LinuxProcessManager(ProcessManager):
-  def __init__(self, parent=None):
-    super(LinuxProcessManager, self).__init__(parent)
-    self.ep = select.epoll()
-    self.fdmap = {}
-    if parent:
-      self.registerChannel(None, parent)
-
-  def close(self):
-    if self.parent:
-      self.unregisterChannel(self.parent)
-    super(LinuxProcessManager, self).close()
-    self.ep.close()
-
-  def spawn_internal(self, id, parent_listener, child_type):
-    return LinuxHost(id, parent_listener, child_type)
-
-  def registerHost(self, host):
-    self.registerChannel(host, host.channel)
-
-  def registerChannel(self, host, channel):
-    fd = channel.reader.fileno()
-    events = select.EPOLLIN | select.EPOLLERR | select.EPOLLHUP
-    self.fdmap[fd] = (host, channel)
-    self.ep.register(fd, events)
-
-  def unregisterHost(self, host):
-    self.unregisterChannel(host.channel)
-
-  def unregisterChannel(self, channel):
-    fd = channel.reader.fileno()
-    del self.fdmap[fd]
-    self.ep.unregister(fd)
-
-  def poll(self):
-    for fd, event in self.ep.poll():
-      host, channel = self.fdmap[fd]
-      if event & (select.EPOLLERR | select.EPOLLHUP):
-        self.handleDead(host, channel)
-      else:
-        message = channel.reader.recv()
-        try:
-          channel.listener.receiveMessage(host, message)
-        except Exception as exn:
-          self.handleError(host, exn)
+    return ProcessHost(id, proc, channel)

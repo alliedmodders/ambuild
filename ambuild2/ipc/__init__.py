@@ -17,12 +17,13 @@
 import util
 from ipc.process import ParentListener, ChildListener
 
-__all__ = ['ProcessManager', 'ParentListener', 'ChildListener']
+__all__ = ['ProcessManager', 'MessagePump', 'ParentListener', 'ChildListener']
 
 if util.IsWindows():
   from ipc.windows import WindowsProcessManager as ProcessManager
 elif util.IsLinux():
   from ipc.linux import LinuxProcessManager as ProcessManager
+  from ipc.linux import LinuxMessagePump as MessagePump
 elif util.IsBSD():
   from ipc.bsd import BSDProcessManager as ProcessManager
 else:

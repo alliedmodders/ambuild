@@ -70,6 +70,10 @@ class BSDHost(ProcessHost):
     self.child_channel.close()
     super(BSDHost, self).close()
 
+class BSDMessagePump(MessagePump):
+  def __init__(self):
+    self
+
 class BSDProcessManager(ProcessManager):
   def __init__(self, parent=None):
     super(BSDProcessManager, self).__init__(parent)
