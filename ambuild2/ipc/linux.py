@@ -77,7 +77,12 @@ class LinuxMessagePump(MessagePump):
         listener.receiveError(channel, Error.EOF)
         continue
 
-      message = channel.reader.recv()
+      try:
+        message = channel.reader.recv()
+      except Exception as exn:
+        listener.receiveError(channel, Error.EOF)
+        continue
+
       try:
         listener.receiveMessage(channel, message)
       except Exception as exn:

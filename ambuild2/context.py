@@ -17,7 +17,7 @@
 import time
 import os, sys, imp
 import util, database, damage
-from ipc import ProcessManager
+from ipc import ProcessManager, MessagePump
 from optparse import OptionParser
 
 class Context(object):
@@ -29,7 +29,8 @@ class Context(object):
       self.vars = util.pickle.load(fp)
     self.db = database.Database(self.dbpath)
     self.db.connect()
-    self.procman = ProcessManager()
+    self.messagePump = MessagePump()
+    self.procman = ProcessManager(self.messagePump)
 
   def __enter__(self):
     return self

@@ -94,9 +94,6 @@ class Node(object):
     self.incoming = None
     self.outgoing = None
 
-    # If this node has a graph entry, we cache it here.
-    self.graph_node = None
-
   def isCommand(self):
     return (self.type != Source and
             self.type != Output and

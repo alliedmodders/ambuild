@@ -72,4 +72,6 @@ def ComputeDamageGraph(database):
 
   for entry in dirty:
     graph.addEntry(entry)
+
+  graph.complete()
   return graph

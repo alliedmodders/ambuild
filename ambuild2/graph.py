@@ -36,12 +36,14 @@ class Graph(object):
     self.nodes = []
     self.outputs = []
     self.commands = []
+    self.leaf_commands = []
     self.worklist = []
+    self.node_map = {}
 
   def importEntry(self, entry):
-    assert not entry.graph_node
+    assert not entry.id in self.node_map
     graph_node = GraphNode(entry)
-    entry.graph_node = graph_node
+    self.node_map[entry.id] = graph_node
 
     self.roots.add(graph_node)
     if graph_node.isCommand():
@@ -56,7 +58,7 @@ class Graph(object):
   # If the node doesn't exist in the graph, add the DAG as reachable from
   # this node.
   def addEntry(self, entry):
-    if entry.graph_node:
+    if entry.id in self.node_map:
       return
     graph_node = self.importEntry(entry)
     self.leafs.add(graph_node)
@@ -134,13 +136,13 @@ class Graph(object):
   # Given a source graph node, and a destination database node, construct an
   # edge between the two (adding a node for to_entry if needed).
   def addEdgeToEntry(self, from_node, to_entry):
-    if not to_entry.graph_node:
+    if not to_entry.id in self.node_map:
       self.importEntry(to_entry)
       maybe_leaf = False
     else:
       maybe_leaf = True
 
-    to_node = to_entry.graph_node
+    to_node = self.node_map[to_entry.id]
     self.addEdge(from_node, to_node, to_maybe_leaf=maybe_leaf)
 
   # Given two graph nodes, construct an edge between them.
@@ -169,14 +171,17 @@ class Graph(object):
       for child_entry in self.db.query_outgoing(node.entry):
         self.addEdgeToEntry(node, child_entry)
 
+  # Finish constructing the graph.
+  def complete(self):
+    self.leaf_commands = [node for node in self.commands if not len(node.outgoing_cmds)]
+
   def printCommands(self):
     def printNode(node, indent):
       print((' ' * indent) + ' - ' + node.entry.format())
       for incoming in node.incoming_cmds:
         printNode(incoming, indent + 1)
 
-    roots = [node for node in self.commands if not len(node.outgoing_cmds)]
-    for node in roots:
+    for node in self.leaf_commands:
       printNode(node, 0)
 
   def printGraph(self):

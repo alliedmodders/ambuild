@@ -225,6 +225,7 @@ class ProcessManager(object):
 
     # Tell the listener that we've probably connected.
     listener.receiveConnect(child)
+    return child
 
   ## Internal functions.
 
