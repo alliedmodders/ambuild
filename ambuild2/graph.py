@@ -36,7 +36,6 @@ class Graph(object):
     self.nodes = []
     self.outputs = []
     self.commands = []
-    self.leaf_commands = []
     self.worklist = []
     self.node_map = {}
 
@@ -173,7 +172,11 @@ class Graph(object):
 
   # Finish constructing the graph.
   def complete(self):
-    self.leaf_commands = [node for node in self.commands if not len(node.outgoing_cmds)]
+    pass
+
+  @property
+  def leaf_commands(self):
+    return [node for node in self.commands if not len(node.incoming_cmds)]
 
   def printCommands(self):
     def printNode(node, indent):

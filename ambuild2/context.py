@@ -17,6 +17,7 @@
 import time
 import os, sys, imp
 import util, database, damage
+from builder import Builder
 from ipc import ProcessManager, MessagePump
 from optparse import OptionParser
 
@@ -26,7 +27,11 @@ class Context(object):
     self.cacheFolder = os.path.join(buildPath, '.ambuild2')
     self.dbpath = os.path.join(self.cacheFolder, 'graph')
     with open(os.path.join(self.cacheFolder, 'vars'), 'rb') as fp:
-      self.vars = util.pickle.load(fp)
+      try:
+        self.vars = util.pickle.load(fp)
+      except ValueError as exn:
+        sys.stderr.write('Build was configured with Python 3; use python3 instead.\n')
+        sys.exit(1)
     self.db = database.Database(self.dbpath)
     self.db.connect()
     self.messagePump = MessagePump()
@@ -54,25 +59,25 @@ class Context(object):
                       help="Show the computed build steps and then exit.")
     parser.add_option("-j", "--jobs", dest="jobs", type="int", default=0,
                       help="Number of worker processes. Minimum number is 1; default is #cores * 1.5.")
-    options, args = parser.parse_args()
+    self.options, self.args = parser.parse_args()
 
-    if options.show_graph:
+    if self.options.show_graph:
       self.db.printGraph()
       return True
 
     dmg_graph = damage.ComputeDamageGraph(self.db)
 
     # If we get here, we have to compute damage.
-    if options.show_damage:
+    if self.options.show_damage:
       dmg_graph.printGraph()
       return True
 
-    if options.show_commands:
+    if self.options.show_commands:
       dmg_graph.printCommands()
       return True
     
-    builder = Builder(self)
-    if options.show_steps:
+    builder = Builder(self, dmg_graph)
+    if self.options.show_steps:
       builder.printSteps()
       return True
     return builder.build(options.jobs)
