@@ -14,18 +14,12 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import util
-from ipc.process import ParentListener, ChildListener
+from .impl import MessagePump, ProcessManager
+from .process import ParentListener, ChildListener
 
-__all__ = ['ProcessManager', 'MessagePump', 'ParentListener', 'ChildListener']
-
-if util.IsWindows():
-  from ipc.windows import WindowsProcessManager as ProcessManager
-elif util.IsLinux():
-  from ipc.linux import LinuxProcessManager as ProcessManager
-  from ipc.linux import LinuxMessagePump as MessagePump
-elif util.IsBSD():
-  from ipc.bsd import BSDProcessManager as ProcessManager
-  from ipc.bsd import BSDMessagePump as MessagePump
-else:
-  raise Exception('Unknown platform: ' + util.Platform())
+__all__ = [
+  'ParentListener',
+  'ChildListener',
+  'MessagePump',
+  'ProcessManager'
+]

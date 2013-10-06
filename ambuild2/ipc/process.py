@@ -38,7 +38,11 @@ class Channel(object):
   # Only dictionaries should ever be sent; dictionaries can contain
   # arbitrary items, however, non-dictionary values for |message|
   # are reserved by the implementation.
-  def send(self, message):
+  #
+  # The optional channels parameter may be used to send Channels with the
+  # resulting message. On the receiving end, the channel list will be
+  # attached as a special 'channels' entry on the message dictionary.
+  def send(self, message, channels=None):
     raise Exception('must be implemented')
 
 # The interface for a raw message listener.
@@ -62,6 +66,10 @@ class ChildListener(object):
   def __init__(self, pump):
     super(ChildListener, self).__init__()
     self.pump = pump
+    self.channel = None
+
+  def receiveConnected(self, channel):
+    self.channel = channel
 
   # Called when a message is received from the parent process.
   def receiveMessage(self, message):
@@ -113,9 +121,12 @@ class MessagePump(object):
   def processEvents(self):
     raise Exception('must be implemented!')
 
-  def addChannel(self, channel):
+  # Creates an IPC channel and automatically registers it. When teh channel
+  # is closed it is automatically unregistered.
+  def createChannel(self, listener):
     raise Exception('must be implemented!')
 
+  # Drops a registered IRC channel.
   def dropChannel(self, channel):
     raise Exception('must be implemented!')
 
@@ -141,7 +152,7 @@ class ProcessHost(object):
     pass
 
   def close(self):
-    if self.proc.is_alive():
+    if self.proc.is_alive() and not self.closing:
       # To avoid a potential deadlock, we terminate the process before joining.
       self.proc.terminate()
     self.proc.join()
@@ -154,19 +165,6 @@ class ProcessHost(object):
     self.closing = True
     self.terminating = True
     self.proc.terminate()
-
-class ChildWrapperListener(MessageListener):
-  def __init__(self, listener):
-    super(ChildWrapperListener, self).__init__()
-    self.listener = listener
-
-  def receiveMessage(self, channel, message):
-    self.listener.receiveMessage(message)
-
-  def receiveError(self, channel, error):
-    self.listener.receiveError(error)
-    sys.stderr.write('Parent process died, terminating...\n')
-    sys.exit(1)
 
 class ParentWrapperListener(MessageListener):
   def __init__(self, procman, listener):
@@ -202,26 +200,32 @@ class ProcessManager(object):
   def close(self):
     children = [child for child in self.children]
     for child in children:
-      self.kill(child)
+      child.close()
 
   # On the parent side, the listener object should be a ParentListener that
   # will receive incoming notifications. On the child side, child_type will
   # be used to instantiate a singleton object that listens for messages
   # from the parent process.
-  def spawn(self, listener, child_type, args=()):
+  def spawn(self, listener, child_type, args=(), channels=None):
     # We wrap the listener in one that lets us pre-empt errors.
     listener = ParentWrapperListener(self, listener)
 
     # Create the child process.
     child = self.create_process_and_pipe(
       id=self.last_id_,
-      listener=listener,
-      child_type=child_type,
-      args=args
+      listener=listener
     )
     self.children.add(child)
 
     self.last_id_ += 1
+
+    # Send the start message to the child.
+    message = {
+      'id': '__start__',
+      'args': args,
+      'listener_type': child_type
+    }
+    child.channel.send(message, channels)
 
     # Tell the listener that we've probably connected.
     listener.receiveConnect(child)

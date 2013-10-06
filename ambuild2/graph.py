@@ -178,13 +178,17 @@ class Graph(object):
   def leaf_commands(self):
     return [node for node in self.commands if not len(node.incoming_cmds)]
 
+  @property
+  def root_commands(self):
+    return [node for node in self.commands if not len(node.outgoing_cmds)]
+
   def printCommands(self):
     def printNode(node, indent):
       print((' ' * indent) + ' - ' + node.entry.format())
       for incoming in node.incoming_cmds:
         printNode(incoming, indent + 1)
 
-    for node in self.leaf_commands:
+    for node in self.root_commands:
       printNode(node, 0)
 
   def printGraph(self):

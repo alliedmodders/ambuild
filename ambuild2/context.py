@@ -80,4 +80,4 @@ class Context(object):
     if self.options.show_steps:
       builder.printSteps()
       return True
-    return builder.build(options.jobs)
+    return builder.update()

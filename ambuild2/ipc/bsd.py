@@ -16,71 +16,59 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import select, os, sys
 import multiprocessing as mp
-from ipc.process import ProcessHost, ProcessManager, Channel, MessagePump, Error
-from ipc.process import ChildWrapperListener, Special
+from . import process
+from . import posix_proc
+from ipc.process import ProcessHost, Channel, Error
 
 # BSD multiprocess support is implemented using kqueue() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.
 
-class PipeChannel(Channel):
-  def __init__(self, reader, writer):
-    super(PipeChannel, self).__init__()
-    self.reader = reader
-    self.writer = writer
+# Work around Python 3 bug on Darwin, it seems to translate KQ_NOTE_EXIT wrong.
+KQ_NOTE_EXIT = select.KQ_NOTE_EXIT
+if KQ_NOTE_EXIT == 0x80000000:
+  KQ_NOTE_EXIT = -0x80000000
 
-  def close(self):
-    self.reader.close()
-    self.writer.close()
-
-  def send(self, message):
-    self.writer.send(message)
-
-def ChildMain(channel, listener_type, *args):
-  print('Spawned child process: ' + str(os.getpid()))
-  # Create a process manager.
-  bmp = BSDMessagePump()
-  listener = listener_type(bmp)
-  listener = ChildWrapperListener(listener)
-  bmp.addChannel(channel, listener)
-  channel.send(Special.Connected)
-  bmp.pump()
-
-class BSDMessagePump(MessagePump):
+class MessagePump(process.MessagePump):
   def __init__(self):
     self.kq = select.kqueue()
     self.fdmap = {}
     self.pidmap = {}
 
   def close(self):
-    super(BSDMessagePump, self).close()
+    super(MessagePump, self).close()
     self.kq.close()
 
   def addChannel(self, channel, listener):
-    fd = channel.reader.fileno()
+    assert channel.fd not in self.fdmap
+
     event = select.kevent(
-      ident=fd,
+      ident=channel.fd,
       filter=select.KQ_FILTER_READ,
       flags=select.KQ_EV_ADD
     )
-    self.fdmap[fd] = (channel, listener)
+    self.fdmap[channel.fd] = (channel, listener)
     self.kq.control([event], 0)
 
   def dropChannel(self, channel):
-    fd = channel.reader.fileno()
     event = select.kevent(
-      ident=fd,
+      ident=channel.fd,
       filter=select.KQ_FILTER_READ,
       flags=select.KQ_EV_DELETE
     )
     self.kq.control([event], 0)
-    del self.fdmap[fd]
+    del self.fdmap[channel.fd]
+
+  def createChannel(self, listener):
+    parent, child = posix_proc.SocketChannel.pair()
+    self.addChannel(parent, listener)
+    return parent, child
 
   def addPid(self, pid, channel, listener):
     event = select.kevent(
       ident=pid,
       filter=select.KQ_FILTER_PROC,
       flags=select.KQ_EV_ADD,
-      fflags=select.KQ_NOTE_EXIT
+      fflags=KQ_NOTE_EXIT
     )
     self.pidmap[pid] = (channel, listener)
     self.kq.control([event], 0)
@@ -117,16 +105,16 @@ class BSDMessagePump(MessagePump):
       try:
         message = channel.reader.recv()
       except:
-        listener.receiveError(channel, Error.EOF)
+        self.handle_channel_error(channel, listener, Error.EOF)
         continue
 
       try:
         listener.receiveMessage(channel, message)
       except Exception as exn:
-        listener.receiveError(channel, Error.User)
+        self.handle_channel_error(channel, listener, Error.User)
 
       if event.flags & select.KQ_EV_EOF:
-        listener.receiveError(channel, Error.EOF)
+        self.handle_channel_error(channel, listener, Error.EOF)
 
     # Now handle pid death.
     for event in next_events:
@@ -134,6 +122,10 @@ class BSDMessagePump(MessagePump):
       channel, listener = self.pidmap[event.ident]
       listener.receiveError(channel, Error.Killed)
       del self.pidmap[event.ident]
+
+  def handle_channel_error(self, channel, listener, error):
+    self.dropChannel(channel)
+    listener.receiveError(channel, error)
 
 class BSDHost(ProcessHost):
   def __init__(self, id, proc, channel, child_channel):
@@ -150,27 +142,19 @@ class BSDHost(ProcessHost):
     if self.child_channel:
       self.child_channel.close()
 
-class BSDProcessManager(ProcessManager):
+class ProcessManager(process.ProcessManager):
   def __init__(self, pump):
-    super(BSDProcessManager, self).__init__(pump)
+    super(ProcessManager, self).__init__(pump)
 
-  def create_process_and_pipe(self, id, listener, child_type, args):
+  def create_process_and_pipe(self, id, listener):
     # Create pipes.
-    child_read, parent_write = mp.Pipe(duplex=False)
-    parent_read, child_write = mp.Pipe(duplex=False)
-
-    channel = PipeChannel(parent_read, parent_write)
-    child_channel = PipeChannel(child_read, child_write)
+    parent, child = posix_proc.SocketChannel.pair()
 
     # Watch for changes on the parent channel.
-    self.pump.addChannel(channel, listener)
+    self.pump.addChannel(parent, listener)
 
     # Spawn the process.
-    proc = mp.Process(
-      target=ChildMain,
-      args=(child_channel, child_type) + args
-    )
-    proc.start()
+    proc = posix_proc.Process.spawn(parent)
 
     # Unlike Linux, BSD systems have an old bug where if a descriptor is only
     # alive because it is in a message queue, it can be garbage collected in
@@ -182,12 +166,18 @@ class BSDProcessManager(ProcessManager):
     # and we'll wait forever on it.
     #
     # To address this, we watch for PID death via kqueue.
-    self.pump.addPid(proc.pid, channel, listener)
+    #
+    # NB: This comment really only applies to descriptors sent over sockets
+    # using sendmsg(msg_control + SCM_RIGHTS). For the actual primary channel,
+    # we use dup2(), which should be safe? But just in case, we wait for the
+    # ACK.
+    self.pump.addPid(proc.pid, parent, listener)
 
-    return BSDHost(id, proc, channel, child_channel)
+    return BSDHost(id, proc, parent, child)
 
   def close_process(self, host, error):
-    self.pump.dropChannel(host.channel)
+    # There should be nothing open for this channel, since we wait for process death.
+    assert host.channel.fd not in self.pump.fdmap
     if error != Error.Killed:
       self.pump.dropPid(host.pid)
     host.close()

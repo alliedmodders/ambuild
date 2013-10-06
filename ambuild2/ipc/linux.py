@@ -36,13 +36,13 @@ class PipeChannel(Channel):
     self.writer.send(message)
 
 def ChildMain(channel, listener_type, *args):
-  print('Spawned child process: ' + str(os.getpid()))
   # Create a process manager.
   lmp = LinuxMessagePump()
-  listener = listener_type(lmp)
+  listener = listener_type(lmp, *args)
   listener = ChildWrapperListener(listener)
   lmp.addChannel(channel, listener)
   channel.send(Special.Connected)
+  listener.receiveConnected(channel)
   lmp.pump()
 
 class LinuxMessagePump(MessagePump):
@@ -66,6 +66,16 @@ class LinuxMessagePump(MessagePump):
     fd = channel.reader.fileno()
     self.ep.unregister(fd)
     del self.fdmap[fd]
+
+  def createChannel(self, listener):
+    child_read, parent_write = mp.Pipe(duplex=False)
+    parent_read, child_write = mp.Pipe(duplex=False)
+
+    parent_channel = PipeChannel(parent_read, parent_write)
+    child_channel = PipeChannel(child_read, child_write)
+
+    self.addChannel(parent_channel, listener)
+    return parent_channel, child_channel
 
   def shouldProcessEvents(self):
     return len(self.fdmap)

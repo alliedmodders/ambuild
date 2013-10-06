@@ -1,10 +1,10 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
-from task import Task
 import util
 import os, errno
 import traceback
 import nodetypes
 from collections import deque
+from task import Task, TaskMasterParent
 
 # Given the partial command DAG, compute a task tree we can send to the task
 # thread.
@@ -67,3 +67,6 @@ class Builder(object):
           leafs.append(child)
 
       counter += 1
+
+  def update(self):
+    tm = TaskMasterParent(self.cx, self.leafs, self.commands)
