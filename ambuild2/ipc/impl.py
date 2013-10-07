@@ -30,9 +30,10 @@ ProcessManager = ipc_impl.ProcessManager
 MessagePump = ipc_impl.MessagePump
 
 class ChildWrapperListener(process.MessageListener):
-  def __init__(self, mp):
+  def __init__(self, mp, channel):
     super(ChildWrapperListener, self).__init__()
     self.mp = mp
+    self.channel = channel
     self.listener = None
 
   def receiveMessage(self, channel, message):
@@ -45,8 +46,9 @@ class ChildWrapperListener(process.MessageListener):
       
       self.listener = listener_type(self.mp, *(args + (channels,)))
       self.listener.receiveConnected(channel)
+      return
 
-    self.listener.receiveMessage(message)
+    self.listener.receiveMessage(channel, message)
 
   def receiveError(self, channel, error):
     if self.listener:
@@ -58,6 +60,6 @@ def child_main(channel):
   print('Child process spawned: ' + str(os.getpid()))
 
   mp = MessagePump()
-  listener = ChildWrapperListener(mp)
+  listener = ChildWrapperListener(mp, channel)
   mp.addChannel(channel, listener)
   mp.pump()

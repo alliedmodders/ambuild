@@ -76,7 +76,7 @@ class ChildListener(object):
     self.channel = channel
 
   # Called when a message is received from the parent process.
-  def receiveMessage(self, message):
+  def receiveMessage(self, channel, message):
     raise Exception('Unhandled message: ' + str(message))
 
   # Called when the parent connection has died; this will result in the
@@ -229,7 +229,7 @@ class ProcessManager(object):
       'args': args,
       'listener_type': child_type
     }
-    #child.channel.connect(message, channels)
+    child.channel.send(message, channels)
 
     # Tell the listener that we've probably connected.
     listener.receiveConnect(child)

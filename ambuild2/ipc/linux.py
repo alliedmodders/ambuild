@@ -59,6 +59,9 @@ class MessagePump(process.MessagePump):
           message = channel.recv()
         except Exception as exn:
           traceback.print_exc()
+          message = None
+
+        if not message:
           self.handle_channel_error(channel, listener, Error.EOF)
           continue
 

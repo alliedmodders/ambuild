@@ -60,7 +60,6 @@ class MessagePump(process.MessagePump):
 
   def createChannel(self, listener):
     parent, child = posix_proc.SocketChannel.pair()
-    self.addChannel(parent, listener)
     return parent, child
 
   def addPid(self, pid, channel, listener):

@@ -2,7 +2,7 @@
 import os
 import nodetypes
 import multiprocessing as mp
-from ipc import ParentListener, ChildListener, ProcessManager
+from ipc import ParentListener, ChildListener, ProcessManager, MessageListener
 
 class Task(object):
   def __init__(self, id, entry, outputs):
@@ -24,14 +24,17 @@ class Task(object):
     return (' '.join([arg for arg in self.data]))
 
 class WorkerChild(ChildListener):
-  def __init__(self, pump, resultChannel):
+  def __init__(self, pump, channels):
     super(WorkerChild, self).__init__(pump)
-    self.resultChannel = resultChannel
+    self.resultChannel = channels[0]
     print('Spawned worker (pid: ' + str(os.getpid()) + ')')
-    print('pid: ' + str(os.getpid()) + ', (' + str(resultChannel.reader.fileno()) + ', ' + str(resultChannel.writer.fileno()) + ')')
+    print('pid: ' + str(os.getpid()) + ', fd=' + str(self.resultChannel.fd))
 
   def receiveConnected(self, channel):
-    print('pidx: ' + str(os.getpid()) + ', (' + str(channel.reader.fileno()) + ', ' + str(channel.writer.fileno()) + ')')
+    print('pidx: ' + str(os.getpid()) + ', fd=' + str(channel.fd))
+
+  def receiveMessage(self, channel, message):
+    print(message)
 
 class WorkerParent(ParentListener):
   def __init__(self, taskMaster, child_channel):
@@ -53,12 +56,21 @@ class TaskMasterChild(ChildListener):
     super(TaskMasterChild, self).__init__(pump)
     print('Spawned task master (pid: ' + str(os.getpid()) + ')')
 
-    #self.procman = ProcessManager(pump)
-    #for channel in child_channels:
-    #  self.procman.spawn(WorkerParent(self, channel), WorkerChild, args=(channel,))
+    self.procman = ProcessManager(pump)
+    for channel in child_channels:
+      self.procman.spawn(WorkerParent(self, channel), WorkerChild, args=(), channels=(channel,))
 
   def receiveConnected(self, channel):
-    print('pidx: ' + str(os.getpid()) + ', (' + str(channel.reader.fileno()) + ', ' + str(channel.writer.fileno()) + ')')
+    self.channel = channel
+    print('pidx: ' + str(os.getpid()) + ', fd=' + str(channel.fd))
+
+  def receiveMessage(self, channel, message):
+    print(message)
+    #super(TaskMasterChild, self).receiveMessage(channel, message)
+
+class WorkerIOListener(MessageListener):
+  def __init__(self):
+    super(WorkerIOListener, self).__init__()
 
 class TaskMasterParent(ParentListener):
   def __init__(self, cx, task_graph, task_list):
@@ -85,7 +97,8 @@ class TaskMasterParent(ParentListener):
     child_channels = []
     for i in range(num_processes):
       parent_channel, child_channel = cx.messagePump.createChannel(self)
-      self.channels.append(parent_channel)
+      listener = WorkerIOListener()
+      cx.messagePump.addChannel(parent_channel, listener)
       child_channels.append(child_channel)
 
     # Spawn the task master.

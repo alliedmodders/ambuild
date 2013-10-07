@@ -186,6 +186,8 @@ class SocketChannel(Channel):
     while len(b) < nbytes:
       new_bytes = self.sock.recv(nbytes - len(b))
       if len(new_bytes) == 0:
+        if len(b) == 0:
+          return None
         raise Exception('socket closed')
       b += new_bytes
     return b
@@ -231,8 +233,16 @@ class SocketChannel(Channel):
     res = sendmsg(self.sock.fileno(), ctypes.pointer(msg), MSG_NOSIGNAL)
     check_errno(res)
 
+    # On Linux, it's now safe to close all the channels we just sent.
+    if util.IsLinux():
+      for channel in channels:
+        channel.close()
+
   def recv(self):
     header = self.recv_all(8)
+    if header == None:
+      return None
+
     size, nfds = struct.unpack('ii', header)
     if nfds == 0:
       data = self.recv_all(size)
@@ -279,6 +289,7 @@ class SocketChannel(Channel):
             for i in range(wire_fds):
               fd = cmsg.contents.cmsg_data[i]
               channel = SocketChannel.fromfd(fd)
+              channel.send(Special.Connected)
               channels.append(channel)
             
           cmsg = CMSG_NXTHDR(msg, cmsg)
