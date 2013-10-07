@@ -19,17 +19,38 @@ import struct
 import ctypes
 import socket
 import signal
-from .process import Channel 
+from .process import Channel, ProcessHost, Special
 import os, sys, fcntl
 
 kStartFd = 3
 
+class iovec_t(ctypes.Structure):
+  def __init__(self):
+    super(iovec_t, self).__init__()
+iovec_t._fields_ = [
+  ('iov_base', ctypes.c_void_p),
+  ('iov_len', ctypes.c_size_t)
+]
+
 if util.IsMac():
   sLibC = ctypes.CDLL('libc.dylib', use_errno=True)
+
   posix_spawn_file_actions_t = ctypes.c_void_p
   pid_t = ctypes.c_int
+  SOL_SOCKET = 0xffff
+  SCM_RIGHTS = 1
+  MSG_NOSIGNAL = 0  # Not supported.
+  MSG_CTRUNC = 0x20
+
 elif util.IsLinux():
   sLibC = ctypes.CDLL('libc.so.6', use_errno=True)
+
+  pid_t = ctypes.c_int
+  SOL_SOCKET = 1
+  SCM_RIGHTS = 1
+  MSG_NOSIGNAL = 0x4000
+  MSG_CTRUNC = 0x8
+
   class posix_spawn_file_actions_t(ctypes.Structure):
     def __init__(self):
       super(posix_spawn_file_actions_t, self).__init__()
@@ -39,7 +60,35 @@ elif util.IsLinux():
     ('spawn_action', ctypes.c_void_p),
     ('pad', ctypes.c_int * 16)
   ]
-  pid_t = ctypes.c_int
+
+  class msghdr_t(ctypes.Structure):
+    def __init__(self):
+      super(msghdr_t, self).__init__()
+  msghdr_t._fields_ = [
+    ('msg_name', ctypes.c_void_p),
+    ('msg_namelen', ctypes.c_int),
+    ('msg_iov', ctypes.POINTER(iovec_t)),
+    ('msg_iovlen', ctypes.c_size_t),
+    ('msg_control', ctypes.c_void_p),
+    ('msg_controllen', ctypes.c_size_t),
+    ('msg_flags', ctypes.c_int)
+  ]
+
+  def CMSG_NXTHDR(msg, cmsg):
+    cmsg_len = cmsg.contents.cmsg_len
+    if cmsg_len < ctypes.sizeof(cmsghdr_base_t):
+      return None
+    
+    cmsg_len = (cmsg_len + ctypes.sizeof(ctypes.c_size_t) - 1) & ~(ctypes.sizeof(ctypes.c_size_t) - 1)
+    addr = ctypes.addressof(cmsg.contents) + cmsg_len
+    if addr + ctypes.sizeof(cmsghdr_base_t) > msg.msg_control + msg.msg_controllen:
+      return None
+
+    cmsg = ctypes.cast(addr, cmsghdr_base_t_p)
+    if addr + cmsg.contents.cmsg_len > msg.msg_control + msg.msg_controllen:
+      return None
+
+    return cmsg
 
 posix_spawnp = sLibC.posix_spawnp
 posix_spawnp.argtypes = [
@@ -62,6 +111,22 @@ posix_spawn_file_actions_adddup2 = sLibC.posix_spawn_file_actions_adddup2
 posix_spawn_file_actions_adddup2.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
 posix_spawn_file_actions_adddup2.restype = ctypes.c_int
 
+sendmsg = sLibC.sendmsg
+sendmsg.argtypes = [
+  ctypes.c_int,             # sockfd
+  ctypes.POINTER(msghdr_t), # msg
+  ctypes.c_int              # flags
+]
+sendmsg.restype = ctypes.c_ssize_t
+
+recvmsg = sLibC.recvmsg
+recvmsg.argtypes = [
+  ctypes.c_int,             # sockfd
+  ctypes.POINTER(msghdr_t), # msg
+  ctypes.c_int              # flags
+]
+recvmsg.restype = ctypes.c_ssize_t
+
 def check_errno(res):
   if res < 0:
     n = ctypes.get_errno()
@@ -73,6 +138,39 @@ def SetNonBlocking(fd):
 def SetCloseOnExec(fd):
   flags = fcntl.fcntl(fd, fcntl.F_GETFD)
   fcntl.fcntl(fd, fcntl.F_SETFD, flags|fcntl.FD_CLOEXEC)
+
+class cmsghdr_base_t(ctypes.Structure):
+  def __init__(self):
+    super(cmsghdr_base_t, self).__init__()
+cmsghdr_base_t._fields_ = [
+  ('cmsg_len', ctypes.c_size_t),
+  ('cmsg_level', ctypes.c_int),
+  ('cmsg_type', ctypes.c_int)
+]
+cmsghdr_base_t_p = ctypes.POINTER(cmsghdr_base_t)
+
+def cmsghdr_type_for_n(n):
+  class cmsghdr_t(ctypes.Structure):
+    def __init__(self):
+      super(cmsghdr_t, self).__init__()
+  cmsghdr_t._fields_ = [
+    ('cmsg_len', ctypes.c_size_t),
+    ('cmsg_level', ctypes.c_int),
+    ('cmsg_type', ctypes.c_int),
+    ('cmsg_data', ctypes.c_int * n)
+  ]
+  size = 0
+  for name, type in cmsghdr_t._fields_:
+    size += ctypes.sizeof(type)
+  return cmsghdr_t, size
+
+def cmsghdr_t(n):
+  cmsghdr, cmsg_len = cmsghdr_type_for_n(n)
+  cmsg = cmsghdr()
+  cmsg.cmsg_level = SOL_SOCKET
+  cmsg.cmsg_type = SCM_RIGHTS
+  cmsg.cmsg_len = cmsg_len
+  return cmsg
 
 class SocketChannel(Channel):
   def __init__(self, sock):
@@ -86,20 +184,111 @@ class SocketChannel(Channel):
   def recv_all(self, nbytes):
     b = bytes()
     while len(b) < nbytes:
-      b += self.sock.recv(nbytes - len(b))
+      new_bytes = self.sock.recv(nbytes - len(b))
+      if len(new_bytes) == 0:
+        raise Exception('socket closed')
+      b += new_bytes
     return b
 
-  def send(self, obj, channels=None):
-    assert not channels
+  def send(self, obj, channels=()):
     data = util.pickle.dumps(obj)
-    self.sock.sendall(struct.pack('i', len(data)))
-    self.sock.sendall(data)
+
+    # If no channels, just send the data.
+    if not len(channels):
+      self.sock.sendall(struct.pack('ii', len(data), 0))
+      self.sock.sendall(data)
+      return
+
+    # Construct the actual message.
+    buf = bytearray(data)
+    while len(buf) < 8:
+      # Work around a Python bug where we need at least 8 bytes.
+      buf.append(0)
+
+    # Send the data length and # of channels.
+    self.sock.sendall(struct.pack('ii', len(buf), len(channels)))
+
+    cmsg = cmsghdr_t(len(channels))
+    for index, channel in enumerate(channels):
+      cmsg.cmsg_data[index] = channel.fd
+
+    buffer_t = ctypes.c_byte * len(buf)
+    iov_base = buffer_t.from_buffer(buf)
+
+    iovec = iovec_t()
+    iovec.iov_base = ctypes.addressof(iov_base)
+    iovec.iov_len = len(buf)
+
+    msg = msghdr_t()
+    msg.msg_name = None
+    msg.msg_namelen = 0
+    msg.msg_iov = ctypes.pointer(iovec)
+    msg.msg_iovlen = 1
+    msg.msg_control = ctypes.addressof(cmsg)
+    msg.msg_controllen = cmsg.cmsg_len
+    msg.msg_flags = 0
+
+    res = sendmsg(self.sock.fileno(), ctypes.pointer(msg), MSG_NOSIGNAL)
+    check_errno(res)
 
   def recv(self):
-    header = self.recv_all(4)
-    size, = struct.unpack('i', header)
-    data = self.recv_all(size)
-    return util.pickle.loads(data)
+    header = self.recv_all(8)
+    size, nfds = struct.unpack('ii', header)
+    if nfds == 0:
+      data = self.recv_all(size)
+      return util.pickle.loads(data)
+
+    iov_base = (ctypes.c_byte * size)()
+
+    iovec = iovec_t()
+
+    msg = msghdr_t()
+    msg.msg_iov = ctypes.pointer(iovec)
+    msg.msg_iovlen = 1
+
+    # Construct a buffer for the ancillary data. This is pretty arbitrary.
+    cmsg_base = (ctypes.c_byte * 512)()
+    msg.msg_control = ctypes.cast(cmsg_base, ctypes.c_void_p)
+
+    channels = []
+
+    received = 0
+    while received < size:
+      iovec.iov_base = ctypes.addressof(iov_base) + received
+      iovec.iov_len = size - received
+      msg.msg_controllen = len(cmsg_base)
+
+      res = recvmsg(self.sock.fileno(), ctypes.pointer(msg), 0)
+      check_errno(res)
+
+      received += res
+
+      if msg.msg_flags & MSG_CTRUNC:
+        raise Exception('message control or ancillary data was truncated')
+
+      # Min struct size is 12.
+      if msg.msg_controllen >= 12:
+        cmsg = ctypes.cast(msg.msg_control, cmsghdr_base_t_p)
+        while cmsg:
+          if cmsg.contents.cmsg_level == SOL_SOCKET and cmsg.contents.cmsg_type == SCM_RIGHTS:
+            # Grab the file descriptors.
+            wire_fds = (cmsg.contents.cmsg_len - ctypes.sizeof(cmsg.contents)) // 4
+            cmsg_t, cmsg_len = cmsghdr_type_for_n(wire_fds)
+            cmsg_t_p = ctypes.POINTER(cmsg_t)
+            cmsg = ctypes.cast(ctypes.addressof(cmsg.contents), cmsg_t_p)
+            for i in range(wire_fds):
+              fd = cmsg.contents.cmsg_data[i]
+              channel = SocketChannel.fromfd(fd)
+              channels.append(channel)
+            
+          cmsg = CMSG_NXTHDR(msg, cmsg)
+
+    if nfds != len(channels):
+      raise Exception('expected ' + str(nfds) + ' channels, received ' + str(len(channels)))
+
+    message = util.Unpickle(bytes(iov_base))
+    message['channels'] = tuple(channels)
+    return message
 
   @property
   def fd(self):
@@ -123,7 +312,27 @@ class SocketChannel(Channel):
 def child_main():
   from . import impl
   channel = SocketChannel.fromfd(kStartFd)
+  channel.send(Special.Connected)
   impl.child_main(channel)
+
+# We keep the child's socket fd alive until we get an ACK, since fork() is
+# asynchronous and we need to keep the fd alive.
+class PosixHost(ProcessHost):
+  def __init__(self, id, proc, parent, child):
+    super(PosixHost, self).__init__(id, proc, parent)
+    self.child_channel = child
+
+  def receiveConnected(self):
+    super(PosixHost, self).receiveConnected()
+    if self.child_channel:
+      self.child_channel.close()
+      self.child_channel = None
+
+  def close(self):
+    super(PosixHost, self).close()
+    if self.child_channel:
+      self.child_channel.close()
+      self.child_channel = None
 
 class Process(object):
   def __init__(self, pid):
@@ -164,8 +373,13 @@ class Process(object):
     exe = ctypes.c_char_p(bytes(sys.executable, 'utf8'))
 
     # Bind 
-    res = posix_spawn_file_actions_adddup2(file_actions, channel.fd, kStartFd)
-    check_errno(res)
+    remap = (
+      (channel.fd, kStartFd),
+    )
+    for fromfd, tofd in remap:
+      res = posix_spawn_file_actions_adddup2(file_actions, fromfd, tofd)
+      check_errno(res)
+
     envp = (ctypes.c_char_p * (len(os.environ) + 1))()
     for index, key in enumerate(os.environ.keys()):
       export = key + '=' + os.environ[key]

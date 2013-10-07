@@ -30,37 +30,34 @@ ProcessManager = ipc_impl.ProcessManager
 MessagePump = ipc_impl.MessagePump
 
 class ChildWrapperListener(process.MessageListener):
-  def __init__(self, listener):
+  def __init__(self, mp):
     super(ChildWrapperListener, self).__init__()
-    self.listener = listener
-
-  def receiveConnected(self, channel):
-    self.listener.receiveConnected(channel)
+    self.mp = mp
+    self.listener = None
 
   def receiveMessage(self, channel, message):
+    if message['id'] == '__start__':
+      listener_type = message['listener_type']
+      args = message['args']
+      channels = ()
+      if 'channels' in message:
+        channels = message['channels']
+      
+      self.listener = listener_type(self.mp, *(args + (channels,)))
+      self.listener.receiveConnected(channel)
+
     self.listener.receiveMessage(message)
 
   def receiveError(self, channel, error):
-    self.listener.receiveError(error)
+    if self.listener:
+      self.listener.receiveError(error)
     sys.stderr.write('Parent process died, terminating...\n')
     sys.exit(1)
 
 def child_main(channel):
   print('Child process spawned: ' + str(os.getpid()))
-  message = channel.recv()
-  assert(message['id'] == 'start')
 
-  target = message['target']
-  listener_type = message['listener_type']
-  args = message['args']
-  channels = ()
-  if 'channels' in message:
-    channels = message['channels']
-  
   mp = MessagePump()
-  listener = listener_type(mp, *(args + channels))
-  listener = ChildWrapperListener(listener)
+  listener = ChildWrapperListener(mp)
   mp.addChannel(channel, listener)
-  channel.send(Special.Connected)
-  listener.receiveConnected(channel)
   mp.pump()

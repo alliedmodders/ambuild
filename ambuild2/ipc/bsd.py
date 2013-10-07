@@ -127,21 +127,6 @@ class MessagePump(process.MessagePump):
     self.dropChannel(channel)
     listener.receiveError(channel, error)
 
-class BSDHost(ProcessHost):
-  def __init__(self, id, proc, channel, child_channel):
-    super(BSDHost, self).__init__(id, proc, channel)
-    self.child_channel = child_channel
-
-  def receiveConnected(self):
-    super(BSDHost, self).receiveConnected()
-    self.child_channel.close()
-    self.child_channel = None
-
-  def close(self):
-    super(BSDHost, self).close()
-    if self.child_channel:
-      self.child_channel.close()
-
 class ProcessManager(process.ProcessManager):
   def __init__(self, pump):
     super(ProcessManager, self).__init__(pump)
@@ -154,7 +139,7 @@ class ProcessManager(process.ProcessManager):
     self.pump.addChannel(parent, listener)
 
     # Spawn the process.
-    proc = posix_proc.Process.spawn(parent)
+    proc = posix_proc.Process.spawn(child)
 
     # Unlike Linux, BSD systems have an old bug where if a descriptor is only
     # alive because it is in a message queue, it can be garbage collected in
@@ -173,7 +158,7 @@ class ProcessManager(process.ProcessManager):
     # ACK.
     self.pump.addPid(proc.pid, parent, listener)
 
-    return BSDHost(id, proc, parent, child)
+    return posix_proc.PosixHost(id, proc, parent, child)
 
   def close_process(self, host, error):
     # There should be nothing open for this channel, since we wait for process death.

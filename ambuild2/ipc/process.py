@@ -14,7 +14,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import sys
+import os, sys
 import multiprocessing as mp
 
 class Error:
@@ -39,10 +39,14 @@ class Channel(object):
   # arbitrary items, however, non-dictionary values for |message|
   # are reserved by the implementation.
   #
-  # The optional channels parameter may be used to send Channels with the
-  # resulting message. On the receiving end, the channel list will be
-  # attached as a special 'channels' entry on the message dictionary.
-  def send(self, message, channels=None):
+  # If channels is a tuple of Channel objects, they will be attached to the
+  # message dictionary to a 'channels' key, and reconstructed on the other
+  # side.
+  def send(self, message, channels=()):
+    raise Exception('must be implemented')
+
+  # Receives an initial connection message.
+  def accept(self):
     raise Exception('must be implemented')
 
 # The interface for a raw message listener.
@@ -225,7 +229,7 @@ class ProcessManager(object):
       'args': args,
       'listener_type': child_type
     }
-    child.channel.send(message, channels)
+    #child.channel.connect(message, channels)
 
     # Tell the listener that we've probably connected.
     listener.receiveConnect(child)

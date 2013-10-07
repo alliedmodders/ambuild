@@ -14,40 +14,19 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+import traceback
 import select, os
 import multiprocessing as mp
-from ipc.process import ProcessHost, ProcessManager, Channel, MessagePump, Error
-from ipc.process import ChildWrapperListener, Special
+from . import process
+from . import posix_proc
+from ipc.process import ProcessHost, Channel, Error
 
 # Linux multiprocess support is implemented using epoll() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.
 
-class PipeChannel(Channel):
-  def __init__(self, reader, writer):
-    super(PipeChannel, self).__init__()
-    self.reader = reader
-    self.writer = writer
-
-  def close(self):
-    self.reader.close()
-    self.writer.close()
-
-  def send(self, message):
-    self.writer.send(message)
-
-def ChildMain(channel, listener_type, *args):
-  # Create a process manager.
-  lmp = LinuxMessagePump()
-  listener = listener_type(lmp, *args)
-  listener = ChildWrapperListener(listener)
-  lmp.addChannel(channel, listener)
-  channel.send(Special.Connected)
-  listener.receiveConnected(channel)
-  lmp.pump()
-
-class LinuxMessagePump(MessagePump):
+class MessagePump(process.MessagePump):
   def __init__(self):
-    super(LinuxMessagePump, self).__init__()
+    super(MessagePump, self).__init__()
     self.ep = select.epoll()
     self.fdmap = {}
 
@@ -56,26 +35,18 @@ class LinuxMessagePump(MessagePump):
     self.ep.close()
 
   def addChannel(self, channel, listener):
-    fd = channel.reader.fileno()
     events = select.EPOLLIN | select.EPOLLERR | select.EPOLLHUP
 
-    self.ep.register(fd, events)
-    self.fdmap[fd] = (channel, listener)
+    self.ep.register(channel.fd, events)
+    self.fdmap[channel.fd] = (channel, listener)
 
   def dropChannel(self, channel):
-    fd = channel.reader.fileno()
-    self.ep.unregister(fd)
-    del self.fdmap[fd]
+    self.ep.unregister(channel.fd)
+    del self.fdmap[channel.fd]
 
   def createChannel(self, listener):
-    child_read, parent_write = mp.Pipe(duplex=False)
-    parent_read, child_write = mp.Pipe(duplex=False)
-
-    parent_channel = PipeChannel(parent_read, parent_write)
-    child_channel = PipeChannel(child_read, child_write)
-
-    self.addChannel(parent_channel, listener)
-    return parent_channel, child_channel
+    parent, child = posix_proc.SocketChannel.pair()
+    return parent, child
 
   def shouldProcessEvents(self):
     return len(self.fdmap)
@@ -83,49 +54,51 @@ class LinuxMessagePump(MessagePump):
   def processEvents(self):
     for fd, event in self.ep.poll():
       channel, listener = self.fdmap[fd]
+      if event & select.EPOLLIN:
+        try:
+          message = channel.recv()
+        except Exception as exn:
+          traceback.print_exc()
+          self.handle_channel_error(channel, listener, Error.EOF)
+          continue
+
+        try:
+          listener.receiveMessage(channel, message)
+        except Exception as exn:
+          traceback.print_exc()
+          self.handle_channel_error(channel, listener, Error.User)
+          continue
+
       if event & (select.EPOLLERR | select.EPOLLHUP):
-        listener.receiveError(channel, Error.EOF)
-        continue
+        self.handle_channel_error(channel, listener, Error.EOF)
 
-      try:
-        message = channel.reader.recv()
-      except Exception as exn:
-        listener.receiveError(channel, Error.EOF)
-        continue
+  def handle_channel_error(self, channel, listener, error):
+    self.dropChannel(channel)
+    listener.receiveError(channel, error)
 
-      try:
-        listener.receiveMessage(channel, message)
-      except Exception as exn:
-        listener.receiveError(channel, Error.User)
-
-class LinuxProcessManager(ProcessManager):
+class ProcessManager(process.ProcessManager):
   def __init__(self, pump):
-    super(LinuxProcessManager, self).__init__(pump)
+    super(ProcessManager, self).__init__(pump)
 
-  def create_process_and_pipe(self, id, listener, child_type, args):
+  def create_process_and_pipe(self, id, listener):
     # Create pipes.
-    child_read, parent_write = mp.Pipe(duplex=False)
-    parent_read, child_write = mp.Pipe(duplex=False)
+    parent, child = posix_proc.SocketChannel.pair()
 
-    # Create the parent listener channel and register it.
-    channel = PipeChannel(parent_read, parent_write)
-    self.pump.addChannel(channel, listener)
-
-    # Create the child channel.
-    child_channel = PipeChannel(child_read, child_write)
+    # Watch for changes on the parent chnnale.
+    self.pump.addChannel(parent, listener)
 
     # Spawn the process.
-    proc = mp.Process(
-      target=ChildMain,
-      args=(child_channel, child_type) + args
-    )
-    proc.start()
+    proc = posix_proc.Process.spawn(child)
 
-    # We don't need the child descriptors anymore.
-    child_channel.close()
-
-    return ProcessHost(id, proc, channel)
+    # There is a race condition where if the child dies before sending an ACK,
+    # we will never close the parent process's fildes for the child socket.
+    # epoll() will then deadlock since no EOF will be delivered. I don't see
+    # an easy way to solve this yet, so we just cross our fingers.
+    #
+    # On BSD this is not a problem since kqueue() can watch pids.
+    return posix_proc.PosixHost(id, proc, parent, child)
 
   def close_process(self, host, error):
-    self.pump.dropChannel(host.channel)
+    # There should be nothing open for this channel, since we wait for process death.
+    assert host.channel.fd not in self.pump.fdmap
     host.close()

@@ -39,20 +39,23 @@ class WorkerParent(ParentListener):
     self.taskMaster = taskMaster
     self.child_channel = child_channel
 
-  def recvConnected(self, child):
+  def receiveConnected(self, child):
     # We're just a conduit for this pipe. Now that the child has received it,
     # it's safe to free our references to it.
     self.child_channel.close()
     self.child_channel = None
+
+  def receiveError(self, child, error):
+    print('Error: ' + error)
 
 class TaskMasterChild(ChildListener):
   def __init__(self, pump, task_graph, child_channels):
     super(TaskMasterChild, self).__init__(pump)
     print('Spawned task master (pid: ' + str(os.getpid()) + ')')
 
-    self.procman = ProcessManager(pump)
-    for channel in child_channels:
-      self.procman.spawn(WorkerParent(self, channel), WorkerChild, args=(channel,))
+    #self.procman = ProcessManager(pump)
+    #for channel in child_channels:
+    #  self.procman.spawn(WorkerParent(self, channel), WorkerChild, args=(channel,))
 
   def receiveConnected(self, channel):
     print('pidx: ' + str(os.getpid()) + ', (' + str(channel.reader.fileno()) + ', ' + str(channel.writer.fileno()) + ')')
@@ -86,9 +89,12 @@ class TaskMasterParent(ParentListener):
       child_channels.append(child_channel)
 
     # Spawn the task master.
-    cx.procman.spawn(self, TaskMasterChild, args=(task_graph), channels=child_channels)
+    cx.procman.spawn(self, TaskMasterChild, args=(task_graph,), channels=child_channels)
 
     self.run()
+
+  def receiveError(self, child, error):
+    print('Error: ' + error)
 
   def run(self):
     self.cx.messagePump.pump()
