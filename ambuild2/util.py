@@ -166,3 +166,7 @@ def Unpickle(blob):
     blob = bytes(blob)
   return pickle.loads(blob)
 
+def str2b(s):
+  if bytes is str:
+    return s
+  return bytes(s, 'utf8')

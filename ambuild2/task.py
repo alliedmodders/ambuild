@@ -83,10 +83,11 @@ class TaskMasterParent(ParentListener):
       # since we incur the additional overhead of message passing. Instead,
       # we use two processes as the minimal number. If that turns out to be
       # bad we can create an in-process TaskMaster later.
-      if mp.cpu_count() == 1:
-        num_processes = 2
-      else:
-        num_processes = int(mp.cpu_count() * 1.5)
+      #if mp.cpu_count() == 1:
+      #  num_processes = 2
+      #else:
+      #  num_processes = int(mp.cpu_count() * 1.5)
+      num_processes = 5
 
     # Don't create more processes than we'll need.
     if len(task_list) < num_processes:

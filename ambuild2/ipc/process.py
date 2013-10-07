@@ -19,6 +19,7 @@ import multiprocessing as mp
 
 class Error:
   EOF = 'eof'
+  Closed = 'closed'
   User = 'badmsg'
   Killed = 'killed'
 

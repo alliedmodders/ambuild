@@ -14,6 +14,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+import traceback
 import select, os, sys
 import multiprocessing as mp
 from . import process
@@ -73,14 +74,20 @@ class MessagePump(process.MessagePump):
     self.kq.control([event], 0)
 
   def dropPid(self, pid):
-    event = select.kevent(
-      ident=pid,
-      filter=select.KQ_FILTER_PROC,
-      flags=select.KQ_EV_DELETE,
-      fflags=select.KQ_NOTE_EXIT
-    )
+    assert pid in self.pidmap
+    try:
+      event = select.kevent(
+        ident=pid,
+        filter=select.KQ_FILTER_PROC,
+        flags=select.KQ_EV_DELETE,
+        fflags=select.KQ_NOTE_EXIT
+      )
+      self.kq.control([event], 0)
+    except:
+      # We could have already pulled the process death out and it's sitting
+      # in our poll list. 
+      pass
     del self.pidmap[pid]
-    self.kq.control([event], 0)
 
   def shouldProcessEvents(self):
     return len(self.pidmap) + len(self.fdmap)
@@ -102,14 +109,20 @@ class MessagePump(process.MessagePump):
       # We can receive EOF even if there are more bytes to read, so we always
       # attempt a message read anyway.
       try:
-        message = channel.reader.recv()
+        message = channel.recv()
       except:
+        traceback.print_exc()
         self.handle_channel_error(channel, listener, Error.EOF)
+        continue
+
+      if not message:
+        self.handle_channel_error(channel, listener, Error.Closed)
         continue
 
       try:
         listener.receiveMessage(channel, message)
       except Exception as exn:
+        traceback.print_exc()
         self.handle_channel_error(channel, listener, Error.User)
 
       if event.flags & select.KQ_EV_EOF:

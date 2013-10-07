@@ -32,20 +32,41 @@ iovec_t._fields_ = [
   ('iov_len', ctypes.c_size_t)
 ]
 
+# Note that msg_socklen_t is not really socklen_t. Darwin uses socklen_t but
+# Linux uses size_t, so we alias that.
+
+def Align(n, a):
+  return (n + a - 1) & ~(a - 1)
+
 if util.IsMac():
   sLibC = ctypes.CDLL('libc.dylib', use_errno=True)
 
   posix_spawn_file_actions_t = ctypes.c_void_p
   pid_t = ctypes.c_int
+  msg_socklen_t = ctypes.c_uint
   SOL_SOCKET = 0xffff
   SCM_RIGHTS = 1
   MSG_NOSIGNAL = 0  # Not supported.
   MSG_CTRUNC = 0x20
 
+  def CMSG_NXTHDR(msg, cmsg):
+    cmsg_len = cmsg.contents.cmsg_len
+    if cmsg_len < ctypes.sizeof(cmsghdr_base_t):
+      return None
+    
+    cmsg_len = Align(cmsg_len, ctypes.sizeof(ctypes.c_uint))
+    addr = ctypes.addressof(cmsg.contents) + cmsg_len
+    check = addr + Align(ctypes.sizeof(cmsghdr_base_t), ctypes.sizeof(ctypes.c_uint))
+    if check > msg.msg_control + msg.msg_controllen:
+      return None
+
+    return ctypes.cast(addr, cmsghdr_base_t_p)
+
 elif util.IsLinux():
   sLibC = ctypes.CDLL('libc.so.6', use_errno=True)
 
   pid_t = ctypes.c_int
+  msg_socklen_t = ctypes.c_size_t
   SOL_SOCKET = 1
   SCM_RIGHTS = 1
   MSG_NOSIGNAL = 0x4000
@@ -61,25 +82,12 @@ elif util.IsLinux():
     ('pad', ctypes.c_int * 16)
   ]
 
-  class msghdr_t(ctypes.Structure):
-    def __init__(self):
-      super(msghdr_t, self).__init__()
-  msghdr_t._fields_ = [
-    ('msg_name', ctypes.c_void_p),
-    ('msg_namelen', ctypes.c_int),
-    ('msg_iov', ctypes.POINTER(iovec_t)),
-    ('msg_iovlen', ctypes.c_size_t),
-    ('msg_control', ctypes.c_void_p),
-    ('msg_controllen', ctypes.c_size_t),
-    ('msg_flags', ctypes.c_int)
-  ]
-
   def CMSG_NXTHDR(msg, cmsg):
     cmsg_len = cmsg.contents.cmsg_len
     if cmsg_len < ctypes.sizeof(cmsghdr_base_t):
       return None
     
-    cmsg_len = (cmsg_len + ctypes.sizeof(ctypes.c_size_t) - 1) & ~(ctypes.sizeof(ctypes.c_size_t) - 1)
+    cmsg_len = Align(cmsg_len, ctypes.sizeof(ctypes.c_size_t))
     addr = ctypes.addressof(cmsg.contents) + cmsg_len
     if addr + ctypes.sizeof(cmsghdr_base_t) > msg.msg_control + msg.msg_controllen:
       return None
@@ -111,6 +119,61 @@ posix_spawn_file_actions_adddup2 = sLibC.posix_spawn_file_actions_adddup2
 posix_spawn_file_actions_adddup2.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
 posix_spawn_file_actions_adddup2.restype = ctypes.c_int
 
+def check_errno(res):
+  if res < 0:
+    n = ctypes.get_errno()
+    raise OSError(n, os.strerror(n))
+
+def SetNonBlocking(fd):
+  fcntl.fcntl(fd, fcntl.F_SETFL, os.O_NONBLOCK)
+
+def SetCloseOnExec(fd):
+  flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+  fcntl.fcntl(fd, fcntl.F_SETFD, flags|fcntl.FD_CLOEXEC)
+
+class msghdr_t(ctypes.Structure):
+  def __init__(self):
+    super(msghdr_t, self).__init__()
+msghdr_t._fields_ = [
+  ('msg_name', ctypes.c_void_p),
+  ('msg_namelen', ctypes.c_int),
+  ('msg_iov', ctypes.POINTER(iovec_t)),
+  ('msg_iovlen', msg_socklen_t),
+  ('msg_control', ctypes.c_void_p),
+  ('msg_controllen', msg_socklen_t),
+  ('msg_flags', ctypes.c_int)
+]
+
+class cmsghdr_base_t(ctypes.Structure):
+  def __init__(self):
+    super(cmsghdr_base_t, self).__init__()
+cmsghdr_base_t._fields_ = [
+  ('cmsg_len', msg_socklen_t),
+  ('cmsg_level', ctypes.c_int),
+  ('cmsg_type', ctypes.c_int)
+]
+cmsghdr_base_t_p = ctypes.POINTER(cmsghdr_base_t)
+
+def cmsghdr_type_for_n(n):
+  class cmsghdr_t(ctypes.Structure):
+    def __init__(self):
+      super(cmsghdr_t, self).__init__()
+  cmsghdr_t._fields_ = cmsghdr_base_t._fields_ + [
+    ('cmsg_data', ctypes.c_int * n)
+  ]
+  size = 0
+  for name, type in cmsghdr_t._fields_:
+    size += ctypes.sizeof(type)
+  return cmsghdr_t, size
+
+def cmsghdr_t(n):
+  cmsghdr, cmsg_len = cmsghdr_type_for_n(n)
+  cmsg = cmsghdr()
+  cmsg.cmsg_level = SOL_SOCKET
+  cmsg.cmsg_type = SCM_RIGHTS
+  cmsg.cmsg_len = cmsg_len
+  return cmsg
+
 sendmsg = sLibC.sendmsg
 sendmsg.argtypes = [
   ctypes.c_int,             # sockfd
@@ -126,51 +189,6 @@ recvmsg.argtypes = [
   ctypes.c_int              # flags
 ]
 recvmsg.restype = ctypes.c_ssize_t
-
-def check_errno(res):
-  if res < 0:
-    n = ctypes.get_errno()
-    raise OSError(n, os.strerror(n))
-
-def SetNonBlocking(fd):
-  fcntl.fcntl(fd, fcntl.F_SETFL, os.O_NONBLOCK)
-
-def SetCloseOnExec(fd):
-  flags = fcntl.fcntl(fd, fcntl.F_GETFD)
-  fcntl.fcntl(fd, fcntl.F_SETFD, flags|fcntl.FD_CLOEXEC)
-
-class cmsghdr_base_t(ctypes.Structure):
-  def __init__(self):
-    super(cmsghdr_base_t, self).__init__()
-cmsghdr_base_t._fields_ = [
-  ('cmsg_len', ctypes.c_size_t),
-  ('cmsg_level', ctypes.c_int),
-  ('cmsg_type', ctypes.c_int)
-]
-cmsghdr_base_t_p = ctypes.POINTER(cmsghdr_base_t)
-
-def cmsghdr_type_for_n(n):
-  class cmsghdr_t(ctypes.Structure):
-    def __init__(self):
-      super(cmsghdr_t, self).__init__()
-  cmsghdr_t._fields_ = [
-    ('cmsg_len', ctypes.c_size_t),
-    ('cmsg_level', ctypes.c_int),
-    ('cmsg_type', ctypes.c_int),
-    ('cmsg_data', ctypes.c_int * n)
-  ]
-  size = 0
-  for name, type in cmsghdr_t._fields_:
-    size += ctypes.sizeof(type)
-  return cmsghdr_t, size
-
-def cmsghdr_t(n):
-  cmsghdr, cmsg_len = cmsghdr_type_for_n(n)
-  cmsg = cmsghdr()
-  cmsg.cmsg_level = SOL_SOCKET
-  cmsg.cmsg_type = SCM_RIGHTS
-  cmsg.cmsg_len = cmsg_len
-  return cmsg
 
 class SocketChannel(Channel):
   def __init__(self, sock):
@@ -297,7 +315,10 @@ class SocketChannel(Channel):
     if nfds != len(channels):
       raise Exception('expected ' + str(nfds) + ' channels, received ' + str(len(channels)))
 
-    message = util.Unpickle(bytes(iov_base))
+    if bytes == str:
+      message = util.Unpickle(ctypes.cast(iov_base, ctypes.c_char_p).value)
+    else:
+      message = util.Unpickle(bytes(iov_base))
     message['channels'] = tuple(channels)
     return message
 
@@ -381,7 +402,7 @@ class Process(object):
     res = posix_spawn_file_actions_init(file_actions)
     check_errno(res)
 
-    exe = ctypes.c_char_p(bytes(sys.executable, 'utf8'))
+    exe = ctypes.c_char_p(util.str2b(sys.executable))
 
     # Bind 
     remap = (
@@ -394,7 +415,7 @@ class Process(object):
     envp = (ctypes.c_char_p * (len(os.environ) + 1))()
     for index, key in enumerate(os.environ.keys()):
       export = key + '=' + os.environ[key]
-      envp[index] = ctypes.c_char_p(bytes(export, 'utf8'))
+      envp[index] = ctypes.c_char_p(util.str2b(export))
     envp[len(os.environ)] = None
 
     # Create argv.
@@ -402,7 +423,7 @@ class Process(object):
 
     c_argv = (ctypes.c_char_p * (len(argv) + 1))()
     for index, arg in enumerate(argv):
-      c_argv[index] = ctypes.c_char_p(bytes(arg, 'utf8'))
+      c_argv[index] = ctypes.c_char_p(util.str2b(arg))
     c_argv[len(argv)] = None
 
     res = posix_spawnp(
