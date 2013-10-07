@@ -28,17 +28,18 @@ class WorkerChild(ChildListener):
     super(WorkerChild, self).__init__(pump)
     self.resultChannel = channels[0]
     print('Spawned worker (pid: ' + str(os.getpid()) + ')')
-    print('pid: ' + str(os.getpid()) + ', fd=' + str(self.resultChannel.fd))
+    self.resultChannel.connect('WorkerIOChild')
 
   def receiveConnected(self, channel):
-    print('pidx: ' + str(os.getpid()) + ', fd=' + str(channel.fd))
+    channel.send({'id': 'ready'})
 
   def receiveMessage(self, channel, message):
-    print(message)
+    super(WorkerChild, self).receiveMessage(channel, message)
 
+# The WorkerParent is in the same process as the TaskMasterChild.
 class WorkerParent(ParentListener):
   def __init__(self, taskMaster, child_channel):
-    super(WorkerParent, self).__init__()
+    super(WorkerParent, self).__init__('Worker')
     self.taskMaster = taskMaster
     self.child_channel = child_channel
 
@@ -48,9 +49,15 @@ class WorkerParent(ParentListener):
     self.child_channel.close()
     self.child_channel = None
 
+  def receiveMessage(self, child, message):
+    if message['id'] == 'ready':
+      return self.taskMaster.onProcessReady(child)
+    super(WorkerParent, self).receiveMessage(child, message)
+
   def receiveError(self, child, error):
     print('Error: ' + error)
 
+# The TaskMasterChild is in the same process as the WorkerParent.
 class TaskMasterChild(ChildListener):
   def __init__(self, pump, task_graph, child_channels):
     super(TaskMasterChild, self).__init__(pump)
@@ -62,11 +69,9 @@ class TaskMasterChild(ChildListener):
 
   def receiveConnected(self, channel):
     self.channel = channel
-    print('pidx: ' + str(os.getpid()) + ', fd=' + str(channel.fd))
 
   def receiveMessage(self, channel, message):
-    print(message)
-    #super(TaskMasterChild, self).receiveMessage(channel, message)
+    super(TaskMasterChild, self).receiveMessage(channel, message)
 
 class WorkerIOListener(MessageListener):
   def __init__(self):
@@ -74,7 +79,7 @@ class WorkerIOListener(MessageListener):
 
 class TaskMasterParent(ParentListener):
   def __init__(self, cx, task_graph, task_list):
-    super(TaskMasterParent, self).__init__()
+    super(TaskMasterParent, self).__init__('TaskMaster')
     self.cx = cx
 
     # Figure out how many tasks to create.
@@ -96,7 +101,7 @@ class TaskMasterParent(ParentListener):
     self.channels = []
     child_channels = []
     for i in range(num_processes):
-      parent_channel, child_channel = cx.messagePump.createChannel(self)
+      parent_channel, child_channel = cx.messagePump.createChannel('WorkerIO', self)
       listener = WorkerIOListener()
       cx.messagePump.addChannel(parent_channel, listener)
       child_channels.append(child_channel)

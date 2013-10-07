@@ -14,6 +14,8 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+import time
+import logging
 import os, sys
 import multiprocessing as mp
 
@@ -33,8 +35,9 @@ class Special:
 # Channels must have at most one reader and at most one writer. Attempt to
 # have multiple writers or readers could corrupt the pipe.
 class Channel(object):
-  def __init__(self):
+  def __init__(self, name):
     super(Channel, self).__init__()
+    self.name = name
 
   # Only dictionaries should ever be sent; dictionaries can contain
   # arbitrary items, however, non-dictionary values for |message|
@@ -44,10 +47,51 @@ class Channel(object):
   # message dictionary to a 'channels' key, and reconstructed on the other
   # side.
   def send(self, message, channels=()):
-    raise Exception('must be implemented')
+    self.send_impl(message, channels)
+    self.log_send(message, channels)
 
-  # Receives an initial connection message.
-  def accept(self):
+  def recv(self):
+    message = self.recv_impl()
+    self.log_recv(message)
+    return message
+
+  # When manually passing pipes around, connect() should be explicitly called
+  # to ensure the other end knows that the pipe is ready.
+  def connect(self, name):
+    self.name = name
+    self.send(Special.Connected)
+
+  def log_recv(self, message):
+    if not __debug__:
+      return
+    msgid = Channel.formatMessage(message)
+    logging.info('[{0}:{1}] {2} received message: {3}'.format(
+      os.getpid(),
+      time.time(),
+      self.name,
+      msgid
+    ))
+
+  def log_send(self, message, channels=()):
+    if not __debug__:
+      return
+    msgid = Channel.formatMessage(message)
+    logging.info('[{0}:{1}] {2} sent message: {3} ({4} channels)'.format(
+      os.getpid(),
+      time.time(),
+      self.name,
+      msgid,
+      len(channels))
+    )
+
+  @staticmethod
+  def formatMessage(message):
+    if type(message) == dict:
+      return message['id']
+    return str(message)
+
+  # Implementation of send().
+  def send_impl(self, message, channels=()):
     raise Exception('must be implemented')
 
 # The interface for a raw message listener.
@@ -91,8 +135,9 @@ class ChildListener(object):
 # ParentListeners are instantiated manually and given directly to spawn() -
 # one listener can be re-used many times.
 class ParentListener(object):
-  def __init__(self):
+  def __init__(self, name):
     super(ParentListener, self).__init__()
+    self.name = name
 
   # Called when a connection is being established.
   def receiveConnect(self, child):
@@ -115,6 +160,9 @@ class ParentListener(object):
 class MessagePump(object):
   def __init__(self):
     super(MessagePump, self).__init__()
+    if 'LOG' in os.environ:
+      import logging
+      logging.basicConfig(level=logging.INFO)
 
   def close(self):
     pass
@@ -128,7 +176,7 @@ class MessagePump(object):
 
   # Creates an IPC channel and automatically registers it. When teh channel
   # is closed it is automatically unregistered.
-  def createChannel(self, listener):
+  def createChannel(self, name, listener):
     raise Exception('must be implemented!')
 
   # Drops a registered IRC channel.
@@ -177,6 +225,10 @@ class ParentWrapperListener(MessageListener):
     self.procman = procman
     self.child = None
     self.listener = listener
+
+  @property
+  def name(self):
+    return self.listener.name
 
   def receiveConnect(self, child):
     self.child = child

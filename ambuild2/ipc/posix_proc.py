@@ -191,8 +191,8 @@ recvmsg.argtypes = [
 recvmsg.restype = ctypes.c_ssize_t
 
 class SocketChannel(Channel):
-  def __init__(self, sock):
-    super(SocketChannel, self).__init__()
+  def __init__(self, name, sock):
+    super(SocketChannel, self).__init__(name)
     self.sock = sock
     SetCloseOnExec(self.sock.fileno())
 
@@ -210,7 +210,7 @@ class SocketChannel(Channel):
       b += new_bytes
     return b
 
-  def send(self, obj, channels=()):
+  def send_impl(self, obj, channels=()):
     data = util.pickle.dumps(obj)
 
     # If no channels, just send the data.
@@ -256,7 +256,7 @@ class SocketChannel(Channel):
       for channel in channels:
         channel.close()
 
-  def recv(self):
+  def recv_impl(self):
     header = self.recv_all(8)
     if header == None:
       return None
@@ -306,8 +306,7 @@ class SocketChannel(Channel):
             cmsg = ctypes.cast(ctypes.addressof(cmsg.contents), cmsg_t_p)
             for i in range(wire_fds):
               fd = cmsg.contents.cmsg_data[i]
-              channel = SocketChannel.fromfd(fd)
-              channel.send(Special.Connected)
+              channel = SocketChannel.fromfd('<recvd-unknown>', fd)
               channels.append(channel)
             
           cmsg = CMSG_NXTHDR(msg, cmsg)
@@ -327,23 +326,27 @@ class SocketChannel(Channel):
     return self.sock.fileno()
 
   @classmethod
-  def fromfd(cls, fd):
+  def fromfd(cls, name, fd):
     sock = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
     os.close(fd)
-    return SocketChannel(sock)
+    return SocketChannel(name, sock)
 
   @classmethod
-  def pair(cls):
+  def pair(cls, name):
     parent, child = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
 
     # We don't set non-blocking (right now), it shouldn't be needed because
     # communication tends to be modal for a given pipe, and we wait until
     # reads would not block to begin reading.
-    return SocketChannel(parent), SocketChannel(child)
+    return SocketChannel(name + 'Parent', parent), SocketChannel(name + 'Child', child)
 
-def child_main():
+def child_main(name):
+  if 'LOG' in os.environ:
+    import logging
+    logging.basicConfig(level=logging.INFO)
+
   from . import impl
-  channel = SocketChannel.fromfd(kStartFd)
+  channel = SocketChannel.fromfd(name, kStartFd)
   channel.send(Special.Connected)
   impl.child_main(channel)
 
@@ -383,7 +386,7 @@ class Process(object):
     return False
 
   def terminate(self):
-    if self.returncode is None:
+    if not self.returncode is None:
       return
 
     os.kill(self.pid, signal.SIGTERM)
@@ -419,7 +422,11 @@ class Process(object):
     envp[len(os.environ)] = None
 
     # Create argv.
-    argv = [sys.executable, '-c', 'from ipc.posix_proc import child_main; child_main()']
+    argv = [
+      sys.executable,
+      '-c',
+      'from ipc.posix_proc import child_main; child_main("{0}")'.format(channel.name)
+    ]
 
     c_argv = (ctypes.c_char_p * (len(argv) + 1))()
     for index, arg in enumerate(argv):

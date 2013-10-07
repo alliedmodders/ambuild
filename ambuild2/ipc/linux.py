@@ -44,8 +44,8 @@ class MessagePump(process.MessagePump):
     self.ep.unregister(channel.fd)
     del self.fdmap[channel.fd]
 
-  def createChannel(self, listener):
-    parent, child = posix_proc.SocketChannel.pair()
+  def createChannel(self, name, listener):
+    parent, child = posix_proc.SocketChannel.pair(name)
     return parent, child
 
   def shouldProcessEvents(self):
@@ -85,7 +85,7 @@ class ProcessManager(process.ProcessManager):
 
   def create_process_and_pipe(self, id, listener):
     # Create pipes.
-    parent, child = posix_proc.SocketChannel.pair()
+    parent, child = posix_proc.SocketChannel.pair(listener.name)
 
     # Watch for changes on the parent chnnale.
     self.pump.addChannel(parent, listener)

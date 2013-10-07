@@ -57,8 +57,6 @@ class ChildWrapperListener(process.MessageListener):
     sys.exit(1)
 
 def child_main(channel):
-  print('Child process spawned: ' + str(os.getpid()))
-
   mp = MessagePump()
   listener = ChildWrapperListener(mp, channel)
   mp.addChannel(channel, listener)
