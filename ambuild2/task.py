@@ -2,7 +2,7 @@
 import os
 import nodetypes
 import multiprocessing as mp
-from ipc import ParentListener, ChildListener, ProcessManager, MessageListener
+from ipc import ParentListener, ChildListener, ProcessManager, MessageListener, Error
 
 class Task(object):
   def __init__(self, id, entry, outputs):
@@ -26,15 +26,18 @@ class Task(object):
 class WorkerChild(ChildListener):
   def __init__(self, pump, channels):
     super(WorkerChild, self).__init__(pump)
-    self.resultChannel = channels[0]
     print('Spawned worker (pid: ' + str(os.getpid()) + ')')
+    self.resultChannel = channels[0]
     self.resultChannel.connect('WorkerIOChild')
+    self.messageMap = {
+      'task': lambda channel, message: self.receiveTask(channel, message)
+    }
 
   def receiveConnected(self, channel):
-    channel.send({'id': 'ready'})
+    channel.send({'id': 'ready', 'finished': None})
 
-  def receiveMessage(self, channel, message):
-    super(WorkerChild, self).receiveMessage(channel, message)
+  def receiveTask(self, channel, message):
+    print(message)
 
 # The WorkerParent is in the same process as the TaskMasterChild.
 class WorkerParent(ParentListener):
@@ -42,6 +45,9 @@ class WorkerParent(ParentListener):
     super(WorkerParent, self).__init__('Worker')
     self.taskMaster = taskMaster
     self.child_channel = child_channel
+    self.messageMap = {
+      'ready': lambda child, message: self.receiveReady(child, message)
+    }
 
   def receiveConnected(self, child):
     # We're just a conduit for this pipe. Now that the child has received it,
@@ -49,19 +55,21 @@ class WorkerParent(ParentListener):
     self.child_channel.close()
     self.child_channel = None
 
-  def receiveMessage(self, child, message):
-    if message['id'] == 'ready':
-      return self.taskMaster.onProcessReady(child)
-    super(WorkerParent, self).receiveMessage(child, message)
+  def receiveReady(self, child, message):
+    return self.taskMaster.onWorkerReady(child)
 
   def receiveError(self, child, error):
-    print('Error: ' + error)
+    self.taskMaster.onWorkerDied(child, error)
 
 # The TaskMasterChild is in the same process as the WorkerParent.
 class TaskMasterChild(ChildListener):
   def __init__(self, pump, task_graph, child_channels):
     super(TaskMasterChild, self).__init__(pump)
     print('Spawned task master (pid: ' + str(os.getpid()) + ')')
+
+    self.task_graph = task_graph
+    self.outstanding = {}
+    self.ready = set()
 
     self.procman = ProcessManager(pump)
     for channel in child_channels:
@@ -70,8 +78,42 @@ class TaskMasterChild(ChildListener):
   def receiveConnected(self, channel):
     self.channel = channel
 
-  def receiveMessage(self, channel, message):
-    super(TaskMasterChild, self).receiveMessage(channel, message)
+  def onWorkerReady(self, child):
+    if not len(self.task_graph):
+      if len(self.outstanding):
+        # There are still tasks left to complete, but they're waiting on
+        # others to finish. Mark this process as ready and just ignore the
+        # status change for now.
+        self.ready.add(child)
+      else:
+        # There are no tasks remaining, the worker is not needed.
+        self.procman.close(child)
+      return
+
+    # Send a task to the worker.
+    task = self.task_graph.pop()
+
+    message = {
+      'id': 'task',
+      'task_id': task.id,
+      'task_type': task.type,
+      'task_data': task.data,
+      'task_outputs': task.outputs
+    }
+    child.send(message)
+    self.outstanding[task.id] = (task, child)
+
+  def onWorkerDied(self, child, error):
+    if error != Error.NormalShutdown:
+      for task_id in self.outstanding.keys():
+        task, child = self.outstanding[task_id]
+        self.onWorkerFailed(child, task, error)
+        # There should be at most one outstanding task assigned to this worker.
+        break
+
+    self.ready.discard(child)
+    if not self.procman.liveChildren():
+      self.pump.cancel()
 
 class WorkerIOListener(MessageListener):
   def __init__(self):

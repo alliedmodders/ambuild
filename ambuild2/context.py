@@ -41,7 +41,7 @@ class Context(object):
     return self
 
   def __exit__(self, type, value, traceback):
-    self.procman.close()
+    self.procman.shutdown()
     self.db.close()
 
   def Build(self):

@@ -37,6 +37,11 @@ class ChildWrapperListener(process.MessageListener):
     self.listener = None
 
   def receiveMessage(self, channel, message):
+    if message == process.Special.Close:
+      self.mp.cancel()
+      self.listener.receiveClose(channel)
+      return
+
     if message['id'] == '__start__':
       listener_type = message['listener_type']
       args = message['args']

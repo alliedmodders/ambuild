@@ -363,8 +363,8 @@ class PosixHost(ProcessHost):
       self.child_channel.close()
       self.child_channel = None
 
-  def close(self):
-    super(PosixHost, self).close()
+  def shutdown(self):
+    super(PosixHost, self).shutdown()
     if self.child_channel:
       self.child_channel.close()
       self.child_channel = None

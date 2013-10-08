@@ -49,7 +49,7 @@ class MessagePump(process.MessagePump):
     return parent, child
 
   def shouldProcessEvents(self):
-    return len(self.fdmap)
+    return len(self.fdmap) and super(MessagePump, self).shouldProcessEvents()
 
   def processEvents(self):
     for fd, event in self.ep.poll():
@@ -101,7 +101,7 @@ class ProcessManager(process.ProcessManager):
     # On BSD this is not a problem since kqueue() can watch pids.
     return posix_proc.PosixHost(id, proc, parent, child)
 
-  def close_process(self, host, error):
+  def close_process(self, host):
     # There should be nothing open for this channel, since we wait for process death.
     assert host.channel.fd not in self.pump.fdmap
-    host.close()
+    host.shutdown()

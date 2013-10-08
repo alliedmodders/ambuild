@@ -17,9 +17,11 @@
 import time
 import logging
 import os, sys
+import traceback
 import multiprocessing as mp
 
 class Error:
+  NormalShutdown = 'normal'
   EOF = 'eof'
   Closed = 'closed'
   User = 'badmsg'
@@ -27,6 +29,7 @@ class Error:
 
 class Special:
   Connected = 'ack!'
+  Close = 'die'
 
 # A channel is two-way IPC connection; it has a read and write pipe. The read
 # pipe is multiplexed by a MessagePump. The send() function can access the
@@ -116,13 +119,20 @@ class ChildListener(object):
     super(ChildListener, self).__init__()
     self.pump = pump
     self.channel = None
+    self.messageMap = {}
 
   def receiveConnected(self, channel):
     self.channel = channel
 
   # Called when a message is received from the parent process.
   def receiveMessage(self, channel, message):
+    if message['id'] in self.messageMap:
+      return self.messageMap[message['id']](channel, message)
     raise Exception('Unhandled message: ' + str(message))
+
+  # Called when the parent process requests safe shutdown.
+  def receiveClose(self, channel):
+    pass
 
   # Called when the parent connection has died; this will result in the
   # child process terminating.
@@ -138,6 +148,7 @@ class ParentListener(object):
   def __init__(self, name):
     super(ParentListener, self).__init__()
     self.name = name
+    self.messageMap = {}
 
   # Called when a connection is being established.
   def receiveConnect(self, child):
@@ -150,16 +161,21 @@ class ParentListener(object):
   # Called when a message has been received. The child is a ProcessHost
   # object corresponding to the parent side of the child process's connection.
   def receiveMessage(self, child, message):
+    if message['id'] in self.messageMap:
+      return self.messageMap[message['id']](child, message)
     raise Exception('Unhandled message: ' + str(message))
 
   # Called when an error has occurred and the channel will be closed.
   def receiveError(self, child, error):
-    raise Exception('Unhandled error: ' + error)
+    if error != Error.NormalShutdown:
+      raise Exception('Unhandled error: ' + error)
 
 # A MessagePump handles multiplexing IPC communication.
 class MessagePump(object):
   def __init__(self):
     super(MessagePump, self).__init__()
+    self.running = True
+
     if 'LOG' in os.environ:
       import logging
       logging.basicConfig(level=logging.INFO)
@@ -167,7 +183,14 @@ class MessagePump(object):
   def close(self):
     pass
 
+  def cancel(self):
+    self.running = False
+
+  def shouldProcessEvents(self):
+    return self.running
+
   def pump(self):
+    self.running = True
     while self.shouldProcessEvents():
       self.processEvents()
 
@@ -189,8 +212,7 @@ class ProcessHost(object):
   def __init__(self, id, proc, channel):
     super(ProcessHost, self).__init__()
     self.id = id
-    self.closing = False      # Indicates intent to terminate.
-    self.terminating = False  # Indicates forceful termination.
+    self.closing = None       # not-None Indicates intent to terminate.
     self.proc = proc
     self.channel = channel
 
@@ -204,20 +226,21 @@ class ProcessHost(object):
   def receiveConnected(self):
     pass
 
-  def close(self):
-    if self.proc.is_alive() and not self.closing:
-      # To avoid a potential deadlock, we terminate the process before joining.
-      self.proc.terminate()
-    self.proc.join()
+  def is_alive(self):
+    return (not self.closing) and self.proc.is_alive()
+
+  def shutdown(self):
+    assert not self.closing is None
+    self.terminate()
     self.channel.close()
 
   # An abrupt termination.
   def terminate(self):
-    if self.terminating:
+    if not self.proc.is_alive():
       return
-    self.closing = True
-    self.terminating = True
+    # To avoid a potential deadlock, we terminate the process before joining.
     self.proc.terminate()
+    self.proc.join()
 
 class ParentWrapperListener(MessageListener):
   def __init__(self, procman, listener):
@@ -243,8 +266,12 @@ class ParentWrapperListener(MessageListener):
 
   def receiveError(self, channel, error):
     if not self.child.closing:
+      self.child.closing = error
+    try:
       self.listener.receiveError(self.child, error)
-    self.procman.cleanup(self.child, error)
+    except:
+      traceback.print_exc()
+    self.procman.cleanup(self.child)
 
 # A process manager handles multiplexing IPC communication. It also owns the
 # set of child processes. There should only be one ProcessManager per process.
@@ -254,10 +281,16 @@ class ProcessManager(object):
     self.children = set()
     self.last_id_ = 1
 
-  def close(self):
-    children = [child for child in self.children]
-    for child in children:
-      child.close()
+  def shutdown(self):
+    for child in self.children:
+      self.close(child)
+
+  def close(self, child):
+    child.channel.send(Special.Close)
+    child.closing = Error.NormalShutdown
+
+  def liveChildren(self):
+    return len([child for child in self.children if child.is_alive()])
 
   # On the parent side, the listener object should be a ParentListener that
   # will receive incoming notifications. On the child side, child_type will
@@ -290,6 +323,6 @@ class ProcessManager(object):
 
   ## Internal functions.
 
-  def cleanup(self, host, error):
+  def cleanup(self, host):
     self.children.remove(host)
-    self.close_process(host, error)
+    self.close_process(host)

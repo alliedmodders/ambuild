@@ -90,7 +90,8 @@ class MessagePump(process.MessagePump):
     del self.pidmap[pid]
 
   def shouldProcessEvents(self):
-    return len(self.pidmap) + len(self.fdmap)
+    return (len(self.pidmap) + len(self.fdmap)) and \
+           super(MessagePump, self).shouldProcessEvents()
 
   def processEvents(self):
     max_events = len(self.pidmap) + len(self.fdmap)
