@@ -80,4 +80,6 @@ class Context(object):
     if self.options.show_steps:
       builder.printSteps()
       return True
-    return builder.update()
+    if not builder.update():
+      sys.stderr.write('Build failed.\n')
+      sys.exit(1)
