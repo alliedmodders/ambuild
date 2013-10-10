@@ -329,7 +329,7 @@ class WorkerIOListener(MessageListener):
       self.taskMaster.terminateBuild(graceful=True)
 
 class TaskMasterParent(ParentProcessListener):
-  def __init__(self, cx, builder, task_graph):
+  def __init__(self, cx, builder, task_graph, max_parallel):
     super(TaskMasterParent, self).__init__('TaskMaster')
     self.cx = cx
     self.builder = builder
@@ -350,8 +350,8 @@ class TaskMasterParent(ParentProcessListener):
         num_processes = int(mp.cpu_count() * 1.5)
 
     # Don't create more processes than we'll need.
-    if len(builder.commands) < num_processes:
-      num_processes = len(builder.commands)
+    if num_processes > max_parallel:
+      num_processes = max_parallel
 
     # Create the list of pipes we'll be using.
     self.channels = []

@@ -14,18 +14,23 @@ class TaskTreeBuilder(object):
     self.cache = {}
     self.cmd_list = []
     self.tree_leafs = []
+    self.max_parallel = 0
 
   def buildFromGraph(self, graph):
     for node in graph.leaf_commands:
       leaf = self.enqueueCommand(node)
       self.tree_leafs.append(leaf)
 
+    self.max_parallel = len(self.worklist)
     while len(self.worklist):
       task, node = self.worklist.pop()
 
       for outgoing in node.outgoing_cmds:
         outgoing_task = self.findTask(outgoing)
         task.addOutgoing(outgoing_task)
+
+      if len(self.worklist) > self.max_parallel:
+        self.max_parallel = len(self.worklist)
 
     return self.cmd_list, self.tree_leafs
 
@@ -51,6 +56,7 @@ class Builder(object):
 
     tb = TaskTreeBuilder()
     self.commands, self.leafs = tb.buildFromGraph(graph)
+    self.max_parallel = tb.max_parallel
 
   def printSteps(self):
     counter = 0
@@ -69,7 +75,7 @@ class Builder(object):
       counter += 1
 
   def update(self):
-    tm = TaskMasterParent(self.cx, self, self.leafs)
+    tm = TaskMasterParent(self.cx, self, self.leafs, self.max_parallel)
 
   def findTask(self, task_id):
     return self.commands[task_id]
