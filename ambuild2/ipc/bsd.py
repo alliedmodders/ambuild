@@ -19,7 +19,7 @@ import select, os, sys
 import multiprocessing as mp
 from . import process
 from . import posix_proc
-from ipc.process import ProcessHost, Channel, Error
+from ipc.process import ProcessHost, Channel, Error, Special
 
 # BSD multiprocess support is implemented using kqueue() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.
@@ -59,8 +59,8 @@ class MessagePump(process.MessagePump):
     self.kq.control([event], 0)
     del self.fdmap[channel.fd]
 
-  def createChannel(self, listener):
-    parent, child = posix_proc.SocketChannel.pair()
+  def createChannel(self, name, listener):
+    parent, child = posix_proc.SocketChannel.pair(name)
     return parent, child
 
   def addPid(self, pid, channel, listener):
@@ -85,7 +85,7 @@ class MessagePump(process.MessagePump):
       self.kq.control([event], 0)
     except:
       # We could have already pulled the process death out and it's sitting
-      # in our poll list. 
+      # in our poll list; kqueue has removed it.
       pass
     del self.pidmap[pid]
 
@@ -101,6 +101,9 @@ class MessagePump(process.MessagePump):
     # Process reads first.
     next_events = []
     for event in events:
+      if not self.shouldProcessEvents():
+        return
+
       if event.filter != select.KQ_FILTER_READ:
         next_events.append(event)
         continue
@@ -120,6 +123,10 @@ class MessagePump(process.MessagePump):
         self.handle_channel_error(channel, listener, Error.Closed)
         continue
 
+      if message == Special.Closing:
+        self.handle_channel_error(channel, listener, Error.NormalShutdown)
+        continue
+
       try:
         listener.receiveMessage(channel, message)
       except Exception as exn:
@@ -131,7 +138,16 @@ class MessagePump(process.MessagePump):
 
     # Now handle pid death.
     for event in next_events:
+      if not self.shouldProcessEvents():
+        return
+
       assert event.filter == select.KQ_FILTER_PROC
+      # We could have pulled this event out earlier, and decided to drop the
+      # PID in between. To account for this, we check the map first. It might
+      # be cleaner to pre-process PID events earlier?
+      if event.ident not in self.pidmap:
+        continue
+
       channel, listener = self.pidmap[event.ident]
       listener.receiveError(channel, Error.Killed)
       del self.pidmap[event.ident]
@@ -146,7 +162,7 @@ class ProcessManager(process.ProcessManager):
 
   def create_process_and_pipe(self, id, listener):
     # Create pipes.
-    parent, child = posix_proc.SocketChannel.pair()
+    parent, child = posix_proc.SocketChannel.pair(listener.name)
 
     # Watch for changes on the parent channel.
     self.pump.addChannel(parent, listener)
@@ -173,9 +189,9 @@ class ProcessManager(process.ProcessManager):
 
     return posix_proc.PosixHost(id, proc, parent, child)
 
-  def close_process(self, host, error):
+  def close_process(self, host):
     # There should be nothing open for this channel, since we wait for process death.
     assert host.channel.fd not in self.pump.fdmap
-    if error != Error.Killed:
+    if host.closing != Error.Killed:
       self.pump.dropPid(host.pid)
-    host.close()
+    host.shutdown()

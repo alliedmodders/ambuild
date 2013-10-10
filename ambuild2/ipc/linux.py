@@ -55,6 +55,9 @@ class MessagePump(process.MessagePump):
 
   def processEvents(self):
     for fd, event in self.ep.poll():
+      if not self.shouldProcessEvents():
+        return
+
       channel, listener = self.fdmap[fd]
       if event & select.EPOLLIN:
         # Linux seems to have two failure modes for failing to read from a
