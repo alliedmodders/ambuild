@@ -69,4 +69,7 @@ class Builder(object):
       counter += 1
 
   def update(self):
-    tm = TaskMasterParent(self.cx, self.leafs, self.commands)
+    tm = TaskMasterParent(self.cx, self, self.leafs)
+
+  def findTask(self, task_id):
+    return self.commands[task_id]

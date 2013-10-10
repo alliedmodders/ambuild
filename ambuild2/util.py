@@ -1,7 +1,7 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et: 
 import errno
-import os, sys
 import subprocess
+import re, os, sys
 import multiprocessing
 try:
   import __builtin__ as builtins
@@ -123,7 +123,8 @@ class FolderChanger:
     self.new = folder
 
   def __enter__(self):
-    os.chdir(self.new)
+    if self.new:
+      os.chdir(self.new)
 
   def __exit__(self, type, value, traceback):
     os.chdir(self.old)
@@ -149,7 +150,7 @@ def Execute(argv):
   out = stdout.decode()
   err = stderr.decode()
 
-  out = (' '.join([i for i in argv])) + out
+  out = (' '.join([i for i in argv])) + '\n' + out
   return p, out, err
 
 def typeof(x):
@@ -170,3 +171,40 @@ def str2b(s):
   if bytes is str:
     return s
   return bytes(s, 'utf8')
+
+sReadIncludes = 0
+sLookForIncludeGuard = 1
+sFoundIncludeGuard = 2
+sIgnoring = 3
+def ParseGCCDeps(text):
+  deps = set()
+  strip = False
+  new_text = ''
+
+  state = sReadIncludes
+  for line in re.split('\n+', text):
+    if state == sReadIncludes:
+      m = re.match('\.+\s+(.+)\s*$', line)
+      if m == None:
+        state = sLookForIncludeGuard
+      else:
+        name = m.groups()[0]
+        if os.path.exists(name):
+          strip = True
+          deps.add(name)
+        else:
+          state = LookForIncludeGuard
+    if state == sLookForIncludeGuard:
+      if line.startswith('Multiple include guards may be useful for:'):
+        state = sFoundIncludeGuard
+        strip = True
+      else:
+        state = sReadIncludes
+        strip = False
+    elif state == sFoundIncludeGuard:
+      if not line in deps:
+        strip = False
+        state = sIgnoring
+    if not strip and len(line):
+      new_text += line + '\n'
+  return new_text, deps

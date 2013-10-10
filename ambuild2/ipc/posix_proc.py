@@ -19,8 +19,9 @@ import struct
 import ctypes
 import socket
 import signal
-from .process import Channel, ProcessHost, Special
+import traceback
 import os, sys, fcntl
+from .process import Channel, ProcessHost, Special
 
 kStartFd = 3
 
@@ -196,8 +197,18 @@ class SocketChannel(Channel):
     self.sock = sock
     SetCloseOnExec(self.sock.fileno())
 
+  #def __del__(self):
+  #  print('{0} DELClosing socket: {1}'.format(os.getpid(), self.sock.fileno()))
+  #  if self.sock.fileno() != -1:
+  #    traceback.print_stack()
+
   def close(self):
+    #print('{0} Closing socket: {1}'.format(os.getpid(), self.sock.fileno()))
+    #traceback.print_stack()
     self.sock.close()
+
+  def closed(self):
+    return self.sock.fileno() == -1
 
   def recv_all(self, nbytes):
     b = bytes()

@@ -15,11 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 from .impl import MessagePump, ProcessManager
-from .process import ParentListener, ChildListener, MessageListener, Error
+from .process import ParentProcessListener, ChildProcessListener
+from .process import MessageListener, Error
 
 __all__ = [
-  'ParentListener',
-  'ChildListener',
+  'ParentProcessListener',
+  'ChildProcessListener',
   'MessagePump',
   'ProcessManager',
   'MessageListener',

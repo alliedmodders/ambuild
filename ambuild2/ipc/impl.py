@@ -38,7 +38,6 @@ class ChildWrapperListener(process.MessageListener):
 
   def receiveMessage(self, channel, message):
     if message == process.Special.Close:
-      self.mp.cancel()
       self.listener.receiveClose(channel)
       return
 
@@ -58,7 +57,7 @@ class ChildWrapperListener(process.MessageListener):
   def receiveError(self, channel, error):
     if self.listener:
       self.listener.receiveError(error)
-    sys.stderr.write('Parent process died, terminating...\n')
+    sys.stderr.write('[{0}] Parent process died, terminating...\n'.format(os.getpid()))
     sys.exit(1)
 
 def child_main(channel):
@@ -66,3 +65,4 @@ def child_main(channel):
   listener = ChildWrapperListener(mp, channel)
   mp.addChannel(channel, listener)
   mp.pump()
+  sys.stdout.write('[{0}] Child process terminating normally.\n'.format(os.getpid()))

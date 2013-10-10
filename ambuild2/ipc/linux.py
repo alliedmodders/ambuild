@@ -14,12 +14,14 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+import errno
 import traceback
+import socket
 import select, os
 import multiprocessing as mp
 from . import process
 from . import posix_proc
-from ipc.process import ProcessHost, Channel, Error
+from ipc.process import ProcessHost, Channel, Error, Special
 
 # Linux multiprocess support is implemented using epoll() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.
@@ -55,14 +57,27 @@ class MessagePump(process.MessagePump):
     for fd, event in self.ep.poll():
       channel, listener = self.fdmap[fd]
       if event & select.EPOLLIN:
+        # Linux seems to have two failure modes for failing to read from a
+        # unix domain socket: it can receive 0 bytes (which we handle in
+        # posix_proc, and return None for), or it can throw ECONNRESET. In
+        # either case, we treat it as an EOF, and don't throw an exception.
+        #
+        # If it was a legitimate error, we'll throw it later on.
+        message = None
         try:
           message = channel.recv()
+        except socket.error as exn:
+          if not (exn.errno == errno.ECONNRESET and (event & select.EPOLLHUP)):
+            traceback.print_exc()
         except Exception as exn:
           traceback.print_exc()
-          message = None
 
         if not message:
           self.handle_channel_error(channel, listener, Error.EOF)
+          continue
+
+        if message == Special.Closing:
+          self.handle_channel_error(channel, listener, Error.NormalShutdown)
           continue
 
         try:

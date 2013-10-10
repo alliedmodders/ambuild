@@ -30,6 +30,7 @@ class Error:
 class Special:
   Connected = 'ack!'
   Close = 'die'
+  Closing = 'closing'
 
 # A channel is two-way IPC connection; it has a read and write pipe. The read
 # pipe is multiplexed by a MessagePump. The send() function can access the
@@ -63,6 +64,11 @@ class Channel(object):
   def connect(self, name):
     self.name = name
     self.send(Special.Connected)
+  
+  # Sends a special message to the other end that the channel is about to
+  # close.
+  def finished(self):
+    self.send(Special.Closing)
 
   def log_recv(self, message):
     if not __debug__:
@@ -97,13 +103,31 @@ class Channel(object):
   def send_impl(self, message, channels=()):
     raise Exception('must be implemented')
 
+  # For debugging.
+  def closed(self):
+    raise Exception('must be implemented')
+
 # The interface for a raw message listener.
 class MessageListener(object):
-  def __init__(self):
+  def __init__(self, close_on_ack=None):
     super(MessageListener, self).__init__()
+    self.messageMap = {}
+    self.close_on_ack = close_on_ack
+
+  def receiveConnected(self, channel):
+    pass
 
   def receiveMessage(self, channel, message):
-    pass
+    if message == Special.Connected:
+      if self.close_on_ack:
+        self.close_on_ack.close()
+        self.close_on_ack = None
+      return self.receiveConnected(channel)
+
+    if message['id'] in self.messageMap:
+      return self.messageMap[message['id']](channel, message)
+
+    raise Exception('Unhandled message: ' + str(message['id']))
 
   def receiveError(self, channel, error):
     pass
@@ -114,9 +138,9 @@ class MessageListener(object):
 # is automatically created in the child process.
 #
 # The incoming value to ChildListener() is the message pump.
-class ChildListener(object):
+class ChildProcessListener(object):
   def __init__(self, pump):
-    super(ChildListener, self).__init__()
+    super(ChildProcessListener, self).__init__()
     self.pump = pump
     self.channel = None
     self.messageMap = {}
@@ -128,11 +152,12 @@ class ChildListener(object):
   def receiveMessage(self, channel, message):
     if message['id'] in self.messageMap:
       return self.messageMap[message['id']](channel, message)
-    raise Exception('Unhandled message: ' + str(message))
+    raise Exception('Unhandled message: ' + str(message['id']))
 
   # Called when the parent process requests safe shutdown.
   def receiveClose(self, channel):
-    pass
+    self.channel.send(Special.Closing)
+    self.pump.cancel()
 
   # Called when the parent connection has died; this will result in the
   # child process terminating.
@@ -144,9 +169,9 @@ class ChildListener(object):
 # process a message, the child process is killed and an error is reported.
 # ParentListeners are instantiated manually and given directly to spawn() -
 # one listener can be re-used many times.
-class ParentListener(object):
+class ParentProcessListener(object):
   def __init__(self, name):
-    super(ParentListener, self).__init__()
+    super(ParentProcessListener, self).__init__()
     self.name = name
     self.messageMap = {}
 
@@ -163,7 +188,7 @@ class ParentListener(object):
   def receiveMessage(self, child, message):
     if message['id'] in self.messageMap:
       return self.messageMap[message['id']](child, message)
-    raise Exception('Unhandled message: ' + str(message))
+    raise Exception('Unhandled message: ' + str(message['id']))
 
   # Called when an error has occurred and the channel will be closed.
   def receiveError(self, child, error):
@@ -227,21 +252,18 @@ class ProcessHost(object):
     pass
 
   def is_alive(self):
-    return (not self.closing) and self.proc.is_alive()
+    return self.proc.is_alive()
 
   def shutdown(self):
     assert not self.closing is None
-    self.terminate()
+    if self.closing != Error.NormalShutdown:
+      self.proc.terminate()
+    self.proc.join()
     self.channel.close()
 
-  # An abrupt termination.
-  def terminate(self):
-    if not self.proc.is_alive():
-      return
-    # To avoid a potential deadlock, we terminate the process before joining.
-    self.proc.terminate()
-    self.proc.join()
-
+# We wrap a listener in between process channels, so we can pass the child
+# object instead of the channel. We could probably simplify a bit here by
+# using MessageListener's close_on_ack feature.
 class ParentWrapperListener(MessageListener):
   def __init__(self, procman, listener):
     super(ParentWrapperListener, self).__init__()
@@ -285,12 +307,12 @@ class ProcessManager(object):
     for child in self.children:
       self.close(child)
 
+  # This does not close a process, but requests that it shutdown
+  # asynchronously.
   def close(self, child):
-    child.channel.send(Special.Close)
-    child.closing = Error.NormalShutdown
-
-  def liveChildren(self):
-    return len([child for child in self.children if child.is_alive()])
+    if not child.closing:
+      child.channel.send(Special.Close)
+      child.closing = Error.NormalShutdown
 
   # On the parent side, the listener object should be a ParentListener that
   # will receive incoming notifications. On the child side, child_type will
