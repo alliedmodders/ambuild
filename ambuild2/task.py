@@ -208,7 +208,9 @@ class TaskMasterChild(ChildProcessListener):
       )
 
   def buildFailed(self):
-    self.build_failed = True
+    if not self.build_failed:
+      self.build_failed = True
+      self.close_idle()
 
   def receiveClose(self, channel):
     # We received a close request, so wait for all children to finish.
@@ -243,6 +245,11 @@ class TaskMasterChild(ChildProcessListener):
       if not self.onWorkerReady(child):
         break
 
+  def close_idle(self):
+    for child in self.idle:
+      self.procman.close(child)
+    self.idle = set()
+
   def onWorkerReady(self, child):
     if not len(self.task_graph):
       if len(self.outstanding):
@@ -253,6 +260,11 @@ class TaskMasterChild(ChildProcessListener):
       else:
         # There are no tasks remaining, the worker is not needed.
         self.procman.close(child)
+        self.close_idle()
+        self.channel.send({
+          'id': 'completed',
+          'status': 'ok'
+        })
       return False
 
     # If the build failed, just ignore this and close the child process.
