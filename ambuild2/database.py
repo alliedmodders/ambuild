@@ -16,13 +16,15 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import util
 import sqlite3
+import nodetypes
 from nodetypes import Node
 
 class Database(object):
   def __init__(self, path):
     self.path = path
     self.cn = None
-    self.node_cache_ = { }
+    self.node_cache_ = {}
+    self.path_cache_ = {}
 
   def connect(self):
     assert not self.cn
@@ -43,6 +45,23 @@ class Database(object):
   def commit(self):
     self.cn.commit()
 
+  def add_source(self, path):
+    assert path not in self.path_cache_
+
+    query = """
+      insert into nodes
+      (type, generated, path)
+      values
+      (?, ?, ?)
+    """
+
+    cursor = self.cn.execute(query, (nodetypes.Source, 1, path))
+    row = (nodetypes.Source, 0, 1, 1, path, None, None)
+    return self.import_node(
+      id=cursor.lastrowid,
+      row=row
+    )
+
   def query_node(self, id):
     if id in self.node_cache_:
       return self.node_cache_[id]
@@ -50,6 +69,22 @@ class Database(object):
     query = "select type, stamp, dirty, generated, path, folder, data from nodes where rowid = ?"
     cursor = self.cn.execute(query, (id,))
     return self.import_node(id, cursor.fetchone())
+
+  def query_path(self, path):
+    if path in self.path_cache_:
+      return self.path_cache_[path]
+
+    query = """
+      select type, stamp, dirty, generated, path, folder, data, rowid
+      from nodes
+      where path = ?
+    """
+    cursor = self.cn.execute(query, (path,))
+    row = cursor.fetchone()
+    if not row:
+      return None
+
+    return self.import_node(row[7], row)
 
   def import_node(self, id, row):
     assert id not in self.node_cache_
@@ -72,6 +107,9 @@ class Database(object):
                 dirty=bool(row[2]),
                 generated=bool(row[3]))
     self.node_cache_[id] = node
+    if node.path:
+      assert node.path not in self.path_cache_
+      self.path_cache_[node.path] = node
     return node
 
   def query_incoming(self, node):

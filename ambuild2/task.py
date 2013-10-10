@@ -126,31 +126,27 @@ class WorkerChild(ChildProcessListener):
       p, out, err = util.Execute(argv)
       if cc_type == 'gcc':
         err, deps = util.ParseGCCDeps(err)
-        
-        # Adjust any dependencies relative to the current folder, to be relative
-        # to the output folder instead.
-        paths = []
-        for inc_path in deps:
-          if not os.path.isabs(inc_path):
-            # We have a path relative to the current output folder. In order
-            # for dependency computation to work, we need to transform this
-            # into a path that is absolute if it is not in the output folder,
-            # and relative if it is in the output folder. Start by making
-            # inc_path absolute.
-            inc_path = os.path.abspath(inc_path)
-
-            build_path = self.buildPath
-            if build_path[-1] != '/':
-              build_path += '/'
-            prefix = os.path.commonprefix([build_path, inc_path])
-            if prefix == build_path:
-              # The include is not a system include, i.e. it was generated, so
-              # rewrite the path to be relative to the build folder.
-              inc_path = os.path.relpath(inc_path, self.buildPath)
-
-          paths.append(inc_path)
       else:
         raise Exception('unknown compiler type')
+        
+      # Adjust any dependencies relative to the current folder, to be relative
+      # to the output folder instead.
+      paths = []
+      for inc_path in deps:
+        if not os.path.isabs(inc_path):
+          inc_path = os.path.abspath(inc_path)
+
+        # Detect whether the include is within the build folder or not.
+        build_path = self.buildPath
+        if build_path[-1] != '/':
+          build_path += '/'
+        prefix = os.path.commonprefix([build_path, inc_path])
+        if prefix == build_path:
+          # The include is not a system include, i.e. it was generated, so
+          # rewrite the path to be relative to the build folder.
+          inc_path = os.path.relpath(inc_path, self.buildPath)
+
+        paths.append(inc_path)
 
     reply = {
       'ok': p.returncode == 0,
@@ -197,6 +193,7 @@ class TaskMasterChild(ChildProcessListener):
     self.outstanding = {}
     self.idle = set()
     self.build_failed = False
+    self.build_completed = False
 
     self.procman = ProcessManager(pump)
     for channel in child_channels:
@@ -214,6 +211,11 @@ class TaskMasterChild(ChildProcessListener):
 
   def receiveClose(self, channel):
     # We received a close request, so wait for all children to finish.
+    if not self.build_completed:
+      # The master process might have decided we failed, in which case it'll
+      # request an early shutdown. Set our own fail bit so worker processes
+      # don't enqueue more tasks.
+      self.build_failed = True
     self.procman.shutdown()
 
   def onWorkerRanTask(self, child, message):
@@ -251,6 +253,10 @@ class TaskMasterChild(ChildProcessListener):
     self.idle = set()
 
   def onWorkerReady(self, child):
+    # If the build failed, ignore the message.
+    if self.build_failed:
+      return False
+
     if not len(self.task_graph):
       if len(self.outstanding):
         # There are still tasks left to complete, but they're waiting on
@@ -259,17 +265,13 @@ class TaskMasterChild(ChildProcessListener):
         self.idle.add(child)
       else:
         # There are no tasks remaining, the worker is not needed.
+        self.build_completed = True
         self.procman.close(child)
         self.close_idle()
         self.channel.send({
           'id': 'completed',
           'status': 'ok'
         })
-      return False
-
-    # If the build failed, just ignore this and close the child process.
-    if self.build_failed:
-      self.procman.close(child)
       return False
 
     # Send a task to the worker.
@@ -372,8 +374,6 @@ class TaskMasterParent(ParentProcessListener):
       channels=child_channels
     )
 
-    self.run()
-
   def processResults(self, message):
     if len(message['stdout']):
       sys.stdout.write('[{0}] {1}'.format(message['pid'], message['stdout']))
@@ -386,8 +386,10 @@ class TaskMasterParent(ParentProcessListener):
 
     task_id = message['task_id']
     updates = message['updates']
-    ##if not builder.update(task_id, updates, message):
-    ##  self.terminateBuild(graceful=True)
+    node = self.builder.findTask(task_id)
+    if not self.builder.updateGraph(node, updates, message):
+      sys.stderr.write('Failed to update node: {0}\n'.format(node.entry.format()))
+      self.terminateBuild(graceful=True)
 
   def terminateBuild(self, graceful):
     if not graceful:

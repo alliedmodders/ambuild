@@ -25,6 +25,10 @@ class GraphNode(object):
     self.outgoing_cmds = set()
     self.is_command = entry.isCommand()
 
+  @property
+  def type(self):
+    return self.entry.type
+
   def isCommand(self):
     return self.is_command
 
@@ -58,10 +62,11 @@ class Graph(object):
   # this node.
   def addEntry(self, entry):
     if entry.id in self.node_map:
-      return
+      return self.node_map[entry.id]
     graph_node = self.importEntry(entry)
     self.leafs.add(graph_node)
     self.integrate()
+    return graph_node
 
   # Given an edge from x -> y, we want to propagate command dependencies
   # between the two. If |x| and |y| are both commands, then this is easy.
