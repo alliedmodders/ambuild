@@ -195,7 +195,7 @@ class TaskMasterChild(ChildProcessListener):
 
     self.task_graph = task_graph
     self.outstanding = {}
-    self.ready = set()
+    self.idle = set()
     self.build_failed = False
 
     self.procman = ProcessManager(pump)
@@ -237,22 +237,28 @@ class TaskMasterChild(ChildProcessListener):
 
     self.onWorkerReady(child)
 
+    # If more stuff was queued, and we have idle processes, use them.
+    while len(self.task_graph) and len(self.idle):
+      child = self.idle.pop()
+      if not self.onWorkerReady(child):
+        break
+
   def onWorkerReady(self, child):
     if not len(self.task_graph):
       if len(self.outstanding):
         # There are still tasks left to complete, but they're waiting on
         # others to finish. Mark this process as ready and just ignore the
         # status change for now.
-        self.ready.add(child)
+        self.idle.add(child)
       else:
         # There are no tasks remaining, the worker is not needed.
         self.procman.close(child)
-      return
+      return False
 
     # If the build failed, just ignore this and close the child process.
     if self.build_failed:
       self.procman.close(child)
-      return
+      return False
 
     # Send a task to the worker.
     task = self.task_graph.pop()
@@ -267,6 +273,7 @@ class TaskMasterChild(ChildProcessListener):
     }
     child.send(message)
     self.outstanding[task.id] = (task, child)
+    return True
 
   def onWorkerCrashed(self, child, task):
     self.channel.send({
@@ -285,7 +292,7 @@ class TaskMasterChild(ChildProcessListener):
           self.onWorkerCrashed(child, task)
           break
 
-    self.ready.discard(child)
+    self.idle.discard(child)
 
     for other_child in self.procman.children:
       if other_child == child:
@@ -334,8 +341,6 @@ class TaskMasterParent(ParentProcessListener):
     if len(builder.commands) < num_processes:
       num_processes = len(builder.commands)
 
-    num_processes = 2
-
     # Create the list of pipes we'll be using.
     self.channels = []
     child_channels = []
@@ -367,8 +372,8 @@ class TaskMasterParent(ParentProcessListener):
 
     task_id = message['task_id']
     updates = message['updates']
-    if not builder.update(task_id, updates, message):
-      self.terminateBuild(graceful=True)
+    ##if not builder.update(task_id, updates, message):
+    ##  self.terminateBuild(graceful=True)
 
   def terminateBuild(self, graceful):
     if not graceful:
