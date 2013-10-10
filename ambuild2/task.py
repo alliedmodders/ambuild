@@ -315,6 +315,7 @@ class TaskMasterChild(ChildProcessListener):
         return
 
     # If we got here, no other child processes are live, so we can quit.
+    self.channel.finished()
     self.pump.cancel()
 
 class WorkerIOListener(MessageListener):
