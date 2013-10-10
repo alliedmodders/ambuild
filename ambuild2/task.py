@@ -348,6 +348,8 @@ class TaskMasterParent(ParentProcessListener):
         num_processes = 2
       else:
         num_processes = int(mp.cpu_count() * 1.5)
+    else:
+      num_processes = cx.options.jobs
 
     # Don't create more processes than we'll need.
     if num_processes > max_parallel:
