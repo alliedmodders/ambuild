@@ -147,8 +147,8 @@ def Execute(argv):
       shell=False
   )
   stdout, stderr = p.communicate()
-  out = stdout.decode()
-  err = stderr.decode()
+  out = stdout.decode('utf8')
+  err = stderr.decode('utf8')
 
   out = (' '.join([i for i in argv])) + '\n' + out
   return p, out, err
