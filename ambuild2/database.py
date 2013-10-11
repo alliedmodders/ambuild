@@ -154,15 +154,13 @@ class Database(object):
       node.outgoing.add(outgoing)
     return node.outgoing
 
+  def mark_dirty(self, entry):
+    query = "update nodes set dirty = 1 where rowid = ?"
+    self.cn.execute(query, (entry.id,))
+    entry.dirty |= nodetypes.KnownDirty
+
   def unmark_dirty(self, entry, stamp=None):
-    query = """
-      update nodes
-      set
-        dirty = 0,
-        stamp = ?
-      where
-        rowid = ?
-    """
+    query = "update nodes set dirty = 0, stamp = ? where rowid = ?"
     if not stamp:
       if entry.isCommand():
         stamp = 0.0
