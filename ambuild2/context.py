@@ -45,7 +45,8 @@ class Context(object):
     self.db.close()
 
   def Build(self):
-    return self.build_internal()
+    if not self.build_internal():
+      sys.exit(1)
 
   def build_internal(self):
     parser = OptionParser("usage: %prog [options]")
@@ -66,6 +67,8 @@ class Context(object):
       return True
 
     dmg_graph = damage.ComputeDamageGraph(self.db)
+    if not dmg_graph:
+      return False
 
     # If we get here, we have to compute damage.
     if self.options.show_damage:
@@ -82,4 +85,5 @@ class Context(object):
       return True
     if not builder.update():
       sys.stderr.write('Build failed.\n')
-      sys.exit(1)
+    else:
+      sys.stdout.write('Build succeeded.\n')

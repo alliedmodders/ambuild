@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
+import nodetypes
 from graph import Graph
 
 def ComputeSourceDirty(node):
@@ -36,25 +37,22 @@ def ComputeOutputDirty(node):
   # In the first case, our preceding command node will not have been undirtied,
   # so we should be able to find our incoming command in the graph. However,
   # case #2 breaks that guarantee. To be safe, if the timestamp has changed,
-  # we mark the node as dirty (the dirty bit is always false for Outputs) to
-  # signal to later steps that the node has been munged on the file system.
-  # If its ancestor was then never added to the graph, we can warn the user
-  # and manually insert the node.
+  # we mark the node as dirty.
   stamp = os.path.getmtime(node.path)
-  if stamp == node.stamp:
-    return False
-
-  node.dirty = True
-  return True
+  return stamp != node.stamp
 
 def ComputeDirty(node):
-  if node.type == 'src':
-    return ComputeSourceDirty(node)
-  if node.type == 'out':
-    return ComputeOutputDirty(node)
-  if node.type == 'cpa':
-    return ComputeCopyFolderDirty(node)
-  raise Exception('cannot compute dirty bit for node type: ' + node.type)
+  if node.type == nodetypes.Source:
+    dirty = ComputeSourceDirty(node)
+  elif node.type == nodetypes.Output:
+    dirty = ComputeOutputDirty(node)
+  elif node.type == nodetypes.CopyFolder:
+    dirty = ComputeCopyFolderDirty(node)
+  else:
+    raise Exception('cannot compute dirty bit for node type: ' + node.type)
+  if dirty:
+    node.dirty |= nodetypes.NewDirty
+  return dirty
 
 def ComputeDamageGraph(database):
   graph = Graph(database)
@@ -72,6 +70,18 @@ def ComputeDamageGraph(database):
 
   for entry in dirty:
     graph.addEntry(entry)
+    if (entry.type == nodetypes.Output) and (entry.dirty == nodetypes.NewDirty):
+      # Ensure that our command has been marked as dirty.
+      incoming = database.query_incoming(entry)
+
+      # There should really only be one command to generate an output.
+      if len(incoming) != 1:
+        sys.stderr.write('Error in dependency graph: an output has multiple inputs.')
+        sys.stderr.write('Output: {0}'.format(entry.format()))
+        return None
+
+      for cmd in incoming:
+        graph.addEntry(cmd)
 
   graph.complete()
   return graph

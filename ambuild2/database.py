@@ -124,7 +124,7 @@ class Database(object):
                 blob=blob,
                 folder=folder,
                 stamp=row[1],
-                dirty=bool(row[2]),
+                dirty=row[2],
                 generated=bool(row[3]))
     self.node_cache_[id] = node
     if node.path:
@@ -154,7 +154,7 @@ class Database(object):
       node.outgoing.add(outgoing)
     return node.outgoing
 
-  def unmark_dirty(self, entry):
+  def unmark_dirty(self, entry, stamp=None):
     query = """
       update nodes
       set
@@ -163,11 +163,15 @@ class Database(object):
       where
         rowid = ?
     """
-    try:
-      stamp = os.path.getmtime(entry.path)
-    except:
-      traceback.print_exc()
-      sys.stderr.write('Could not unmark file as dirty; leaving dirty.\n')
+    if not stamp:
+      if entry.isCommand():
+        stamp = 0.0
+      else:
+        try:
+          stamp = os.path.getmtime(entry.path)
+        except:
+          traceback.print_exc()
+          sys.stderr.write('Could not unmark file as dirty; leaving dirty.\n')
     self.cn.execute(query, (stamp, entry.id))
     entry.dirty = False
     entry.stamp = stamp

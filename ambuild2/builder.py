@@ -78,6 +78,9 @@ class Builder(object):
       counter += 1
 
   def update(self):
+    if not len(self.leafs):
+      return True
+
     tm = TaskMasterParent(self.cx, self, self.leafs, self.max_parallel)
     success = tm.run()
     self.commit()
@@ -136,12 +139,11 @@ class Builder(object):
 
     old_set = self.cx.db.query_incoming(cmd_node.entry)
     for entry in old_set:
-      if not entry.generated:
+      if entry not in discovered_set and entry.generated:
+        self.cx.db.drop_edge(entry, cmd_node.entry)
         continue
 
-      if entry not in discovered_set:
-        self.cx.db.drop_edge(entry, cmd_node.entry)
-      elif entry.type == nodetypes.Source:
+      if entry.type == nodetypes.Source:
         self.lazyUpdateEntry(entry)
 
     for entry in discovered_set:
@@ -157,5 +159,10 @@ class Builder(object):
     if 'deps' in message:
       if not self.mergeDependencies(node, message['deps']):
         return False
+
+    for path, stamp in updates:
+      entry = self.cx.db.query_path(path)
+      self.cx.db.unmark_dirty(entry, stamp)
+    self.cx.db.unmark_dirty(node.entry)
 
     return True
