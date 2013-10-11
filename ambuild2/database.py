@@ -15,8 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import util
+import os, sys
 import sqlite3
 import nodetypes
+import traceback
 from nodetypes import Node
 
 class Database(object):
@@ -61,6 +63,24 @@ class Database(object):
       id=cursor.lastrowid,
       row=row
     )
+
+  def add_edge(self, from_entry, to_entry, generated):
+    query = """
+      insert into edges
+      (outgoing, incoming, generated)
+      values
+      (?, ?, ?)
+    """
+    self.cn.execute(query, (to_entry.id, from_entry.id, int(generated)))
+
+  def drop_edge(self, from_entry, to_entry):
+    query = """
+      delete from edges
+      where
+        outgoing = ? and
+        incoming = ?
+    """
+    self.cn.execute(query, (to_entry.id, from_entry.id))
 
   def query_node(self, id):
     if id in self.node_cache_:
@@ -117,10 +137,10 @@ class Database(object):
       return node.incoming
 
     query = "select incoming from edges where outgoing = ?"
-    node.incoming = []
+    node.incoming = set()
     for incoming_id, in self.cn.execute(query, (node.id,)):
       incoming = self.query_node(incoming_id)
-      node.incoming.append(incoming)
+      node.incoming.add(incoming)
     return node.incoming
 
   def query_outgoing(self, node):
@@ -128,11 +148,29 @@ class Database(object):
       return node.outgoing
 
     query = "select outgoing from edges where incoming = ?"
-    node.outgoing = []
+    node.outgoing = set()
     for outgoing_id, in self.cn.execute(query, (node.id,)):
       outgoing = self.query_node(outgoing_id)
-      node.outgoing.append(outgoing)
+      node.outgoing.add(outgoing)
     return node.outgoing
+
+  def unmark_dirty(self, entry):
+    query = """
+      update nodes
+      set
+        dirty = 0,
+        stamp = ?
+      where
+        rowid = ?
+    """
+    try:
+      stamp = os.path.getmtime(entry.path)
+    except:
+      traceback.print_exc()
+      sys.stderr.write('Could not unmark file as dirty; leaving dirty.\n')
+    self.cn.execute(query, (stamp, entry.id))
+    entry.dirty = False
+    entry.stamp = stamp
 
   # Intended to be called before any nodes are imported.
   def query_known_dirty(self, aggregate):

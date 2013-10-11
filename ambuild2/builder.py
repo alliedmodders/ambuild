@@ -58,6 +58,9 @@ class Builder(object):
     self.commands, self.leafs = tb.buildFromGraph(graph)
     self.max_parallel = tb.max_parallel
 
+    # Set of nodes we'll mark as clean in the database.
+    self.update_set = set()
+
   def printSteps(self):
     counter = 0
     leafs = deque(self.leafs)
@@ -77,18 +80,31 @@ class Builder(object):
   def update(self):
     tm = TaskMasterParent(self.cx, self, self.leafs, self.max_parallel)
     success = tm.run()
-    self.cx.db.commit()
+    self.commit()
     return success
 
   def findTask(self, task_id):
     return self.commands[task_id]
 
-  def findPath(self, from_node, to_node):
+  def findPath(self, from_entry, to_entry):
     return False
 
-  def mergeDependencies(self, cmd, discovered):
+  def lazyUpdateEntry(self, entry):
+    assert entry.type == nodetypes.Source
+    if entry.dirty:
+      self.update_set.add(entry)
+
+  def commit(self):
+    # Update any dirty source file timestamps. It's important that files are
+    # not modified in between being used as dependencies and the build
+    # finishing; otherwise, the DAG state will be incoherent.
+    for entry in self.update_set:
+      self.cx.db.unmark_dirty(entry)
+    self.cx.db.commit()
+
+  def mergeDependencies(self, cmd_node, discovered):
     # Grab nodes for each dependency.
-    discovered_nodes = []
+    discovered_set = set()
     for path in discovered:
       entry = self.cx.db.query_path(path)
       if not entry:
@@ -107,16 +123,33 @@ class Builder(object):
         sys.stderr.write('Dependent path {0} is not a file input!\n'.format(path))
         return False
 
-      node = self.graph.addEntry(entry)
-
-      if node.type == nodetypes.Output:
-        if not self.graph.findPath(node, cmd):
+      if entry.type == nodetypes.Output:
+        if not self.findPath(entry, cmd_node.entry):
           sys.stderr.write('Encountered an error while computing new dependencies:\n')
           sys.stderr.write('A new dependency was discovered that exists as an output from another build step.\n')
           sys.stderr.write('However, there is no explicit dependency between that path and this command.\n')
           sys.stderr.write('The build must abort since the ordering of these two steps is undefined.\n')
           sys.stderr.write('Dependency: {0}\n'.format(path))
           return False
+
+      discovered_set.add(entry)
+
+    old_set = self.cx.db.query_incoming(cmd_node.entry)
+    for entry in old_set:
+      if not entry.generated:
+        continue
+
+      if entry not in discovered_set:
+        self.cx.db.drop_edge(entry, cmd_node.entry)
+      elif entry.type == nodetypes.Source:
+        self.lazyUpdateEntry(entry)
+
+    for entry in discovered_set:
+      if entry in old_set:
+        continue
+      self.cx.db.add_edge(entry, cmd_node.entry, generated=True)
+      if entry.type == nodetypes.Source:
+        self.lazyUpdateEntry(entry)
 
     return True
 
