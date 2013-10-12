@@ -13,7 +13,10 @@ class Task(object):
     self.id = id
     self.type = entry.type
     self.data = entry.blob
-    self.folder = entry.folder
+    if entry.folder:
+      self.folder = entry.folder.path
+    else:
+      self.folder = None
     self.outputs = outputs
     self.outgoing = []
     self.incoming = set()
