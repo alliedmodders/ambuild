@@ -14,9 +14,14 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import os
 import util
+import os, sys
 import nodetypes
+from frontend.base_gen import ConfigureException
+
+class GraphException(Exception):
+  def __init__(self):
+    super(GraphException, self).__init__()
 
 class NodeBuilder(object):
   def __init__(self, type, path=None, folder=None, blob=None, generated=False):
@@ -51,7 +56,10 @@ class GraphBuilder(object):
 
   def addOutput(self, path):
     assert not os.path.isabs(path)
-    assert not path in self.files
+    if path in self.files:
+      sys.stderr.write('The same output file has been added to the build twice.\n')
+      sys.stderr.write('Path: {0}\n'.format(path))
+      raise ConfigureException()
 
     node = NodeBuilder(type=nodetypes.Output, path=path)
     self.files[path] = node

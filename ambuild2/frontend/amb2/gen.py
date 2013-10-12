@@ -37,7 +37,8 @@ class Generator(base_gen.Generator):
     os.mkdir(self.cacheFolder)
 
   def addCxxTasks(self, cx, binary):
-    folderNode = self.graph.generateFolder(cx.buildFolder)
+    folder = os.path.join(cx.buildFolder, binary.name)
+    folderNode = self.graph.generateFolder(folder)
 
     binNode = self.graph.addOutput(path=binary.outputFile)
     linkCmd = self.graph.addCommand(type=nodetypes.Command,
@@ -66,13 +67,13 @@ class Generator(base_gen.Generator):
       database.exportGraph(self.graph)
     self.saveVars()
     self.generateBuildFile()
-    return True
 
   def generateBuildFile(self):
     with open(os.path.join(self.buildPath, 'build.py'), 'w') as fp:
       fp.write("""
 # vim set: ts=8 sts=2 sw=2 tw=99 et:
 import sys
+sys.path.append('/home/dvander/alliedmodders/ambuild/ambuild2')
 import run
 
 if not run.Build("{build}"):

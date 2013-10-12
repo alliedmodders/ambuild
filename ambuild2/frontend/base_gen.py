@@ -28,6 +28,10 @@ from frontend import cpp
 # utilized by backends for minimal reparsing and DAG updates when build
 # scripts change.
 
+class ConfigureException(Exception):
+  def __init__(self, *args, **kwargs):
+    super(ConfigureException, self).__init__(*args, **kwargs)
+
 class Context(object):
   def __init__(self, generator, parent, script):
     self.generator = generator
@@ -42,11 +46,20 @@ class Context(object):
     # matching its layout in the source tree.
     path, name = os.path.split(script)
     if parent:
-      self.sourcePath = os.path.join(parent.sourcePath, path)
+      self.currentSourcePath = os.path.join(parent.currentSourcePath, path)
       self.buildFolder = os.path.join(parent.buildFolder, path)
     else:
-      self.sourcePath = generator.sourcePath
+      self.currentSourcePath = generator.sourcePath
       self.buildFolder = ''
+
+  # Root source folder.
+  @property
+  def sourcePath(self):
+    return self.generator.sourcePath
+
+  @property
+  def options(self):
+    return self.generator.options
 
   @property
   def buildPath(self):
@@ -55,6 +68,7 @@ class Context(object):
   def DetectCompilers(self):
     if not self.compiler:
       self.compiler = self.generator.DetectCompilers()
+    return self.compiler
 
   def RunBuildScripts(self, *args):
     for script in args:
@@ -62,7 +76,7 @@ class Context(object):
 
   def Add(self, taskbuilder):
     taskbuilder.finish(self)
-    self.generator.addCxxTasks(self, taskbuilder)
+    taskbuilder.generate(self.generator, self)
 
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
@@ -72,6 +86,7 @@ class Generator(object):
     self.args = args
     self.compiler = None
     self.contextStack_ = [None]
+    self.configure_failed = False
 
   def parseBuildScripts(self):
     root = os.path.join(self.sourcePath, 'AMBuildScript')
@@ -88,7 +103,7 @@ class Generator(object):
     self.pushContext(cx)
 
     # Compile the build script.
-    with open(file) as fp:
+    with open(os.path.join(self.sourcePath, file)) as fp:
       chars = fp.read()
       code = compile(chars, file, 'exec')
 
@@ -100,9 +115,13 @@ class Generator(object):
     self.popContext()
 
   def Generate(self):
-    self.preGenerate()
-    self.parseBuildScripts()
-    return self.postGenerate()
+    try:
+      self.preGenerate()
+      self.parseBuildScripts()
+      self.postGenerate()
+    except ConfigureException:
+      return False
+    return True
 
   def DetectCompilers(self):
     if self.compiler:
