@@ -29,7 +29,7 @@ class Vendor(object):
 
 class MSVC(Vendor):
   def __init__(self, command, version):
-    super(MSVC, self).__init__('msvc', version, 'msvvc', command, '.obj')
+    super(MSVC, self).__init__('msvc', version, 'msvc', command, '.obj')
     self.definePrefix = '/D'
 
   def formatInclude(self, outputPath, includePath):
@@ -221,6 +221,9 @@ class Compiler(object):
   def Program(self, name):
     return Program(self, name)
 
+  def Library(self, name):
+    return Library(self, name)
+
 # Environment representing a C/C++ compiler invocation. Encapsulates most
 # arguments.
 class CCommandEnv(object):
@@ -253,20 +256,24 @@ class ObjectFile(object):
     self.argv = argv
 
 class BinaryBuilder(object):
-  def __init__(self, compiler, binary):
+  def __init__(self, compiler, name):
     super(BinaryBuilder, self).__init__()
-    self.compiler = compiler
-    self.binary = binary
+    self.compiler = compiler.clone()
+    self.name = name
     self.sources = []
     self.used_cxx = False
     self.linker = None
 
+  def generate(self, generator, cx):
+    generator.addCxxTasks(cx, self)
+
   def finish(self, cx):
     # Because we want to compute relative include folders for MSVC (see its
     # vendor object), we need to compute an absolute path to the build folder.
-    outputPath = os.path.join(cx.buildPath, cx.buildFolder)
-    self.default_c_env = CCommandEnv(outputPath, self.compiler, self.compiler.cc)
-    self.default_cxx_env = CCommandEnv(outputPath, self.compiler, self.compiler.cxx)
+    self.outputFolder = os.path.join(cx.buildFolder, self.name)
+    self.outputPath = os.path.join(cx.buildPath, self.outputFolder)
+    self.default_c_env = CCommandEnv(self.outputPath, self.compiler, self.compiler.cc)
+    self.default_cxx_env = CCommandEnv(self.outputPath, self.compiler, self.compiler.cxx)
 
     self.objfiles = [self.generateItem(cx, item) for item in self.sources]
 
@@ -282,7 +289,7 @@ class BinaryBuilder(object):
       argv.append(name)
 
     name, argv = self.generateBinary(cx, argv)
-    self.outputFile = os.path.join(cx.buildFolder, name)
+    self.outputFile = os.path.join(self.outputFolder, name)
     self.argv = argv
 
   def generateItem(self, cx, item):
@@ -298,24 +305,43 @@ class BinaryBuilder(object):
     sourceFile = os.path.join(cx.sourcePath, item)
     objName = NameForObjectFile(fparts[0]) + cenv.compiler.objSuffix
     argv = cenv.argv(sourceFile, objName)
-    objectFile = os.path.join(cx.buildFolder, objName)
+    objectFile = os.path.join(self.outputFolder, objName)
     return ObjectFile(sourceFile, objectFile, argv)
 
 class Program(BinaryBuilder):
-  def __init__(self, compiler, binary):
-    super(Program, self).__init__(compiler, binary)
+  def __init__(self, compiler, name):
+    super(Program, self).__init__(compiler, name)
 
   def generateBinary(self, cx, argv):
-    name = self.binary + util.ExecutableSuffix()
+    name = self.name + util.ExecutableSuffix()
 
     if isinstance(self.linker, MSVC):
       argv.append('/link')
     argv.extend(self.compiler.linkflags)
     if isinstance(self.linker, MSVC):
       argv.append('/OUT:' + name)
-      argv.append('/PDB:"' + self.binary + '.pdb"')
+      argv.append('/PDB:"' + self.name + '.pdb"')
     else:
       argv.extend(['-o', name])
 
     return name, argv
 
+class Library(BinaryBuilder):
+  def __init__(self, compiler, name):
+    super(Library, self).__init__(compiler, name)
+
+  def generateBinary(self, cx, argv):
+    name = self.name + util.SharedLibSuffix()
+
+    argv.extend(self.compiler.linkflags)
+    if isinstance(self.linker, MSVC):
+      argv.append('/OUT:' + name)
+      argv.append('/DLL')
+      argv.append('/PDB:"' + self.name + '.pdb"')
+    elif isinstance(self.linker, CompatGCC):
+      if util.IsMac():
+        argv.append('-dynamiclib')
+      else:
+        argv.append('-shared')
+
+    return name, argv
