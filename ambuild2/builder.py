@@ -62,6 +62,8 @@ class Builder(object):
     self.update_set = set()
 
   def printSteps(self):
+    for entry in self.graph.create:
+      print(entry.format())
     counter = 0
     leafs = deque(self.leafs)
     while len(leafs):
@@ -78,6 +80,12 @@ class Builder(object):
       counter += 1
 
   def update(self):
+    for entry in self.graph.create:
+      if entry.type == nodetypes.Mkdir:
+        sys.stdout.write('{0}\n'.format(entry.format()))
+        os.makedirs(entry.path)
+      else:
+        raise Exception('Unknown entry type: {0}'.format(entry.type))
     if not len(self.leafs):
       return True
 

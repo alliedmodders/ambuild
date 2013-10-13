@@ -109,6 +109,8 @@ class Node(object):
     if self.type == Source or self.type == Output:
       return self.path
     text = ''
+    if self.type == Mkdir:
+      return 'mkdir -p ' + self.path
     if self.type == Cxx:
       return '[' + self.blob['type'] + ']' + ' -> ' + (' '.join([arg for arg in self.blob['argv']]))
     return (' '.join([arg for arg in self.blob]))

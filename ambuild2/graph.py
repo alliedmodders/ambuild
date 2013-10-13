@@ -42,6 +42,7 @@ class Graph(object):
     self.commands = []
     self.worklist = []
     self.node_map = {}
+    self.create = []
 
   def importEntry(self, entry):
     assert not entry.id in self.node_map
@@ -188,6 +189,9 @@ class Graph(object):
     return [node for node in self.commands if not len(node.outgoing_cmds)]
 
   def printCommands(self):
+    for entry in self.create:
+      print(' - ' + entry.format())
+
     def printNode(node, indent):
       print((' ' * indent) + ' - ' + node.entry.format())
       for incoming in node.incoming_cmds:
@@ -197,6 +201,9 @@ class Graph(object):
       printNode(node, 0)
 
   def printGraph(self):
+    for entry in self.create:
+      print(' : ' + entry.format())
+
     def printNode(node, indent):
       print((' ' * indent) + ' - ' + node.entry.format())
       for incoming in node.incoming:

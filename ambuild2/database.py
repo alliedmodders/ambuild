@@ -174,6 +174,18 @@ class Database(object):
     entry.dirty = False
     entry.stamp = stamp
 
+  # Query all mkdir nodes.
+  def query_mkdir(self, aggregate):
+    query = """
+      select type, stamp, dirty, generated, path, folder, data, rowid
+      from nodes
+      where type == 'mkd'
+    """
+    for row in self.cn.execute(query):
+      id = row[7]
+      node = self.import_node(id, row)
+      aggregate(node)
+
   # Intended to be called before any nodes are imported.
   def query_known_dirty(self, aggregate):
     query = """

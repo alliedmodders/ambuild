@@ -57,6 +57,11 @@ def ComputeDirty(node):
 def ComputeDamageGraph(database):
   graph = Graph(database)
 
+  def maybe_mkdir(node):
+    if not os.path.exists(node.path):
+      graph.create.append(node)
+  database.query_mkdir(maybe_mkdir)
+
   dirty = []
   def known_dirty(node):
     dirty.append(node)
