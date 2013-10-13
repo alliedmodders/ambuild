@@ -62,7 +62,7 @@ class Database(object):
 
       assert node.id is None
       query = """
-        INSERT INTO nodes (type, generated, path) VALUES (?, ?, ?)
+        INSERT INTO nodes (type, generated, path, dirty) VALUES (?, ?, ?, 0)
       """
       cursor = self.cn.execute(query, (node.type, int(node.generated), node.path))
       node.id = cursor.lastrowid
