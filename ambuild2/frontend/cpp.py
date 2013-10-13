@@ -215,7 +215,7 @@ class Compiler(object):
     cc.cc = self.cc
     cc.cxx = self.cxx
     for attr in Compiler.attrs:
-      setattr(self, attr, copy.copy(getattr(cc, attr)))
+      setattr(cc, attr, copy.copy(getattr(self, attr)))
     return cc
 
   def Program(self, name):
@@ -302,7 +302,7 @@ class BinaryBuilder(object):
       self.used_cxx = True
 
     # Find or add node for the source input file.
-    sourceFile = os.path.join(cx.sourcePath, item)
+    sourceFile = os.path.join(cx.currentSourcePath, item)
     objName = NameForObjectFile(fparts[0]) + cenv.compiler.objSuffix
     argv = cenv.argv(sourceFile, objName)
     objectFile = os.path.join(self.outputFolder, objName)
@@ -343,5 +343,6 @@ class Library(BinaryBuilder):
         argv.append('-dynamiclib')
       else:
         argv.append('-shared')
+      argv.extend(['-o', name])
 
     return name, argv

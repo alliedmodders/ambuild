@@ -127,7 +127,8 @@ class Generator(object):
     if self.compiler:
       return self.compiler
 
-    cc = cpp.DetectCompiler(self, os.environ, 'CC')
-    cxx = cpp.DetectCompiler(self, os.environ, 'CXX')
+    with util.FolderChanger('.ambuild2'):
+      cc = cpp.DetectCompiler(self, os.environ, 'CC')
+      cxx = cpp.DetectCompiler(self, os.environ, 'CXX')
     self.compiler = cpp.Compiler(cc, cxx)
     return self.compiler
