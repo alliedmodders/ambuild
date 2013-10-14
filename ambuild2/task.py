@@ -1,6 +1,7 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
 import util
 import errno
+import shutil
 import os, sys
 import nodetypes
 import traceback
@@ -25,12 +26,20 @@ class Task(object):
     self.outgoing.append(task)
     task.incoming.add(self)
 
+  @property
+  def folder_name(self):
+    if not self.folder:
+      return ''
+    return self.folder
+
   def format(self):
     text = ''
     if self.type == nodetypes.Cxx:
       return '[' + self.data['type'] + ']' + ' -> ' + (' '.join([arg for arg in self.data['argv']]))
     if self.type == nodetypes.Symlink:
-      return 'ln -s "{0}" "{1}"'.format(self.data[0], self.data[1])
+      return 'ln -s "{0}" "{1}"'.format(self.data[0], os.path.join(self.folder_name, self.data[1]))
+    if self.type == nodetypes.Copy:
+      return 'cp "{0}" "{1}"'.format(self.data[0], os.path.join(self.folder_name, self.data[1]))
     return (' '.join([arg for arg in self.data]))
 
 class WorkerChild(ChildProcessListener):
@@ -47,7 +56,8 @@ class WorkerChild(ChildProcessListener):
     self.taskMap = {
       'cxx': lambda message: self.doCompile(message),
       'cmd': lambda message: self.doCommand(message),
-      'ln': lambda message: self.doSymlink(message)
+      'ln': lambda message: self.doSymlink(message),
+      'cp': lambda message: self.doCopy(message),
     }
 
   def receiveConnected(self, channel):
@@ -127,13 +137,25 @@ class WorkerChild(ChildProcessListener):
     source_path, output_path = message['task_data']
 
     with util.FolderChanger(task_folder):
-      if os.path.exists(output_path):
-        os.unlink(output_path)
       os.symlink(source_path, output_path)
 
     reply = {
       'ok': True,
-      'stdout': 'ln -s "{0}" "{1}"\n'.format(source_path, output_path),
+      'stdout': 'ln -s "{0}" "{1}"\n'.format(source_path, os.path.join(task_folder, output_path)),
+      'stderr': '',
+    }
+    return reply
+
+  def doCopy(self, message):
+    task_folder = message['task_folder']
+    source_path, output_path = message['task_data']
+
+    with util.FolderChanger(task_folder):
+      shutil.copy(source_path, output_path)
+
+    reply = {
+      'ok': True,
+      'stdout': 'cp "{0}" "{1}"\n'.format(source_path, os.path.join(task_folder, output_path)),
       'stderr': '',
     }
     return reply

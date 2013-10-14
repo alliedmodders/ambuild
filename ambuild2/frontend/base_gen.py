@@ -65,6 +65,9 @@ class Context(object):
   def buildPath(self):
     return self.generator.buildPath
 
+  def SetBuildFolder(self, folder):
+    self.buildFolder = folder
+
   def DetectCompilers(self):
     if not self.compiler:
       self.compiler = self.generator.DetectCompilers()
@@ -83,6 +86,12 @@ class Context(object):
 
   def AddSymlink(self, source, output_path):
     return self.generator.AddSymlink(self, source, output_path)
+
+  def AddFolder(self, folder):
+    return self.generator.AddFolder(self, folder)
+
+  def AddCopy(self, source, folder):
+    return self.generator.AddCopy(self, source, folder)
 
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
@@ -144,4 +153,10 @@ class Generator(object):
     raise Exception('Must be implemented')
 
   def AddSource(self, context, source):
+    raise Exception('Must be implemented')
+
+  def AddFolder(self, context, folder):
+    raise Exception('Must be implemented')
+
+  def AddCopy(self, context, source, folder):
     raise Exception('Must be implemented')

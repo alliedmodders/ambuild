@@ -88,6 +88,13 @@ class Generator(base_gen.Generator):
     folder, name = os.path.split(output_path)
     return self.graph.addSymLink(context, source, folder, name)
 
+  def AddFolder(self, context, folder):
+    folder = os.path.join(context.buildFolder, folder)
+    return self.graph.generateFolder(folder)
+
+  def AddCopy(self, context, source, folder):
+    return self.graph.addCopy(context, source, folder)
+
   def generateBuildFile(self):
     with open(os.path.join(self.buildPath, 'build.py'), 'w') as fp:
       fp.write("""

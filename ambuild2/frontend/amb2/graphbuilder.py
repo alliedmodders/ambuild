@@ -120,3 +120,21 @@ class GraphBuilder(object):
     node = NodeBuilder(type=nodetypes.Source, path=path)
     self.files[path] = node
     return node
+
+  def addCopy(self, context, source, folder):
+    assert type(folder) is NodeBuilder
+    if type(source) is str:
+      source = self.addSource(source)
+
+    ignore, filename = os.path.split(source.path)
+
+    copy = self.addCommand(
+      type=nodetypes.Copy,
+      folder=folder,
+      path=None,
+      data=(source.path, filename)
+    )
+    output = self.addOutput(os.path.join(folder.path, filename))
+    self.addDependency(copy, source)
+    self.addDependency(output, copy)
+    return output

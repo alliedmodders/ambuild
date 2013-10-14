@@ -14,6 +14,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+import os
 
 # Source nodes are files that are leaf inputs to the build system, and are not
 # generated as part of the build process.
@@ -105,6 +106,12 @@ class Node(object):
             self.type != Output and
             self.type != CopyFolder)
 
+  @property
+  def folder_name(self):
+    if not self.folder:
+      return ''
+    return self.folder.path
+
   def format(self):
     if self.type == Source or self.type == Output:
       return self.path
@@ -112,7 +119,9 @@ class Node(object):
     if self.type == Mkdir:
       return 'mkdir -p ' + self.path
     if self.type == Symlink:
-      return 'ln -s "{0}" "{1}"'.format(self.blob[0], self.blob[1])
+      return 'ln -s "{0}" "{1}"'.format(self.blob[0], os.path.join(self.folder_name, self.blob[1]))
+    if self.type == Copy:
+      return 'cp "{0}" "{1}"'.format(self.blob[0], os.path.join(self.folder_name, self.blob[1]))
     if self.type == Cxx:
       return '[' + self.blob['type'] + ']' + ' -> ' + (' '.join([arg for arg in self.blob['argv']]))
     return (' '.join([arg for arg in self.blob]))

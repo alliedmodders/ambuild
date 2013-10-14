@@ -62,6 +62,10 @@ class Builder(object):
     self.update_set = set()
 
   def printSteps(self):
+    if not len(self.graph.create) and not len(self.leafs):
+      print('Build is complete and no files changed; no steps needed.')
+      return
+
     for entry in self.graph.create:
       print(entry.format())
     counter = 0
@@ -83,7 +87,10 @@ class Builder(object):
     for entry in self.graph.create:
       if entry.type == nodetypes.Mkdir:
         sys.stdout.write('{0}\n'.format(entry.format()))
-        os.makedirs(entry.path)
+        # The path might already exist because we mkdir -p and don't bother
+        # ordering.
+        if not os.path.exists(entry.path):
+          os.makedirs(entry.path)
       else:
         raise Exception('Unknown entry type: {0}'.format(entry.type))
     if not len(self.leafs):
