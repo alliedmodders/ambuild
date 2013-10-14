@@ -168,6 +168,11 @@ class Builder(object):
       if not self.mergeDependencies(node, message['deps']):
         return False
 
+    for incoming in node.incoming:
+      if incoming.type != nodetypes.Source:
+        continue
+      self.lazyUpdateEntry(incoming.entry)
+
     for path, stamp in updates:
       entry = self.cx.db.query_path(path)
       self.cx.db.unmark_dirty(entry, stamp)
