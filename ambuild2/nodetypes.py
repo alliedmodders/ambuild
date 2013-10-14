@@ -111,6 +111,8 @@ class Node(object):
     text = ''
     if self.type == Mkdir:
       return 'mkdir -p ' + self.path
+    if self.type == Symlink:
+      return 'ln -s "{0}" "{1}"'.format(self.blob[0], self.blob[1])
     if self.type == Cxx:
       return '[' + self.blob['type'] + ']' + ' -> ' + (' '.join([arg for arg in self.blob['argv']]))
     return (' '.join([arg for arg in self.blob]))

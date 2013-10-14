@@ -83,6 +83,22 @@ class GraphBuilder(object):
     self.files[path] = node
     return node
 
+  def addSymLink(self, context, source, folder, file):
+    folder = os.path.join(context.buildFolder, folder)
+    output_path = os.path.join(folder, file)
+    folder = self.generateFolder(folder)
+
+    command = self.addCommand(
+      type=nodetypes.Symlink,
+      folder=folder,
+      path=None,
+      data=(source.path, file)
+    )
+    output = self.addOutput(output_path)
+    self.addDependency(command, source)
+    self.addDependency(output, command)
+    return output
+
   def addCommand(self, type, folder, path=None, data=None):
     assert folder is None or util.typeof(folder) is NodeBuilder
 

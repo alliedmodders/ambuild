@@ -47,11 +47,16 @@ class Generator(base_gen.Generator):
     self.graph.addDependency(binNode, linkCmd)
 
     # Find dependencies
+    for item in binary.compiler.linkflags:
+      if type(item) is str:
+        continue
+      self.graph.addDependency(linkCmd, item.node)
+
     for item in binary.compiler.postlink:
       if type(item) is str:
         node = self.graph.depNodeForPath(item)
       else:
-        node = item
+        node = item.node
       self.graph.addDependency(linkCmd, node)
 
     for objfile in binary.objfiles:
@@ -75,6 +80,13 @@ class Generator(base_gen.Generator):
       database.exportGraph(self.graph)
     self.saveVars()
     self.generateBuildFile()
+
+  def AddSource(self, context, source_path):
+    return self.graph.addSource(source_path)
+
+  def AddSymlink(self, context, source, output_path):
+    folder, name = os.path.split(output_path)
+    return self.graph.addSymLink(context, source, folder, name)
 
   def generateBuildFile(self):
     with open(os.path.join(self.buildPath, 'build.py'), 'w') as fp:

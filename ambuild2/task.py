@@ -29,6 +29,8 @@ class Task(object):
     text = ''
     if self.type == nodetypes.Cxx:
       return '[' + self.data['type'] + ']' + ' -> ' + (' '.join([arg for arg in self.data['argv']]))
+    if self.type == nodetypes.Symlink:
+      return 'ln -s "{0}" "{1}"'.format(self.data[0], self.data[1])
     return (' '.join([arg for arg in self.data]))
 
 class WorkerChild(ChildProcessListener):
@@ -44,7 +46,8 @@ class WorkerChild(ChildProcessListener):
     }
     self.taskMap = {
       'cxx': lambda message: self.doCompile(message),
-      'cmd': lambda message: self.doCommand(message)
+      'cmd': lambda message: self.doCommand(message),
+      'ln': lambda message: self.doSymlink(message)
     }
 
   def receiveConnected(self, channel):
@@ -115,7 +118,23 @@ class WorkerChild(ChildProcessListener):
     reply = {
       'ok': p.returncode == 0,
       'stdout': stdout,
-      'stderr': stderr
+      'stderr': stderr,
+    }
+    return reply
+
+  def doSymlink(self, message):
+    task_folder = message['task_folder']
+    source_path, output_path = message['task_data']
+
+    with util.FolderChanger(task_folder):
+      if os.path.exists(output_path):
+        os.unlink(output_path)
+      os.symlink(source_path, output_path)
+
+    reply = {
+      'ok': True,
+      'stdout': 'ln -s "{0}" "{1}"\n'.format(source_path, output_path),
+      'stderr': '',
     }
     return reply
 

@@ -205,15 +205,18 @@ class Compiler(object):
   attrs = [
     'includes',         # C and C++ include paths
     'cxxincludes',      # C++-only include paths
-    'linkflags',        # Link flags
     'cflags',           # C and C++ compiler flags
     'cxxflags',         # C++-only compiler flags
     'defines',          # C and C++ #defines
     'cxxdefines',       # C++-only #defines
 
+    # Link flags. If any members are not strings, they will be interpreted as
+    # Dep entries created from BinaryBuilder.
+    'linkflags',
+
     # An array of objects to link, after all link flags have been specified.
-    # Entries may either be strings containing a path, or other graph nodes
-    # that have already been constructed.
+    # Entries may either be strings containing a path, or Dep entries created
+    # from BinaryBuilder.
     'postlink',
   ]
 
@@ -236,6 +239,11 @@ class Compiler(object):
 
   def Library(self, name):
     return Library(self, name)
+
+class Dep(object):
+  def __init__(self, text, node):
+    self.text = text
+    self.node = node
 
 # Environment representing a C/C++ compiler invocation. Encapsulates most
 # arguments.
@@ -280,10 +288,24 @@ class BinaryBuilder(object):
   def generate(self, generator, cx):
     generator.addCxxTasks(cx, self)
 
+  # Make an item that can be passed into linkflags/postlink but has an attached
+  # dependency.
+  def Dep(self, text, node): 
+    return Dep(text, node)
+
+  # The folder we'll be in, relative to our build context.
+  @property
+  def localFolder(self):
+    return self.name
+
+  # Compute the build folder.
+  def getBuildFolder(self, builder):
+    return os.path.join(builder.buildFolder, self.localFolder)
+
   def finish(self, cx):
     # Because we want to compute relative include folders for MSVC (see its
     # vendor object), we need to compute an absolute path to the build folder.
-    self.outputFolder = os.path.join(cx.buildFolder, self.name)
+    self.outputFolder = self.getBuildFolder(cx)
     self.outputPath = os.path.join(cx.buildPath, self.outputFolder)
     self.default_c_env = CCommandEnv(self.outputPath, self.compiler, self.compiler.cc)
     self.default_cxx_env = CCommandEnv(self.outputPath, self.compiler, self.compiler.cxx)
@@ -323,12 +345,16 @@ class BinaryBuilder(object):
 
 def LinkFlags(compiler):
   argv = []
-  argv += compiler.linkflags
+  for item in compiler.linkflags:
+    if type(item) is str:
+      argv.append(item)
+    else:
+      argv.append(item.text)
   for item in compiler.postlink:
     if type(item) is str:
       argv.append(item)
     else:
-      argv.append(item.path)
+      argv.append(item.text)
   return argv
 
 class Program(BinaryBuilder):

@@ -78,6 +78,12 @@ class Context(object):
     taskbuilder.finish(self)
     taskbuilder.generate(self.generator, self)
 
+  def AddSource(self, source_path):
+    return self.generator.AddSource(self, source_path)
+
+  def AddSymlink(self, source, output_path):
+    return self.generator.AddSymlink(self, source, output_path)
+
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
     self.sourcePath = sourcePath
@@ -133,3 +139,9 @@ class Generator(object):
       cxx = cpp.DetectCompiler(self, os.environ, 'CXX')
     self.compiler = cpp.Compiler(cc, cxx)
     return self.compiler
+
+  def AddSymlink(self, context, source, output_path):
+    raise Exception('Must be implemented')
+
+  def AddSource(self, context, source):
+    raise Exception('Must be implemented')
