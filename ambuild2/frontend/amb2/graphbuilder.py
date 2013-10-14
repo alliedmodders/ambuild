@@ -54,6 +54,24 @@ class GraphBuilder(object):
     self.folders[folder] = node
     return node
 
+  def depNodeForPath(self, path):
+    if os.path.isabs(path):
+      return self.addSource(path)
+
+    if path not in self.files:
+      sys.stderr.write('Tried to add a dependency on an output that doesn\'t exist.\n')
+      sys.stderr.write('Path: {0}\n'.format(path))
+      raise ConfigureException()
+
+    node = self.files[path]
+    if node.type != nodetypes.Output:
+      sys.stderr.write('Tried to add an output dependency on node that is not an output.\n')
+      sys.stderr.write('Path: {0}\n'.format(path))
+      sys.stderr.write('Type: {0}\n'.format(node.type))
+      raise ConfigureException()
+
+    return node
+
   def addOutput(self, path):
     assert not os.path.isabs(path)
     if path in self.files:
@@ -80,6 +98,8 @@ class GraphBuilder(object):
   def addSource(self, path):
     if path in self.files:
       return self.files[path]
+
+    assert os.path.isabs(path)
 
     node = NodeBuilder(type=nodetypes.Source, path=path)
     self.files[path] = node

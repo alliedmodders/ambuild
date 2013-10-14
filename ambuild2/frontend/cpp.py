@@ -202,7 +202,20 @@ int main()
   return v
 
 class Compiler(object):
-  attrs = ['includes', 'cxxincludes', 'linkflags', 'cflags', 'cxxflags', 'defines', 'cxxdefines']
+  attrs = [
+    'includes',         # C and C++ include paths
+    'cxxincludes',      # C++-only include paths
+    'linkflags',        # Link flags
+    'cflags',           # C and C++ compiler flags
+    'cxxflags',         # C++-only compiler flags
+    'defines',          # C and C++ #defines
+    'cxxdefines',       # C++-only #defines
+
+    # An array of objects to link, after all link flags have been specified.
+    # Entries may either be strings containing a path, or other graph nodes
+    # that have already been constructed.
+    'postlink',
+  ]
 
   def __init__(self, cc, cxx):
     self.cc = cc
@@ -308,6 +321,16 @@ class BinaryBuilder(object):
     objectFile = os.path.join(self.outputFolder, objName)
     return ObjectFile(sourceFile, objectFile, argv)
 
+def LinkFlags(compiler):
+  argv = []
+  argv += compiler.linkflags
+  for item in compiler.postlink:
+    if type(item) is str:
+      argv.append(item)
+    else:
+      argv.append(item.path)
+  return argv
+
 class Program(BinaryBuilder):
   def __init__(self, compiler, name):
     super(Program, self).__init__(compiler, name)
@@ -317,7 +340,7 @@ class Program(BinaryBuilder):
 
     if isinstance(self.linker, MSVC):
       argv.append('/link')
-    argv.extend(self.compiler.linkflags)
+    argv.extend(LinkFlags(self.compiler))
     if isinstance(self.linker, MSVC):
       argv.append('/OUT:' + name)
       argv.append('/PDB:"' + self.name + '.pdb"')
@@ -333,7 +356,7 @@ class Library(BinaryBuilder):
   def generateBinary(self, cx, argv):
     name = self.name + util.SharedLibSuffix()
 
-    argv.extend(self.compiler.linkflags)
+    argv.extend(LinkFlags(self.compiler))
     if isinstance(self.linker, MSVC):
       argv.append('/OUT:' + name)
       argv.append('/DLL')

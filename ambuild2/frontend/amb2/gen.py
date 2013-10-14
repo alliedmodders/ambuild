@@ -46,6 +46,14 @@ class Generator(base_gen.Generator):
                                     data=binary.argv)
     self.graph.addDependency(binNode, linkCmd)
 
+    # Find dependencies
+    for item in binary.compiler.postlink:
+      if type(item) is str:
+        node = self.graph.depNodeForPath(item)
+      else:
+        node = item
+      self.graph.addDependency(linkCmd, node)
+
     for objfile in binary.objfiles:
       srcNode = self.graph.addSource(path=objfile.sourceFile)
       cxxData = {
