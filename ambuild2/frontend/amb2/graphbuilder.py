@@ -126,13 +126,17 @@ class GraphBuilder(object):
     if type(source) is str:
       source = self.addSource(source)
 
-    ignore, filename = os.path.split(source.path)
+    if source.type == nodetypes.Source:
+      source_path = source.path
+    elif source.type == nodetypes.Output:
+      source_path = os.path.join(context.buildPath, source.path)
+    ignore, filename = os.path.split(source_path)
 
     copy = self.addCommand(
       type=nodetypes.Copy,
       folder=folder,
       path=None,
-      data=(source.path, filename)
+      data=(source_path, filename)
     )
     output = self.addOutput(os.path.join(folder.path, filename))
     self.addDependency(copy, source)

@@ -79,7 +79,7 @@ class Context(object):
 
   def Add(self, taskbuilder):
     taskbuilder.finish(self)
-    taskbuilder.generate(self.generator, self)
+    return taskbuilder.generate(self.generator, self)
 
   def AddSource(self, source_path):
     return self.generator.AddSource(self, source_path)

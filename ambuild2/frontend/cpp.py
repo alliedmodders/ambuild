@@ -31,6 +31,7 @@ class MSVC(Vendor):
   def __init__(self, command, version):
     super(MSVC, self).__init__('msvc', version, 'msvc', command, '.obj')
     self.definePrefix = '/D'
+    self.pdbSuffix = '.pdb'
 
   def formatInclude(self, outputPath, includePath):
     #Hack - try and get a relative path because CL, with either 
@@ -55,6 +56,7 @@ class CompatGCC(Vendor):
     self.majorVersion = int(parts[0])
     self.minorVersion = int(parts[1])
     self.definePrefix = '-D'
+    self.pdbSuffix = None
 
   def formatInclude(self, outputPath, includePath):
     return ['-I', os.path.normpath(includePath)]
@@ -276,6 +278,20 @@ class ObjectFile(object):
     self.outputFile = outputFile
     self.argv = argv
 
+def LinkFlags(compiler):
+  argv = []
+  for item in compiler.linkflags:
+    if type(item) is str:
+      argv.append(item)
+    else:
+      argv.append(item.text)
+  for item in compiler.postlink:
+    if type(item) is str:
+      argv.append(item)
+    else:
+      argv.append(item.text)
+  return argv
+
 class BinaryBuilder(object):
   def __init__(self, compiler, name):
     super(BinaryBuilder, self).__init__()
@@ -286,7 +302,7 @@ class BinaryBuilder(object):
     self.linker = None
 
   def generate(self, generator, cx):
-    generator.addCxxTasks(cx, self)
+    return generator.addCxxTasks(cx, self)
 
   # Make an item that can be passed into linkflags/postlink but has an attached
   # dependency.
@@ -326,6 +342,10 @@ class BinaryBuilder(object):
     name, argv = self.generateBinary(cx, argv)
     self.outputFile = os.path.join(self.outputFolder, name)
     self.argv = argv
+    if self.linker.pdbSuffix:
+      self.pdbFile = os.path.join(self.outputFolder, self.name + self.linker.pdbSuffix)
+    else:
+      self.pdbFile = None
 
   def generateItem(self, cx, item):
     fparts = os.path.splitext(item)
@@ -342,20 +362,6 @@ class BinaryBuilder(object):
     argv = cenv.argv(sourceFile, objName)
     objectFile = os.path.join(self.outputFolder, objName)
     return ObjectFile(sourceFile, objectFile, argv)
-
-def LinkFlags(compiler):
-  argv = []
-  for item in compiler.linkflags:
-    if type(item) is str:
-      argv.append(item)
-    else:
-      argv.append(item.text)
-  for item in compiler.postlink:
-    if type(item) is str:
-      argv.append(item)
-    else:
-      argv.append(item.text)
-  return argv
 
 class Program(BinaryBuilder):
   def __init__(self, compiler, name):

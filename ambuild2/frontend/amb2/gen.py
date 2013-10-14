@@ -46,6 +46,12 @@ class Generator(base_gen.Generator):
                                     data=binary.argv)
     self.graph.addDependency(binNode, linkCmd)
 
+    if binary.pdbFile:
+      pdbNode = self.graph.addOutput(path=binary.pdbFile)
+      self.graph.addDependency(pdbNode, linkCmd)
+    else:
+      pdbNode = None
+
     # Find dependencies
     for item in binary.compiler.linkflags:
       if type(item) is str:
@@ -72,6 +78,8 @@ class Generator(base_gen.Generator):
       self.graph.addDependency(cxxNode, srcNode)
       self.graph.addDependency(objNode, cxxNode)
       self.graph.addDependency(linkCmd, objNode)
+
+    return binNode, pdbNode
 
   def postGenerate(self):
     dbpath = os.path.join(self.cacheFolder, 'graph')
