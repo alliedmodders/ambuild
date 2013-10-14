@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
-import util
+import util, copy
 from frontend import cpp
 
 # AMBuild 2 scripts are parsed recursively. Each script is supplied with a
@@ -70,9 +70,9 @@ class Context(object):
       self.compiler = self.generator.DetectCompilers()
     return self.compiler
 
-  def RunBuildScripts(self, *args):
+  def RunBuildScripts(self, args, vars):
     for script in args:
-      self.generator.parseBuildScript(script)
+      self.generator.parseBuildScript(script, vars)
 
   def Add(self, taskbuilder):
     taskbuilder.finish(self)
@@ -98,7 +98,7 @@ class Generator(object):
   def popContext(self):
     self.contextStack_.pop()
 
-  def parseBuildScript(self, file):
+  def parseBuildScript(self, file, vars={}):
     cx = Context(self, self.contextStack_[-1], file)
     self.pushContext(cx)
 
@@ -107,10 +107,11 @@ class Generator(object):
       chars = fp.read()
       code = compile(chars, file, 'exec')
 
+    new_vars = copy.copy(vars)
+    new_vars['builder'] = cx
+
     # Run it.
-    exec(code, {
-      'builder': cx
-    })
+    exec(code, new_vars)
 
     self.popContext()
 
