@@ -52,6 +52,8 @@ class Context(object):
     parser = OptionParser("usage: %prog [options]")
     parser.add_option("--show-graph", dest="show_graph", action="store_true", default=False,
                       help="Show the dependency graph and then exit.")
+    parser.add_option("--show-changed", dest="show_changed", action="store_true", default=False,
+                      help="Show the list of dirty nodes and then exit.")
     parser.add_option("--show-damage", dest="show_damage", action="store_true", default=False,
                       help="Show the computed change graph and then exit.")
     parser.add_option("--show-commands", dest="show_commands", action="store_true", default=False,
@@ -64,6 +66,12 @@ class Context(object):
 
     if self.options.show_graph:
       self.db.printGraph()
+      return True
+
+    if self.options.show_changed:
+      dmg_list = damage.ComputeDamageGraph(self.db, only_changed=True)
+      for entry in dmg_list:
+        print(entry.format())
       return True
 
     dmg_graph = damage.ComputeDamageGraph(self.db)

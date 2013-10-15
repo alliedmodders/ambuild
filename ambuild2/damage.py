@@ -54,7 +54,7 @@ def ComputeDirty(node):
     node.dirty |= nodetypes.NewDirty
   return dirty
 
-def ComputeDamageGraph(database):
+def ComputeDamageGraph(database, only_changed = False):
   graph = Graph(database)
 
   def maybe_mkdir(node):
@@ -72,6 +72,9 @@ def ComputeDamageGraph(database):
 
   database.query_known_dirty(known_dirty)
   database.query_maybe_dirty(maybe_dirty)
+
+  if only_changed:
+    return dirty
 
   def add_dirty(entry):
     if entry.dirty == nodetypes.NewDirty:
