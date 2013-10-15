@@ -40,14 +40,14 @@ class Generator(base_gen.Generator):
     folder = os.path.join(cx.buildFolder, binary.name)
     folderNode = self.graph.generateFolder(folder)
 
-    binNode = self.graph.addOutput(path=binary.outputFile)
+    binNode = self.graph.addOutput(cx, binary.outputFile)
     linkCmd = self.graph.addCommand(type=nodetypes.Command,
                                     folder=folderNode,
                                     data=binary.argv)
     self.graph.addDependency(binNode, linkCmd)
 
     if binary.pdbFile:
-      pdbNode = self.graph.addOutput(path=binary.pdbFile)
+      pdbNode = self.graph.addOutput(cx, binary.pdbFile)
       self.graph.addDependency(pdbNode, linkCmd)
     else:
       pdbNode = None
@@ -71,7 +71,7 @@ class Generator(base_gen.Generator):
         'argv': objfile.argv,
         'type': binary.linker.behavior
       }
-      objNode = self.graph.addOutput(path=objfile.outputFile)
+      objNode = self.graph.addOutput(cx, objfile.outputFile)
       cxxNode = self.graph.addCommand(type=nodetypes.Cxx,
                                       folder=folderNode,
                                       data=cxxData)
@@ -93,15 +93,17 @@ class Generator(base_gen.Generator):
     return self.graph.addSource(source_path)
 
   def AddSymlink(self, context, source, output_path):
-    folder, name = os.path.split(output_path)
-    return self.graph.addSymLink(context, source, folder, name)
+    return self.graph.addSymlink(context, source, output_path)
 
   def AddFolder(self, context, folder):
     folder = os.path.join(context.buildFolder, folder)
     return self.graph.generateFolder(folder)
 
-  def AddCopy(self, context, source, folder):
-    return self.graph.addCopy(context, source, folder)
+  def AddCopy(self, context, source, output_path):
+    return self.graph.addCopy(context, source, output_path)
+
+  def AddCommand(self, context, argv, outputs):
+    return self.graph.addShellCommand(context, argv, outputs)
 
   def generateBuildFile(self):
     with open(os.path.join(self.buildPath, 'build.py'), 'w') as fp:

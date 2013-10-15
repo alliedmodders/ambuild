@@ -340,10 +340,12 @@ class BinaryBuilder(object):
       argv.append(name)
 
     name, argv = self.generateBinary(cx, argv)
-    self.outputFile = os.path.join(self.outputFolder, name)
+
+    # Output files are relative to the context.
+    self.outputFile = os.path.join(self.localFolder, name)
     self.argv = argv
     if self.linker.pdbSuffix:
-      self.pdbFile = os.path.join(self.outputFolder, self.name + self.linker.pdbSuffix)
+      self.pdbFile = os.path.join(self.localFolder, self.name + self.linker.pdbSuffix)
     else:
       self.pdbFile = None
 
@@ -360,7 +362,7 @@ class BinaryBuilder(object):
     sourceFile = os.path.join(cx.currentSourcePath, item)
     objName = NameForObjectFile(fparts[0]) + cenv.compiler.objSuffix
     argv = cenv.argv(sourceFile, objName)
-    objectFile = os.path.join(self.outputFolder, objName)
+    objectFile = os.path.join(self.localFolder, objName)
     return ObjectFile(sourceFile, objectFile, argv)
 
 class Program(BinaryBuilder):

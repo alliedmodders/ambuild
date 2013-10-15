@@ -90,8 +90,11 @@ class Context(object):
   def AddFolder(self, folder):
     return self.generator.AddFolder(self, folder)
 
-  def AddCopy(self, source, folder):
-    return self.generator.AddCopy(self, source, folder)
+  def AddCopy(self, source, output_path):
+    return self.generator.AddCopy(self, source, output_path)
+
+  def AddCommand(self, argv, outputs):
+    return self.generator.AddCommand(self, argv, outputs)
 
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
@@ -158,5 +161,8 @@ class Generator(object):
   def AddFolder(self, context, folder):
     raise Exception('Must be implemented')
 
-  def AddCopy(self, context, source, folder):
+  def AddCopy(self, context, source, output_path):
+    raise Exception('Must be implemented')
+
+  def AddCommand(self, argv, outputs):
     raise Exception('Must be implemented')

@@ -72,8 +72,11 @@ class GraphBuilder(object):
 
     return node
 
-  def addOutput(self, path):
+  def addOutput(self, context, path):
     assert not os.path.isabs(path)
+
+    path = os.path.join(context.buildFolder, path)
+
     if path in self.files:
       sys.stderr.write('The same output file has been added to the build twice.\n')
       sys.stderr.write('Path: {0}\n'.format(path))
@@ -83,18 +86,42 @@ class GraphBuilder(object):
     self.files[path] = node
     return node
 
-  def addSymLink(self, context, source, folder, file):
-    folder = os.path.join(context.buildFolder, folder)
-    output_path = os.path.join(folder, file)
-    folder = self.generateFolder(folder)
+  @staticmethod
+  def getPathInContext(context, node): 
+    if node.type == nodetypes.Source:
+      assert os.path.isabs(node.path)
+      return node.path
+
+    assert not os.path.isabs(node.path)
+    assert node.type == nodetypes.Output
+
+    return os.path.relpath(node.path, context.buildFolder)
+
+  def addFileOp(self, cmd, context, source, output_path):
+    if type(source) is str:
+      source = self.addSource(source)
+
+    source_path = self.getPathInContext(context, source)
+
+    if type(output_path) is str:
+      if output_path[-1] == os.sep or output_path[-1] == os.altsep:
+        # The path is a folder, so build a new path.
+        ignore, filename = os.path.split(source)
+        output_path += filename
+    else:
+      assert output_path.type == nodetypes.Mkdir
+      ignore, filename = os.path.split(source_path)
+      local_path = os.path.relpath(output_path.path, context.buildFolder)
+      output_path = os.path.join(local_path, filename)
 
     command = self.addCommand(
-      type=nodetypes.Symlink,
-      folder=folder,
+      type=cmd,
+      folder=self.generateFolder(context.buildFolder),
       path=None,
-      data=(source.path, file)
+      data=(source_path, output_path)
     )
-    output = self.addOutput(output_path)
+
+    output = self.addOutput(context, output_path)
     self.addDependency(command, source)
     self.addDependency(output, command)
     return output
@@ -122,23 +149,15 @@ class GraphBuilder(object):
     return node
 
   def addCopy(self, context, source, folder):
-    assert type(folder) is NodeBuilder
-    if type(source) is str:
-      source = self.addSource(source)
+    return self.addFileOp(nodetypes.Copy, context, source, folder)
 
-    if source.type == nodetypes.Source:
-      source_path = source.path
-    elif source.type == nodetypes.Output:
-      source_path = os.path.join(context.buildPath, source.path)
-    ignore, filename = os.path.split(source_path)
+  def addSymlink(self, context, source, folder):
+    return self.addFileOp(nodetypes.Symlink, context, source, folder)
 
-    copy = self.addCommand(
-      type=nodetypes.Copy,
-      folder=folder,
-      path=None,
-      data=(source_path, filename)
-    )
-    output = self.addOutput(os.path.join(folder.path, filename))
-    self.addDependency(copy, source)
-    self.addDependency(output, copy)
-    return output
+  def addShellCommand(self, context, argv, outputs):
+    #output_nodes = []
+    #for output in outputs:
+    #  if type(output) is str:
+    #    output = self.addOutput(os.path.join(context.buildFolder, output))
+    #  output_nodes.append(output)
+    pass
