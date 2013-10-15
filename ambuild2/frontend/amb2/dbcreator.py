@@ -49,10 +49,12 @@ class Database(object):
         outgoing INT NOT NULL,
         incoming INT NOT NULL,
         generated INT NOT NULL,
-        UNIQUE (outgoing, incoming, generated)
+        UNIQUE (outgoing, incoming)
       );
     """
     self.cn.execute(query)
+    self.cn.execute("CREATE INDEX outgoing_edge ON edges(outgoing)")
+    self.cn.execute("CREATE INDEX incoming_edge ON edges(incoming)")
     self.cn.commit()
 
   def exportGraph(self, graph):
