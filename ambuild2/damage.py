@@ -82,7 +82,6 @@ def ComputeDamageGraph(database):
     graph.addEntry(entry)
 
   for entry in dirty:
-    add_dirty(entry)
     if (entry.type == nodetypes.Output) and (entry.dirty == nodetypes.NewDirty):
       # Ensure that our command has been marked as dirty.
       incoming = database.query_incoming(entry)
@@ -94,7 +93,9 @@ def ComputeDamageGraph(database):
         return None
 
       for cmd in incoming:
-        add_dirty(entry)
+        add_dirty(cmd)
+    else:
+      add_dirty(entry)
 
   graph.complete()
   return graph
