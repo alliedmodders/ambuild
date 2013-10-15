@@ -41,7 +41,7 @@ class GraphBuilder(object):
     self.commands = []
     self.edges = []
 
-  def generateFolder(self, folder):
+  def generateFolder(self, context, folder):
     if folder in self.folders:
       return self.folders[folder]
 
@@ -115,8 +115,8 @@ class GraphBuilder(object):
       output_path = os.path.join(local_path, filename)
 
     command = self.addCommand(
+      context=context,
       type=cmd,
-      folder=self.generateFolder(context.buildFolder),
       path=None,
       data=(source_path, output_path)
     )
@@ -126,8 +126,11 @@ class GraphBuilder(object):
     self.addDependency(output, command)
     return output
 
-  def addCommand(self, type, folder, path=None, data=None):
+  def addCommand(self, context, type, folder=None, path=None, data=None):
     assert folder is None or util.typeof(folder) is NodeBuilder
+
+    if not folder and len(context.buildFolder):
+      folder = self.generateFolder(context, context.buildFolder)
 
     node = NodeBuilder(type=type, path=path, folder=folder, blob=data)
     self.commands.append(node)
@@ -138,6 +141,8 @@ class GraphBuilder(object):
     incoming.outgoing.add(outgoing)
     self.edges.append((outgoing, incoming, False))
 
+  # addSource() doesn't take a context since sources may be shared across
+  # many build files. They are garbage collected as needed.
   def addSource(self, path):
     if path in self.files:
       return self.files[path]

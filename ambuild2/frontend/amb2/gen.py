@@ -38,12 +38,15 @@ class Generator(base_gen.Generator):
 
   def addCxxTasks(self, cx, binary):
     folder = os.path.join(cx.buildFolder, binary.name)
-    folderNode = self.graph.generateFolder(folder)
+    folderNode = self.graph.generateFolder(cx, folder)
 
     binNode = self.graph.addOutput(cx, binary.outputFile)
-    linkCmd = self.graph.addCommand(type=nodetypes.Command,
-                                    folder=folderNode,
-                                    data=binary.argv)
+    linkCmd = self.graph.addCommand(
+      context=cx,
+      type=nodetypes.Command,
+      folder=folderNode,
+      data=binary.argv
+    )
     self.graph.addDependency(binNode, linkCmd)
 
     if binary.pdbFile:
@@ -72,9 +75,12 @@ class Generator(base_gen.Generator):
         'type': binary.linker.behavior
       }
       objNode = self.graph.addOutput(cx, objfile.outputFile)
-      cxxNode = self.graph.addCommand(type=nodetypes.Cxx,
-                                      folder=folderNode,
-                                      data=cxxData)
+      cxxNode = self.graph.addCommand(
+        context=cx,
+        type=nodetypes.Cxx,
+        folder=folderNode,
+        data=cxxData
+      )
       self.graph.addDependency(cxxNode, srcNode)
       self.graph.addDependency(objNode, cxxNode)
       self.graph.addDependency(linkCmd, objNode)
@@ -97,7 +103,7 @@ class Generator(base_gen.Generator):
 
   def AddFolder(self, context, folder):
     folder = os.path.join(context.buildFolder, folder)
-    return self.graph.generateFolder(folder)
+    return self.graph.generateFolder(context, folder)
 
   def AddCopy(self, context, source, output_path):
     return self.graph.addCopy(context, source, output_path)
