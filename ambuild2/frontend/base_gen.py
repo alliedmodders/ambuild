@@ -73,7 +73,7 @@ class Context(object):
       self.compiler = self.generator.DetectCompilers()
     return self.compiler
 
-  def RunBuildScripts(self, args, vars):
+  def RunBuildScripts(self, args, vars={}):
     for script in args:
       self.generator.parseBuildScript(script, vars)
 
