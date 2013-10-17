@@ -90,6 +90,9 @@ class WorkerChild(ChildProcessListener):
         if exn.errno != errno.ENOENT:
           raise
 
+    if not message['task_folder']:
+      message['task_folder'] = '.'
+
     # Do the task.
     response = self.taskMap[task_type](message)
 
