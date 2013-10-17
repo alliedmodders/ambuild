@@ -42,6 +42,7 @@ class GraphBuilder(object):
     self.edges = []
 
   def generateFolder(self, context, folder):
+    folder = os.path.normpath(folder)
     if folder in self.folders:
       return self.folders[folder]
 
@@ -80,7 +81,7 @@ class GraphBuilder(object):
     if path in self.files:
       sys.stderr.write('The same output file has been added to the build twice.\n')
       sys.stderr.write('Path: {0}\n'.format(path))
-      raise ConfigureException()
+      raise Exception('duplicate output')
 
     node = NodeBuilder(type=nodetypes.Output, path=path)
     self.files[path] = node
@@ -104,15 +105,30 @@ class GraphBuilder(object):
     source_path = self.getPathInContext(context, source)
 
     if type(output_path) is str:
-      if output_path[-1] == os.sep or output_path[-1] == os.altsep:
+      def detect_folder(output_path):
+        if output_path[-1] == os.sep:
+          return output_path
+        if output_path[-1] == os.altsep:
+          return output_path
+        if os.path.normpath(output_path) == '.':
+          return '.' + os.sep
+        output_folder = os.path.normpath(os.path.join(context.buildFolder, output_path))
+        if output_folder in self.folders:
+          return output_folder + os.sep
+        return None
+
+      folder = detect_folder(output_path)
+      if folder:
         # The path is a folder, so build a new path.
-        ignore, filename = os.path.split(source)
-        output_path += filename
+        ignore, filename = os.path.split(source_path)
+        output_path = folder + filename
     else:
       assert output_path.type == nodetypes.Mkdir
       ignore, filename = os.path.split(source_path)
       local_path = os.path.relpath(output_path.path, context.buildFolder)
       output_path = os.path.join(local_path, filename)
+
+    output_path = os.path.normpath(output_path)
 
     command = self.addCommand(
       context=context,
