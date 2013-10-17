@@ -22,6 +22,11 @@ from frontend.amb2 import dbcreator
 from frontend.amb2 import graphbuilder
 from frontend import base_gen
 
+class CppNodes(object):
+  def __init__(self, output, debug_outputs):
+    self.binary = output
+    self.debug = debug_outputs
+
 class Generator(base_gen.Generator):
   def __init__(self, sourcePath, buildPath, options, args):
     super(Generator, self).__init__(sourcePath, buildPath, options, args)
@@ -85,7 +90,7 @@ class Generator(base_gen.Generator):
       self.graph.addDependency(objNode, cxxNode)
       self.graph.addDependency(linkCmd, objNode)
 
-    return binNode, pdbNode
+    return CppNodes(binNode, pdbNode)
 
   def postGenerate(self):
     dbpath = os.path.join(self.cacheFolder, 'graph')
