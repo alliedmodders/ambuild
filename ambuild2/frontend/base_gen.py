@@ -66,16 +66,19 @@ class Context(object):
     return self.generator.buildPath
 
   def SetBuildFolder(self, folder):
-    self.buildFolder = folder
+    self.buildFolder = os.path.normpath(folder)
 
   def DetectCompilers(self):
     if not self.compiler:
       self.compiler = self.generator.DetectCompilers()
     return self.compiler
 
-  def RunBuildScripts(self, args, vars={}):
-    for script in args:
-      self.generator.parseBuildScript(script, vars)
+  def RunBuildScripts(self, files, vars={}):
+    if type(files) is str:
+      self.generator.parseBuildScript(files, vars)
+    else:
+      for script in files:
+        self.generator.parseBuildScript(script, vars)
 
   def Add(self, taskbuilder):
     taskbuilder.finish(self)
