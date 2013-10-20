@@ -99,7 +99,7 @@ class Context(object):
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
     self.sourcePath = sourcePath
-    self.buildPath = buildPath
+    self.buildPath = os.path.normpath(buildPath)
     self.options = options
     self.args = args
     self.compiler = None

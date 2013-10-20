@@ -8,6 +8,7 @@ import traceback
 import multiprocessing as mp
 from ipc import ParentProcessListener, ChildProcessListener
 from ipc import ProcessManager, MessageListener, Error
+from ipc import Channel
 
 class Task(object):
   def __init__(self, id, entry, outputs):
@@ -47,8 +48,7 @@ class WorkerChild(ChildProcessListener):
     super(WorkerChild, self).__init__(pump)
     print('Spawned worker (pid: ' + str(os.getpid()) + ')')
     self.buildPath = buildPath
-    self.resultChannel = channels[0]
-    self.resultChannel.connect('WorkerIOChild')
+    self.resultChannel = Channel.connect(channels[0], 'WorkerIOChild')
     self.pid = os.getpid()
     self.messageMap = {
       'task': lambda channel, message: self.receiveTask(channel, message)
@@ -140,12 +140,12 @@ class WorkerChild(ChildProcessListener):
     source_path, output_path = message['task_data']
 
     with util.FolderChanger(task_folder):
-      os.symlink(source_path, output_path)
+      rcode, stdout, stderr = util.symlink(source_path, output_path)
 
     reply = {
-      'ok': True,
-      'stdout': 'ln -s "{0}" "{1}"\n'.format(source_path, os.path.join(task_folder, output_path)),
-      'stderr': '',
+      'ok': rcode == 0,
+      'stdout': '{0}\n'.format(stdout),
+      'stderr': stderr,
     }
     return reply
 
@@ -173,6 +173,8 @@ class WorkerChild(ChildProcessListener):
       p, out, err = util.Execute(argv)
       if cc_type == 'gcc':
         err, deps = util.ParseGCCDeps(err)
+      elif cc_type == 'msvc':
+        out, deps = util.ParseMSVCDeps(out)
       else:
         raise Exception('unknown compiler type')
         
@@ -409,7 +411,7 @@ class TaskMasterParent(ParentProcessListener):
     self.channels = []
     child_channels = []
     for i in range(num_processes):
-      parent_channel, child_channel = cx.messagePump.createChannel('WorkerIO', self)
+      parent_channel, child_channel = cx.messagePump.createChannel('WorkerIO')
       listener = WorkerIOListener(self, close_on_ack=child_channel)
       cx.messagePump.addChannel(parent_channel, listener)
       child_channels.append(child_channel)
@@ -425,8 +427,12 @@ class TaskMasterParent(ParentProcessListener):
   def processResults(self, message):
     if len(message['stdout']):
       sys.stdout.write('[{0}] {1}'.format(message['pid'], message['stdout']))
+      if message['stdout'][-1] != '\n':
+        sys.stdout.write('\n')
     if len(message['stderr']):
       sys.stderr.write(message['stderr'])
+      if message['stderr'][-1] != '\n':
+        sys.stderr.write('\n')
 
     if not message['ok']:
       self.terminateBuild(graceful=True)
@@ -449,6 +455,7 @@ class TaskMasterParent(ParentProcessListener):
 
   def receiveError(self, child, error):
     if error != Error.NormalShutdown:
+      sys.stderr.write('Received unexpected error from child process {0}: {1}\n'.format(child.pid, error))
       self.terminateBuild(graceful=False)
 
   def receiveCompleted(self, child, message):

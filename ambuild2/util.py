@@ -139,12 +139,12 @@ class Guard:
   def __exit__(self, type, value, traceback):
     self.obj.close()
 
-def Execute(argv):
+def Execute(argv, shell=False):
   p = subprocess.Popen(
       args=argv,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
-      shell=False
+      shell=shell
   )
   stdout, stderr = p.communicate()
   out = stdout.decode('utf8')
@@ -208,3 +208,31 @@ def ParseGCCDeps(text):
     if not strip and len(line):
       new_text += line + '\n'
   return new_text, deps
+
+def ParseMSVCDeps(out):
+  deps = []
+  new_text = ''
+  for line in out.split('\n'):
+    m = re.match('Note: including file:\s+(.+)$', line)
+    if m != None:
+      file = m.groups()[0].strip()
+      deps.append(file)
+    else:
+      new_text += line
+  return new_text, deps
+
+if hasattr(os, 'symlink'):
+  def symlink(target, link):
+    os.symlink(target, link)
+    stdout = 'ln -s "{0}" "{1}"'.format(target, link)
+    stderr = ''
+    return 0, stdout, stderr
+elif IsWindows():
+  def symlink(target, link):
+    argv = [
+      'mklink',
+      '"{0}"'.format(link),
+      '"{0}"'.format(target)
+    ]
+    p, out, err = Execute(argv, shell=True)
+    return p.returncode, out, err

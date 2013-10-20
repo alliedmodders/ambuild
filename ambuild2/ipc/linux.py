@@ -46,7 +46,7 @@ class MessagePump(process.MessagePump):
     self.ep.unregister(channel.fd)
     del self.fdmap[channel.fd]
 
-  def createChannel(self, name, listener):
+  def createChannel(self, name):
     parent, child = posix_proc.SocketChannel.pair(name)
     return parent, child
 
@@ -105,7 +105,7 @@ class ProcessManager(process.ProcessManager):
     # Create pipes.
     parent, child = posix_proc.SocketChannel.pair(listener.name)
 
-    # Watch for changes on the parent chnnale.
+    # Watch for changes on the parent channel.
     self.pump.addChannel(parent, listener)
 
     # Spawn the process.

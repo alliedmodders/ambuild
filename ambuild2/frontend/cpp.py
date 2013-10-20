@@ -47,7 +47,7 @@ class MSVC(Vendor):
     return ['/I', includePath]
 
   def objectArgs(self, sourceFile, objFile):
-    return ['/showIncludes', '/c', sourceFile, '/Fo' + objFile]
+    return ['/showIncludes', '/nologo', '/c', sourceFile, '/Fo' + objFile]
 
 class CompatGCC(Vendor):
   def __init__(self, name, command, version):
@@ -377,6 +377,8 @@ class Program(BinaryBuilder):
     argv.extend(LinkFlags(self.compiler))
     if isinstance(self.linker, MSVC):
       argv.append('/OUT:' + name)
+      argv.append('/DEBUG')
+      argv.append('/nologo')
       argv.append('/PDB:"' + self.name + '.pdb"')
     else:
       argv.extend(['-o', name])
@@ -393,6 +395,8 @@ class Library(BinaryBuilder):
     argv.extend(LinkFlags(self.compiler))
     if isinstance(self.linker, MSVC):
       argv.append('/OUT:' + name)
+      argv.append('/DEBUG')
+      argv.append('/nologo')
       argv.append('/DLL')
       argv.append('/PDB:"' + self.name + '.pdb"')
     elif isinstance(self.linker, CompatGCC):

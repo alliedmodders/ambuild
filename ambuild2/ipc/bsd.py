@@ -59,7 +59,7 @@ class MessagePump(process.MessagePump):
     self.kq.control([event], 0)
     del self.fdmap[channel.fd]
 
-  def createChannel(self, name, listener):
+  def createChannel(self, name):
     parent, child = posix_proc.SocketChannel.pair(name)
     return parent, child
 

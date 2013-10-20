@@ -29,6 +29,11 @@ else:
 ProcessManager = ipc_impl.ProcessManager
 MessagePump = ipc_impl.MessagePump
 
+if util.IsWindows():
+  Channel = ipc_impl.NamedPipe
+else:
+  Channel = ipc_impl.SocketChannel
+
 class ChildWrapperListener(process.MessageListener):
   def __init__(self, mp, channel):
     super(ChildWrapperListener, self).__init__()

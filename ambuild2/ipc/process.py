@@ -22,7 +22,7 @@ import multiprocessing as mp
 
 class Error:
   NormalShutdown = 'normal'
-  EOF = 'eof'
+  EOF = 'pipe closed'
   Closed = 'closed'
   User = 'badmsg'
   Killed = 'killed'
@@ -54,16 +54,13 @@ class Channel(object):
     self.send_impl(message, channels)
     self.log_send(message, channels)
 
-  def recv(self):
-    message = self.recv_impl()
-    self.log_recv(message)
-    return message
-
   # When manually passing pipes around, connect() should be explicitly called
-  # to ensure the other end knows that the pipe is ready.
-  def connect(self, name):
-    self.name = name
-    self.send(Special.Connected)
+  # to ensure the other end knows that the pipe is ready. A new channel object
+  # may be returned, since channel translation may use proxies instead of real
+  # handles or sockets.
+  @classmethod
+  def connect(cls, channel, name):
+    raise Exception('Must be implemented!')
   
   # Sends a special message to the other end that the channel is about to
   # close.
@@ -224,11 +221,15 @@ class MessagePump(object):
 
   # Creates an IPC channel and automatically registers it. When teh channel
   # is closed it is automatically unregistered.
-  def createChannel(self, name, listener):
+  def createChannel(self, name):
     raise Exception('must be implemented!')
 
   # Drops a registered IRC channel.
   def dropChannel(self, channel):
+    raise Exception('must be implemented!')
+
+  # Adds a channel to be listened on.
+  def addChannel(self, channel, listener):
     raise Exception('must be implemented!')
 
 # A ProcessHost is the parent process's view of a child process. It
@@ -348,3 +349,7 @@ class ProcessManager(object):
   def cleanup(self, host):
     self.children.remove(host)
     self.close_process(host)
+
+  ## Must be implemented by children.
+  def create_process_and_pipe(self, id, listener):
+    raise Exception('Must be implemented!')

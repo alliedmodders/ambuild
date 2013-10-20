@@ -26,12 +26,13 @@ from .process import Channel, ProcessHost, Special
 kStartFd = 3
 
 class iovec_t(ctypes.Structure):
+  _fields_ = [
+    ('iov_base', ctypes.c_void_p),
+    ('iov_len', ctypes.c_size_t)
+  ]
+
   def __init__(self):
     super(iovec_t, self).__init__()
-iovec_t._fields_ = [
-  ('iov_base', ctypes.c_void_p),
-  ('iov_len', ctypes.c_size_t)
-]
 
 # Note that msg_socklen_t is not really socklen_t. Darwin uses socklen_t but
 # Linux uses size_t, so we alias that.
@@ -74,14 +75,15 @@ elif util.IsLinux():
   MSG_CTRUNC = 0x8
 
   class posix_spawn_file_actions_t(ctypes.Structure):
+    _fields_ = [
+      ('allocated', ctypes.c_int),
+      ('used', ctypes.c_int),
+      ('spawn_action', ctypes.c_void_p),
+      ('pad', ctypes.c_int * 16)
+    ]
+
     def __init__(self):
       super(posix_spawn_file_actions_t, self).__init__()
-  posix_spawn_file_actions_t._fields_ = [
-    ('allocated', ctypes.c_int),
-    ('used', ctypes.c_int),
-    ('spawn_action', ctypes.c_void_p),
-    ('pad', ctypes.c_int * 16)
-  ]
 
   def CMSG_NXTHDR(msg, cmsg):
     cmsg_len = cmsg.contents.cmsg_len
@@ -133,35 +135,40 @@ def SetCloseOnExec(fd):
   fcntl.fcntl(fd, fcntl.F_SETFD, flags|fcntl.FD_CLOEXEC)
 
 class msghdr_t(ctypes.Structure):
+  _fields_ = [
+    ('msg_name', ctypes.c_void_p),
+    ('msg_namelen', ctypes.c_int),
+    ('msg_iov', ctypes.POINTER(iovec_t)),
+    ('msg_iovlen', msg_socklen_t),
+    ('msg_control', ctypes.c_void_p),
+    ('msg_controllen', msg_socklen_t),
+    ('msg_flags', ctypes.c_int)
+  ]
+
   def __init__(self):
     super(msghdr_t, self).__init__()
-msghdr_t._fields_ = [
-  ('msg_name', ctypes.c_void_p),
-  ('msg_namelen', ctypes.c_int),
-  ('msg_iov', ctypes.POINTER(iovec_t)),
-  ('msg_iovlen', msg_socklen_t),
-  ('msg_control', ctypes.c_void_p),
-  ('msg_controllen', msg_socklen_t),
-  ('msg_flags', ctypes.c_int)
-]
 
 class cmsghdr_base_t(ctypes.Structure):
+  _fields_ = [
+    ('cmsg_len', msg_socklen_t),
+    ('cmsg_level', ctypes.c_int),
+    ('cmsg_type', ctypes.c_int)
+  ]
+
   def __init__(self):
     super(cmsghdr_base_t, self).__init__()
-cmsghdr_base_t._fields_ = [
-  ('cmsg_len', msg_socklen_t),
-  ('cmsg_level', ctypes.c_int),
-  ('cmsg_type', ctypes.c_int)
-]
+
 cmsghdr_base_t_p = ctypes.POINTER(cmsghdr_base_t)
 
 def cmsghdr_type_for_n(n):
   class cmsghdr_t(ctypes.Structure):
+    _fields_ = cmsghdr_base_t._fields_ + [
+      ('cmsg_data', ctypes.c_int * n)
+    ]
+
     def __init__(self):
       super(cmsghdr_t, self).__init__()
-  cmsghdr_t._fields_ = cmsghdr_base_t._fields_ + [
-    ('cmsg_data', ctypes.c_int * n)
-  ]
+
   size = 0
   for name, type in cmsghdr_t._fields_:
     size += ctypes.sizeof(type)
@@ -197,10 +204,17 @@ class SocketChannel(Channel):
     self.sock = sock
     SetCloseOnExec(self.sock.fileno())
 
-  #def __del__(self):
-  #  print('{0} DELClosing socket: {1}'.format(os.getpid(), self.sock.fileno()))
-  #  if self.sock.fileno() != -1:
-  #    traceback.print_stack()
+  @classmethod
+  def connect(cls, channel, name):
+    channel.name = name
+    channel.send(Special.Connected)
+    return channel
+
+  # On POSIX, recv() is synchronous.
+  def recv(self):
+    message = self.recv_impl()
+    self.log_recv(message)
+    return message
 
   def close(self):
     #print('{0} Closing socket: {1}'.format(os.getpid(), self.sock.fileno()))

@@ -30,7 +30,7 @@ class CppNodes(object):
 class Generator(base_gen.Generator):
   def __init__(self, sourcePath, buildPath, options, args):
     super(Generator, self).__init__(sourcePath, buildPath, options, args)
-    self.cacheFolder = os.path.join(buildPath, '.ambuild2')
+    self.cacheFolder = os.path.join(self.buildPath, '.ambuild2')
     self.graph = graphbuilder.GraphBuilder()
 
   def preGenerate(self):
@@ -104,6 +104,10 @@ class Generator(base_gen.Generator):
     return self.graph.addSource(source_path)
 
   def AddSymlink(self, context, source, output_path):
+    if util.IsWindows():
+      # Windows pre-Vista does not support symlinks. Windows Vista+ supports
+      # symlinks via mklink, but it's Administrator-only by default.
+      return self.graph.addCopy(context, source, output_path)
     return self.graph.addSymlink(context, source, output_path)
 
   def AddFolder(self, context, folder):
@@ -121,10 +125,9 @@ class Generator(base_gen.Generator):
       fp.write("""
 # vim set: ts=8 sts=2 sw=2 tw=99 et:
 import sys
-sys.path.append('/home/dvander/alliedmodders/ambuild/ambuild2')
 import run
 
-if not run.Build("{build}"):
+if not run.Build(r"{build}"):
   sys.exit(1)
 """.format(build=self.buildPath))
 
