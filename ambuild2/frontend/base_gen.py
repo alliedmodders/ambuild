@@ -66,7 +66,10 @@ class Context(object):
     return self.generator.buildPath
 
   def SetBuildFolder(self, folder):
-    self.buildFolder = os.path.normpath(folder)
+    if folder == '/' or folder == '.' or folder == './':
+      self.buildFolder = ''
+    else:
+      self.buildFolder = os.path.normpath(folder)
 
   def DetectCompilers(self):
     if not self.compiler:
@@ -96,8 +99,8 @@ class Context(object):
   def AddCopy(self, source, output_path):
     return self.generator.AddCopy(self, source, output_path)
 
-  def AddCommand(self, argv, outputs):
-    return self.generator.AddCommand(self, argv, outputs)
+  def AddCommand(self, inputs, argv, outputs):
+    return self.generator.AddCommand(self, inputs, argv, outputs)
 
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
@@ -167,5 +170,5 @@ class Generator(object):
   def AddCopy(self, context, source, output_path):
     raise Exception('Must be implemented')
 
-  def AddCommand(self, argv, outputs):
+  def AddCommand(self, inputs, argv, outputs):
     raise Exception('Must be implemented')

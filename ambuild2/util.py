@@ -149,8 +149,6 @@ def Execute(argv, shell=False):
   stdout, stderr = p.communicate()
   out = stdout.decode('utf8')
   err = stderr.decode('utf8')
-
-  out = (' '.join([i for i in argv])) + '\n' + out
   return p, out, err
 
 def typeof(x):
@@ -224,9 +222,7 @@ def ParseMSVCDeps(out):
 if hasattr(os, 'symlink'):
   def symlink(target, link):
     os.symlink(target, link)
-    stdout = 'ln -s "{0}" "{1}"'.format(target, link)
-    stderr = ''
-    return 0, stdout, stderr
+    return 0, '', ''
 elif IsWindows():
   def symlink(target, link):
     argv = [
@@ -236,3 +232,37 @@ elif IsWindows():
     ]
     p, out, err = Execute(argv, shell=True)
     return p.returncode, out, err
+
+if IsUnixy():
+  ConsoleGreen = '\033[92m'
+  ConsoleRed = '\033[91m'
+  ConsoleNormal = '\033[0m'
+  ConsoleBlue = '\033[94m'
+  ConsoleHeader = '\033[95m'
+else:
+  ConsoleGreen = ''
+  ConsoleRed = ''
+  ConsoleNormal = ''
+  ConsoleBlue = ''
+  ConsoleHeader = ''
+
+def IsColor(text):
+  return text.startswith('\033[')
+
+sConsoleColorsEnabled = True
+def DisableConsoleColors():
+  global sConsoleColorsEnabled
+  sConsoleColorsEnabled = False
+
+def con_print(fp, args):
+  for arg in args:
+    if not sConsoleColorsEnabled and IsColor(arg):
+      continue
+    fp.write(arg)
+  fp.write('\n')
+
+def con_out(*args):
+  con_print(sys.stdout, args)
+
+def con_err(*args):
+  con_print(sys.stderr, args)

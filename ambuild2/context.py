@@ -50,6 +50,8 @@ class Context(object):
 
   def build_internal(self):
     parser = OptionParser("usage: %prog [options]")
+    parser.add_option("--no-color", dest="no_color", action="store_true", default=False,
+                      help="Disable console colors.")
     parser.add_option("--show-graph", dest="show_graph", action="store_true", default=False,
                       help="Show the dependency graph and then exit.")
     parser.add_option("--show-changed", dest="show_changed", action="store_true", default=False,
@@ -63,6 +65,11 @@ class Context(object):
     parser.add_option("-j", "--jobs", dest="jobs", type="int", default=0,
                       help="Number of worker processes. Minimum number is 1; default is #cores * 1.5.")
     self.options, self.args = parser.parse_args()
+
+    # This doesn't completely work yet because it's not communicated to child
+    # processes. We'll have to send a message down or up to fix this.
+    if self.options.no_color:
+      util.DisableConsoleColors()
 
     if self.options.show_graph:
       self.db.printGraph()
@@ -92,6 +99,14 @@ class Context(object):
       builder.printSteps()
       return True
     if not builder.update():
-      sys.stderr.write('Build failed.\n')
+      util.con_err(
+        util.ConsoleHeader,
+        'Build failed.',
+        util.ConsoleNormal
+      )
     else:
-      sys.stdout.write('Build succeeded.\n')
+      util.con_out(
+        util.ConsoleHeader,
+        'Build succeeded.',
+        util.ConsoleNormal
+      )

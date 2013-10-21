@@ -117,14 +117,15 @@ class Generator(base_gen.Generator):
   def AddCopy(self, context, source, output_path):
     return self.graph.addCopy(context, source, output_path)
 
-  def AddCommand(self, context, argv, outputs):
-    return self.graph.addShellCommand(context, argv, outputs)
+  def AddCommand(self, context, inputs, argv, outputs):
+    return self.graph.addShellCommand(context, inputs, argv, outputs)
 
   def generateBuildFile(self):
     with open(os.path.join(self.buildPath, 'build.py'), 'w') as fp:
       fp.write("""
 # vim set: ts=8 sts=2 sw=2 tw=99 et:
 import sys
+sys.path.append('/home/dvander/alliedmodders/ambuild/ambuild2')
 import run
 
 if not run.Build(r"{build}"):

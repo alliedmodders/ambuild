@@ -46,7 +46,11 @@ class Task(object):
 class WorkerChild(ChildProcessListener):
   def __init__(self, pump, buildPath, channels):
     super(WorkerChild, self).__init__(pump)
-    print('Spawned worker (pid: ' + str(os.getpid()) + ')')
+    util.con_out(
+      util.ConsoleHeader,
+      'Spawned worker (pid: ' + str(os.getpid()) + ')',
+      util.ConsoleNormal
+    )
     self.buildPath = buildPath
     self.resultChannel = Channel.connect(channels[0], 'WorkerIOChild')
     self.pid = os.getpid()
@@ -124,12 +128,13 @@ class WorkerChild(ChildProcessListener):
 
   def doCommand(self, message):
     task_folder = message['task_folder']
-    task_data = message['task_data']
+    argv = message['task_data']
     with util.FolderChanger(task_folder):
-      p, stdout, stderr = util.Execute(task_data)
+      p, stdout, stderr = util.Execute(argv)
 
     reply = {
       'ok': p.returncode == 0,
+      'cmdline': ' '.join([arg for arg in argv]),
       'stdout': stdout,
       'stderr': stderr,
     }
@@ -144,7 +149,8 @@ class WorkerChild(ChildProcessListener):
 
     reply = {
       'ok': rcode == 0,
-      'stdout': '{0}\n'.format(stdout),
+      'cmdline': 'ln -s {0} {1}'.format(source_path, output_path),
+      'stdout': stdout,
       'stderr': stderr,
     }
     return reply
@@ -158,7 +164,8 @@ class WorkerChild(ChildProcessListener):
 
     reply = {
       'ok': True,
-      'stdout': 'cp "{0}" "{1}"\n'.format(source_path, os.path.join(task_folder, output_path)),
+      'cmdline': 'cp "{0}" "{1}"\n'.format(source_path, os.path.join(task_folder, output_path)),
+      'stdout': '',
       'stderr': '',
     }
     return reply
@@ -199,6 +206,7 @@ class WorkerChild(ChildProcessListener):
 
     reply = {
       'ok': p.returncode == 0,
+      'cmdline': ' '.join([arg for arg in argv]),
       'stdout': out,
       'stderr': err,
       'deps': paths,
@@ -236,7 +244,11 @@ class WorkerParent(ParentProcessListener):
 class TaskMasterChild(ChildProcessListener):
   def __init__(self, pump, task_graph, buildPath, child_channels):
     super(TaskMasterChild, self).__init__(pump)
-    print('Spawned task master (pid: ' + str(os.getpid()) + ')')
+    util.con_out(
+      util.ConsoleHeader,
+      'Spawned task master (pid: ' + str(os.getpid()) + ')',
+      util.ConsoleNormal
+    )
 
     self.task_graph = task_graph
     self.outstanding = {}
@@ -425,8 +437,21 @@ class TaskMasterParent(ParentProcessListener):
     )
 
   def processResults(self, message):
+    if message['ok']:
+      color = util.ConsoleGreen
+    else:
+      color = util.ConsoleRed
+    util.con_out(
+      util.ConsoleBlue,
+      '[{0}]'.format(message['pid']),
+      util.ConsoleNormal,
+      ' ',
+      color,
+      message['cmdline'],
+      util.ConsoleNormal
+    )
     if len(message['stdout']):
-      sys.stdout.write('[{0}] {1}'.format(message['pid'], message['stdout']))
+      sys.stdout.write(message['stdout'])
       if message['stdout'][-1] != '\n':
         sys.stdout.write('\n')
     if len(message['stderr']):
@@ -442,7 +467,11 @@ class TaskMasterParent(ParentProcessListener):
     updates = message['updates']
     node = self.builder.findTask(task_id)
     if not self.builder.updateGraph(node, updates, message):
-      sys.stderr.write('Failed to update node: {0}\n'.format(node.entry.format()))
+      util.con_out(
+        util.ConsoleRed,
+        'Failed to update node!',
+        util.ConsoleNormal
+      )
       self.terminateBuild(graceful=True)
 
   def terminateBuild(self, graceful):

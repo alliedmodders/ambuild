@@ -30,9 +30,9 @@ ProcessManager = ipc_impl.ProcessManager
 MessagePump = ipc_impl.MessagePump
 
 if util.IsWindows():
-  Channel = ipc_impl.NamedPipe
+  from ipc.windows import NamedPipe as Channel
 else:
-  Channel = ipc_impl.SocketChannel
+  from ipc.posix_proc import SocketChannel as Channel
 
 class ChildWrapperListener(process.MessageListener):
   def __init__(self, mp, channel):
@@ -70,4 +70,4 @@ def child_main(channel):
   listener = ChildWrapperListener(mp, channel)
   mp.addChannel(channel, listener)
   mp.pump()
-  sys.stdout.write('[{0}] Child process terminating normally.\n'.format(os.getpid()))
+  #sys.stdout.write('[{0}] Child process terminating normally.\n'.format(os.getpid()))

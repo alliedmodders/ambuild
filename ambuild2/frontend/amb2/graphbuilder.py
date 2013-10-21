@@ -153,6 +153,13 @@ class GraphBuilder(object):
     return node
 
   def addDependency(self, outgoing, incoming):
+    assert outgoing.type != nodetypes.Source
+    assert outgoing.type != nodetypes.Mkdir and incoming.type != nodetypes.Mkdir
+    assert (outgoing.type == nodetypes.Output and \
+            (incoming.type != nodetypes.Source and incoming.type != nodetypes.Output)) or \
+           (outgoing.type != nodetypes.Output and \
+            (incoming.type == nodetypes.Source or incoming.type == nodetypes.Output))
+            
     outgoing.incoming.add(incoming)
     incoming.outgoing.add(outgoing)
     self.edges.append((outgoing, incoming, False))
@@ -175,10 +182,19 @@ class GraphBuilder(object):
   def addSymlink(self, context, source, folder):
     return self.addFileOp(nodetypes.Symlink, context, source, folder)
 
-  def addShellCommand(self, context, argv, outputs):
-    #output_nodes = []
-    #for output in outputs:
-    #  if type(output) is str:
-    #    output = self.addOutput(os.path.join(context.buildFolder, output))
-    #  output_nodes.append(output)
-    pass
+  def addShellCommand(self, context, inputs, argv, outputs):
+    command = self.addCommand(
+      context=context,
+      type=nodetypes.Command,
+      path=None,
+      data=argv
+    )
+    output_nodes = []
+    for output in outputs:
+      output = self.addOutput(context, output)
+      self.addDependency(output, command)
+    for input in inputs:
+      if type(input) is str:
+        input = self.addSource(input)
+      self.addDependency(command, input)
+    return command, output_nodes

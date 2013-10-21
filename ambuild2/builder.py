@@ -129,11 +129,21 @@ class Builder(object):
         if os.path.isabs(path):
           entry = self.cx.db.add_source(path)
         else:
-          sys.stderr.write('Encountered an error while computing new dependencies:\n')
-          sys.stderr.write('A new dependent file or path was discovered that has no corresponding build entry.\n')
-          sys.stderr.write('This probably means a build script did not explicitly mark a generated file as an output.\n');
-          sys.stderr.write('The build must abort since the ordering of these two steps is undefined.\n')
-          sys.stderr.write('Path: {0}\n'.format(path))
+          util.con_err(
+            util.ConsoleRed,
+            'Encountered an error while computing new dependencies: ',
+            'A new dependent file or path was discovered that has no corresponding build entry. ',
+            'This probably means a build script did not explicitly mark a generated file as an output. ',
+            'The build must abort since the ordering of these two steps is undefined. ',
+            util.ConsoleNormal
+          )
+          util.con_err(
+            util.ConsoleRed,
+            'Path: ',
+            util.ConsoleBlue,
+            path,
+            util.ConsoleNormal
+          )
           return False
 
       if entry.type != nodetypes.Source and entry.type != nodetypes.Output:
@@ -143,11 +153,21 @@ class Builder(object):
 
       if entry.type == nodetypes.Output:
         if not self.findPath(entry, cmd_node.entry):
-          sys.stderr.write('Encountered an error while computing new dependencies:\n')
-          sys.stderr.write('A new dependency was discovered that exists as an output from another build step.\n')
-          sys.stderr.write('However, there is no explicit dependency between that path and this command.\n')
-          sys.stderr.write('The build must abort since the ordering of these two steps is undefined.\n')
-          sys.stderr.write('Dependency: {0}\n'.format(path))
+          util.con_err(
+            util.ConsoleRed,
+            'Encountered an error while computing new dependencies: ' ,
+            'A new dependency was discovered that exists as an output from another build step. ',
+            'However, there is no explicit dependency between that path and this command. ',
+            'The build must abort since the ordering of these two steps is undefined. ',
+            util.ConsoleNormal
+          )
+          util.con_err(
+            util.ConsoleRed,
+            'Dependency: ',
+            util.ConsoleBlue,
+            path,
+            util.ConsoleNormal
+          )
           return False
 
       discovered_set.add(entry)
