@@ -53,8 +53,7 @@ class ChildWrapperListener(process.MessageListener):
       if 'channels' in message:
         channels = message['channels']
       
-      self.listener = listener_type(self.mp, *(args + (channels,)))
-      self.listener.receiveConnected(channel)
+      self.listener = listener_type(self.mp, self.channel, *(args + (channels,)))
       return
 
     self.listener.receiveMessage(channel, message)

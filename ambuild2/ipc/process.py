@@ -124,7 +124,7 @@ class MessageListener(object):
     if message['id'] in self.messageMap:
       return self.messageMap[message['id']](channel, message)
 
-    raise Exception('Unhandled message: ' + str(message['id']))
+    raise Exception('Unhandled message in {0}: {1}'.format(self, message['id']))
 
   def receiveError(self, channel, error):
     pass
@@ -136,14 +136,11 @@ class MessageListener(object):
 #
 # The incoming value to ChildListener() is the message pump.
 class ChildProcessListener(object):
-  def __init__(self, pump):
+  def __init__(self, pump, channel):
     super(ChildProcessListener, self).__init__()
     self.pump = pump
-    self.channel = None
-    self.messageMap = {}
-
-  def receiveConnected(self, channel):
     self.channel = channel
+    self.messageMap = {}
 
   # Called when a message is received from the parent process.
   def receiveMessage(self, channel, message):
@@ -185,7 +182,7 @@ class ParentProcessListener(object):
   def receiveMessage(self, child, message):
     if message['id'] in self.messageMap:
       return self.messageMap[message['id']](child, message)
-    raise Exception('Unhandled message: ' + str(message['id']))
+    raise Exception('Unhandled message in {0}: {1}'.format(self, message['id']))
 
   # Called when an error has occurred and the channel will be closed.
   def receiveError(self, child, error):

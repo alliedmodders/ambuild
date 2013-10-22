@@ -44,13 +44,8 @@ class Task(object):
     return (' '.join([arg for arg in self.data]))
 
 class WorkerChild(ChildProcessListener):
-  def __init__(self, pump, buildPath, channels):
-    super(WorkerChild, self).__init__(pump)
-    util.con_out(
-      util.ConsoleHeader,
-      'Spawned worker (pid: ' + str(os.getpid()) + ')',
-      util.ConsoleNormal
-    )
+  def __init__(self, pump, channel, buildPath, channels):
+    super(WorkerChild, self).__init__(pump, channel)
     self.buildPath = buildPath
     self.resultChannel = Channel.connect(channels[0], 'WorkerIOChild')
     self.pid = os.getpid()
@@ -64,9 +59,16 @@ class WorkerChild(ChildProcessListener):
       'cp': lambda message: self.doCopy(message),
     }
 
-  def receiveConnected(self, channel):
-    super(WorkerChild, self).receiveConnected(channel)
-    channel.send({'id': 'ready', 'finished': None})
+    # Spew! We can't print to stdout since it could race.
+    self.resultChannel.send({
+      'id': 'spawned',
+      'pid': os.getpid()
+    })
+
+    self.channel.send({
+      'id': 'ready',
+      'finished': None
+    })
 
   def receiveClose(self, channel):
     try:
@@ -164,7 +166,7 @@ class WorkerChild(ChildProcessListener):
 
     reply = {
       'ok': True,
-      'cmdline': 'cp "{0}" "{1}"\n'.format(source_path, os.path.join(task_folder, output_path)),
+      'cmdline': 'cp "{0}" "{1}"'.format(source_path, os.path.join(task_folder, output_path)),
       'stdout': '',
       'stderr': '',
     }
@@ -242,14 +244,8 @@ class WorkerParent(ParentProcessListener):
 
 # The TaskMasterChild is in the same process as the WorkerParent.
 class TaskMasterChild(ChildProcessListener):
-  def __init__(self, pump, task_graph, buildPath, child_channels):
-    super(TaskMasterChild, self).__init__(pump)
-    util.con_out(
-      util.ConsoleHeader,
-      'Spawned task master (pid: ' + str(os.getpid()) + ')',
-      util.ConsoleNormal
-    )
-
+  def __init__(self, pump, channel, task_graph, buildPath, child_channels):
+    super(TaskMasterChild, self).__init__(pump, channel)
     self.task_graph = task_graph
     self.outstanding = {}
     self.idle = set()
@@ -264,6 +260,11 @@ class TaskMasterChild(ChildProcessListener):
         args=(buildPath,),
         channels=(channel,)
       )
+
+    self.channel.send({
+      'id': 'spawned',
+      'pid': os.getpid()
+    })
 
   def buildFailed(self):
     if not self.build_failed:
@@ -384,8 +385,16 @@ class WorkerIOListener(MessageListener):
     super(WorkerIOListener, self).__init__(close_on_ack)
     self.taskMaster = taskMaster
     self.messageMap = {
-      'results': lambda channel, message: self.taskMaster.processResults(message)
+      'results': lambda channel, message: self.taskMaster.processResults(message),
+      'spawned': lambda channel, message: self.receiveSpawned(message)
     }
+
+  def receiveSpawned(self, message):
+    util.con_out(
+      util.ConsoleHeader,
+      'Spawned worker (pid: {0})'.format(message['pid']),
+      util.ConsoleNormal
+    )
 
   def receiveError(self, channel, error):
     if error != Error.NormalShutdown:
@@ -399,7 +408,8 @@ class TaskMasterParent(ParentProcessListener):
     self.builder = builder
     self.build_failed = False
     self.messageMap = {
-      'completed': lambda child, message: self.receiveCompleted(child, message)
+      'completed': lambda child, message: self.receiveCompleted(child, message),
+      'spawned': lambda child, message: self.receiveSpawned(message),
     }
 
     # Figure out how many tasks to create.
@@ -481,6 +491,13 @@ class TaskMasterParent(ParentProcessListener):
     if not self.build_failed:
       self.build_failed = True
       self.cx.procman.shutdown()
+
+  def receiveSpawned(self, message):
+    util.con_out(
+      util.ConsoleHeader,
+      'Spawned task master (pid: {0})'.format(message['pid']),
+      util.ConsoleNormal
+    )
 
   def receiveError(self, child, error):
     if error != Error.NormalShutdown:
