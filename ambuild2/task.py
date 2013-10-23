@@ -140,10 +140,16 @@ class WorkerChild(ChildProcessListener):
     task_folder = message['task_folder']
     argv = message['task_data']
     with util.FolderChanger(task_folder):
-      p, stdout, stderr = util.Execute(argv)
+      try:
+        p, stdout, stderr = util.Execute(argv)
+        status = p.returncode == 0
+      except Exception as exn:
+        status = False
+        stdout = ''
+        stderr = '{0}'.format(exn)
 
     reply = {
-      'ok': p.returncode == 0,
+      'ok': status,
       'cmdline': ' '.join([arg for arg in argv]),
       'stdout': stdout,
       'stderr': stderr,
