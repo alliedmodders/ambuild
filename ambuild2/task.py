@@ -94,19 +94,27 @@ class WorkerChild(ChildProcessListener):
         os.unlink(output)
       except OSError as exn:
         if exn.errno != errno.ENOENT:
-          raise
+          response = {
+            'ok': False,
+            'cmdline': 'rm {0}'.format(output),
+            'stdout': '',
+            'stderr': '{0}'.format(exn)
+          }
+          return self.issueResponse(message, response)
 
     if not message['task_folder']:
       message['task_folder'] = '.'
 
     # Do the task.
     response = self.taskMap[task_type](message)
+    return self.issueResponse(message, response)
 
+  def issueResponse(self, message, response):
     # Send a message to the task master indicating whether we succeeded.
-    channel.send({
+    self.channel.send({
       'id': 'ranTask',
       'ok': response['ok'],
-      'task_id': task_id
+      'task_id': message['task_id']
     })
 
     # Compute new timestamps for all command outputs.
@@ -119,7 +127,7 @@ class WorkerChild(ChildProcessListener):
     # stdout/stderr if needed.
     response['id'] = 'results'
     response['pid'] = self.pid
-    response['task_id'] = task_id
+    response['task_id'] = message['task_id']
     response['updates'] = new_timestamps
     try:
       self.resultChannel.send(response)
