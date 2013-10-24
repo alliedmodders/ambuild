@@ -29,6 +29,9 @@ Command = 'cmd'
 # but they have special handling within AMBuild.
 Output = 'out'
 
+# An aggregate node that reduces incoming edges to other nodes.
+Group = 'grp'
+
 # Mkdir nodes represent a folder creation action, either explicit or
 # automatically generated.
 Mkdir = 'mkd'
@@ -54,6 +57,9 @@ Symlink = 'ln'
 # on the result of the command (for example, for dependency computation). They
 # are used when using AMBuild2's automated C++ builders.
 Cxx = 'cxx'
+
+def IsCommand(type):
+  return type != Output and type != Source and type != Group
 
 NotDirty = 0
 KnownDirty = (1 << 0)
@@ -102,9 +108,7 @@ class Node(object):
     self.outgoing = None
 
   def isCommand(self):
-    return (self.type != Source and
-            self.type != Output and
-            self.type != CopyFolder)
+    return IsCommand(self.type)
 
   @property
   def folder_name(self):

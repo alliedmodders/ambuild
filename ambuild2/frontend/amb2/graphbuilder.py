@@ -19,10 +19,6 @@ import os, sys
 import nodetypes
 from frontend.base_gen import ConfigureException
 
-class GraphException(Exception):
-  def __init__(self):
-    super(GraphException, self).__init__()
-
 class NodeBuilder(object):
   def __init__(self, type, path=None, folder=None, blob=None, generated=False):
     self.id = None
@@ -33,6 +29,25 @@ class NodeBuilder(object):
     self.generated = generated
     self.outgoing = set()
     self.incoming = set()
+    self.group = None
+
+class GroupBuilder(NodeBuilder):
+  def __init__(self, name):
+    super(GroupBuilder, self).__init__(nodetypes.Group, name)
+    self.members = []
+
+  def Add(self, node):
+    if type(node) is list:
+      for item in node:
+        self.Add(item)
+      return
+
+    if node.type != nodetypes.Output:
+      raise Exception('Only output files can be added to a group')
+    if node.group:
+      raise Exception('Output is already a member of group "{0}"'.format(node.group.path))
+    node.group = self
+    self.members.append(node)
 
 class GraphBuilder(object):
   def __init__(self):
@@ -40,6 +55,7 @@ class GraphBuilder(object):
     self.files = {}
     self.commands = []
     self.edges = []
+    self.groups = {}
 
   def generateFolder(self, context, folder):
     folder = os.path.normpath(folder)
@@ -153,13 +169,25 @@ class GraphBuilder(object):
     return node
 
   def addDependency(self, outgoing, incoming):
+    # Source nodes are leaves.
     assert outgoing.type != nodetypes.Source
+
+    # mkdir nodes are isolated.
     assert outgoing.type != nodetypes.Mkdir and incoming.type != nodetypes.Mkdir
-    assert (outgoing.type == nodetypes.Output and \
-            (incoming.type != nodetypes.Source and incoming.type != nodetypes.Output)) or \
-           (outgoing.type != nodetypes.Output and \
-            (incoming.type == nodetypes.Source or incoming.type == nodetypes.Output))
-            
+
+    # Output nodes should always originate from commands or groups.
+    assert outgoing.type != nodetypes.Output or \
+           (nodetypes.IsCommand(incoming.type) or incoming.type == nodetypes.Group)
+
+    # Group nodes should only depend on output files.
+    assert outgoing.type != nodetypes.Group or incoming.type == nodetypes.Output
+
+    # Command nodes should depend on groups, sources, or outputs.
+    assert not nodetypes.IsCommand(outgoing.type) or \
+           (incoming.type == nodetypes.Output or \
+            incoming.type == nodetypes.Source or \
+            incoming.type == nodetypes.Group)
+
     outgoing.incoming.add(incoming)
     incoming.outgoing.add(outgoing)
     self.edges.append((outgoing, incoming, False))
@@ -198,3 +226,11 @@ class GraphBuilder(object):
         input = self.addSource(input)
       self.addDependency(command, input)
     return command, output_nodes
+
+  def addGroup(self, context, name):
+    if name in self.groups:
+      raise Exception('Duplicate group added: {0}'.format(name))
+
+    group = GroupBuilder(name)
+    self.groups[name] = group
+    return group

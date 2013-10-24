@@ -220,6 +220,10 @@ class Compiler(object):
     # Entries may either be strings containing a path, or Dep entries created
     # from BinaryBuilder.
     'postlink',
+
+    # An array of nodes which should be weak dependencies on each source
+    # compilation command.
+    'weak_source_deps',
   ]
 
   def __init__(self, cc, cxx):

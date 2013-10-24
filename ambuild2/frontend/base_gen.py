@@ -76,12 +76,15 @@ class Context(object):
       self.compiler = self.generator.DetectCompilers()
     return self.compiler
 
+  def RunScript(self, file, vars={}):
+    return self.generator.evalScript(file, vars)
+
   def RunBuildScripts(self, files, vars={}):
     if type(files) is str:
-      self.generator.parseBuildScript(files, vars)
+      self.generator.evalScript(files, vars)
     else:
       for script in files:
-        self.generator.parseBuildScript(script, vars)
+        self.generator.evalScript(script, vars)
 
   def Add(self, taskbuilder):
     taskbuilder.finish(self)
@@ -102,6 +105,9 @@ class Context(object):
   def AddCommand(self, inputs, argv, outputs):
     return self.generator.AddCommand(self, inputs, argv, outputs)
 
+  def AddGroup(self, name):
+    return self.generator.AddGroup(self, name)
+
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
     self.sourcePath = sourcePath
@@ -114,7 +120,7 @@ class Generator(object):
 
   def parseBuildScripts(self):
     root = os.path.join(self.sourcePath, 'AMBuildScript')
-    self.parseBuildScript(root)
+    self.evalScript(root)
 
   def pushContext(self, cx):
     self.contextStack_.append(cx)
@@ -122,22 +128,25 @@ class Generator(object):
   def popContext(self):
     self.contextStack_.pop()
 
-  def parseBuildScript(self, file, vars={}):
+  def evalScript(self, file, vars={}):
     cx = Context(self, self.contextStack_[-1], file)
     self.pushContext(cx)
-
-    # Compile the build script.
-    with open(os.path.join(self.sourcePath, file)) as fp:
-      chars = fp.read()
-      code = compile(chars, file, 'exec')
 
     new_vars = copy.copy(vars)
     new_vars['builder'] = cx
 
     # Run it.
+    rvalue = None
+    with open(os.path.join(self.sourcePath, file)) as fp:
+      chars = fp.read()
+      code = compile(chars, file, 'exec')
     exec(code, new_vars)
+    if 'rvalue' in new_vars:
+      rvalue = new_vars['rvalue']
+      del new_vars['rvalue']
 
     self.popContext()
+    return rvalue
 
   def Generate(self):
     try:
@@ -172,3 +181,7 @@ class Generator(object):
 
   def AddCommand(self, inputs, argv, outputs):
     raise Exception('Must be implemented')
+
+  def AddGroup(self, context, name):
+    raise Exception('Must be implemented')
+

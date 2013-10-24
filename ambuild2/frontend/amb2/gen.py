@@ -120,6 +120,9 @@ class Generator(base_gen.Generator):
   def AddCommand(self, context, inputs, argv, outputs):
     return self.graph.addShellCommand(context, inputs, argv, outputs)
 
+  def AddGroup(self, context, name):
+    return self.graph.addGroup(context, name)
+
   def generateBuildFile(self):
     with open(os.path.join(self.buildPath, 'build.py'), 'w') as fp:
       fp.write("""

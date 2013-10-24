@@ -16,6 +16,7 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import util
 import sqlite3
+import nodetypes
 
 class Database(object):
   def __init__(self, path):
@@ -99,12 +100,28 @@ class Database(object):
       cursor = self.cn.execute(query, (node.type, int(node.generated), node.path, folder_id, blob))
       node.id = cursor.lastrowid
 
+    # Create all group nodes.
+    for group_name in graph.groups:
+      group_node = graph.groups[group_name]
+      assert group_node.id is None
+
+      query = """
+        insert into nodes (type, generated, path, dirty) values (?, 0, ?, 0)
+      """
+      cursor = self.cn.execute(query, (nodetypes.Group, group_node.path))
+      group_node.id = cursor.lastrowid
+
+      for member in group_node.members:
+        assert member.id is not None
+        query = "insert into edges (outgoing, incoming, generated) values (?, ?, 0)"
+        self.cn.execute(query, (group_node.id, member.id))
+
     # Add all edges.
     for outgoing, incoming, generated in graph.edges:
       assert type(outgoing.id) is int
       assert type(incoming.id) is int
 
       query = "INSERT INTO edges (outgoing, incoming, generated) VALUES (?, ?, ?)"
-      cursor = self.cn.execute(query, (outgoing.id, incoming.id, int(generated)))
+      self.cn.execute(query, (outgoing.id, incoming.id, int(generated)))
 
     self.cn.commit()
