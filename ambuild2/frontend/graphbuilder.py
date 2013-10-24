@@ -17,7 +17,6 @@
 import util
 import os, sys
 import nodetypes
-from frontend.base_gen import ConfigureException
 
 class NodeBuilder(object):
   def __init__(self, type, path=None, folder=None, blob=None, generated=False):

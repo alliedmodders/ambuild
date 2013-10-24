@@ -17,6 +17,7 @@
 import os
 import util, copy
 from frontend import cpp
+from frontend import graphbuilder
 
 # AMBuild 2 scripts are parsed recursively. Each script is supplied with a
 # "builder" object, which maps to a Context object. Each script gets its own
@@ -117,6 +118,7 @@ class Generator(object):
     self.compiler = None
     self.contextStack_ = [None]
     self.configure_failed = False
+    self.graph = graphbuilder.GraphBuilder()
 
   def parseBuildScripts(self):
     root = os.path.join(self.sourcePath, 'AMBuildScript')
@@ -167,21 +169,25 @@ class Generator(object):
     self.compiler = cpp.Compiler(cc, cxx)
     return self.compiler
 
-  def AddSymlink(self, context, source, output_path):
-    raise Exception('Must be implemented')
+  def AddSource(self, context, source_path):
+    return self.graph.addSource(source_path)
 
-  def AddSource(self, context, source):
-    raise Exception('Must be implemented')
+  def AddSymlink(self, context, source, output_path):
+    if util.IsWindows():
+      # Windows pre-Vista does not support symlinks. Windows Vista+ supports
+      # symlinks via mklink, but it's Administrator-only by default.
+      return self.graph.addCopy(context, source, output_path)
+    return self.graph.addSymlink(context, source, output_path)
 
   def AddFolder(self, context, folder):
-    raise Exception('Must be implemented')
+    folder = os.path.join(context.buildFolder, folder)
+    return self.graph.generateFolder(context, folder)
 
   def AddCopy(self, context, source, output_path):
-    raise Exception('Must be implemented')
+    return self.graph.addCopy(context, source, output_path)
 
-  def AddCommand(self, inputs, argv, outputs):
-    raise Exception('Must be implemented')
+  def AddCommand(self, context, inputs, argv, outputs):
+    return self.graph.addShellCommand(context, inputs, argv, outputs)
 
   def AddGroup(self, context, name):
-    raise Exception('Must be implemented')
-
+    return self.graph.addGroup(context, name)

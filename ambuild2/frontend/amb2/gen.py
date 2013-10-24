@@ -19,7 +19,6 @@ import util
 import nodetypes
 from frontend.cpp import DetectCompiler
 from frontend.amb2 import dbcreator
-from frontend.amb2 import graphbuilder
 from frontend import base_gen
 
 class CppNodes(object):
@@ -31,7 +30,6 @@ class Generator(base_gen.Generator):
   def __init__(self, sourcePath, buildPath, options, args):
     super(Generator, self).__init__(sourcePath, buildPath, options, args)
     self.cacheFolder = os.path.join(self.buildPath, '.ambuild2')
-    self.graph = graphbuilder.GraphBuilder()
 
   def preGenerate(self):
     self.cleanPriorBuild()
@@ -99,29 +97,6 @@ class Generator(base_gen.Generator):
       database.exportGraph(self.graph)
     self.saveVars()
     self.generateBuildFile()
-
-  def AddSource(self, context, source_path):
-    return self.graph.addSource(source_path)
-
-  def AddSymlink(self, context, source, output_path):
-    if util.IsWindows():
-      # Windows pre-Vista does not support symlinks. Windows Vista+ supports
-      # symlinks via mklink, but it's Administrator-only by default.
-      return self.graph.addCopy(context, source, output_path)
-    return self.graph.addSymlink(context, source, output_path)
-
-  def AddFolder(self, context, folder):
-    folder = os.path.join(context.buildFolder, folder)
-    return self.graph.generateFolder(context, folder)
-
-  def AddCopy(self, context, source, output_path):
-    return self.graph.addCopy(context, source, output_path)
-
-  def AddCommand(self, context, inputs, argv, outputs):
-    return self.graph.addShellCommand(context, inputs, argv, outputs)
-
-  def AddGroup(self, context, name):
-    return self.graph.addGroup(context, name)
 
   def generateBuildFile(self):
     with open(os.path.join(self.buildPath, 'build.py'), 'w') as fp:
