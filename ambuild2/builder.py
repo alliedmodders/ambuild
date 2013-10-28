@@ -276,8 +276,10 @@ class Builder(object):
       if not self.mergeDependencies(node, message['deps']):
         return False
 
-    for incoming in node.incoming:
-      self.lazyUpdateEntry(incoming.entry)
+    for incoming in self.cx.db.query_strong_inputs(node.entry):
+      self.lazyUpdateEntry(incoming)
+    for incoming in self.cx.db.query_dynamic_inputs(node.entry):
+      self.lazyUpdateEntry(incoming)
 
     for path, stamp in updates:
       entry = self.cx.db.query_path(path)
