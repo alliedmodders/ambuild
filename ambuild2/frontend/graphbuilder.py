@@ -54,6 +54,7 @@ class GraphBuilder(object):
     self.files = {}
     self.commands = []
     self.edges = []
+    self.weak_edges = []
     self.groups = {}
 
   def generateFolder(self, context, folder):
@@ -167,7 +168,7 @@ class GraphBuilder(object):
     self.commands.append(node)
     return node
 
-  def addDependency(self, outgoing, incoming):
+  def addDependency(self, outgoing, incoming, weak=False):
     # Source nodes are leaves.
     assert outgoing.type != nodetypes.Source
 
@@ -187,9 +188,15 @@ class GraphBuilder(object):
             incoming.type == nodetypes.Source or \
             incoming.type == nodetypes.Group)
 
-    outgoing.incoming.add(incoming)
-    incoming.outgoing.add(outgoing)
-    self.edges.append((outgoing, incoming, False))
+    if not weak:
+      outgoing.incoming.add(incoming)
+      incoming.outgoing.add(outgoing)
+      self.edges.append((outgoing, incoming))
+    else:
+      self.weak_edges.append((outgoing, incoming))
+
+  def addWeakDependency(self, outgoing, incoming):
+    return self.addDependency(outgoing, incoming, weak=True)
 
   # addSource() doesn't take a context since sources may be shared across
   # many build files. They are garbage collected as needed.
@@ -216,10 +223,13 @@ class GraphBuilder(object):
       path=None,
       data=argv
     )
+
     output_nodes = []
     for output in outputs:
       output = self.addOutput(context, output)
       self.addDependency(output, command)
+      output_nodes.append(output)
+
     for input in inputs:
       if type(input) is str:
         input = self.addSource(input)

@@ -45,17 +45,45 @@ class Database(object):
       );
     """
     self.cn.execute(query)
+
+    # The edge table stores links that are specified by the build scripts;
+    # this table is essentially immutable (except for reconfigures).
     query = """
       CREATE TABLE edges(
         outgoing INT NOT NULL,
         incoming INT NOT NULL,
-        generated INT NOT NULL,
         UNIQUE (outgoing, incoming)
+      );
+    """
+    self.cn.execute(query)
+
+    # The weak edge table stores links that are specified by build scripts,
+    # but only to enforce ordering. They do not propagate damage or updates.
+    query = """
+      create table weak_edges(
+        outgoing int not null,
+        incoming int not null,
+        unique (outgoing, incoming)
+      );
+    """
+
+    # The dynamic edge table stores edges that are discovered as a result of
+    # executing a command; for example, a |cp *| or C++ #includes.
+    self.cn.execute(query)
+    query = """
+      create table dynamic_edges(
+        outgoing int not null,
+        incoming int not null,
+        unique (outgoing, incoming)
       );
     """
     self.cn.execute(query)
     self.cn.execute("CREATE INDEX outgoing_edge ON edges(outgoing)")
     self.cn.execute("CREATE INDEX incoming_edge ON edges(incoming)")
+    self.cn.execute("CREATE INDEX weak_outgoing_edge ON weak_edges(outgoing)")
+    self.cn.execute("CREATE INDEX weak_incoming_edge ON weak_edges(incoming)")
+    self.cn.execute("CREATE INDEX dyn_outgoing_edge ON dynamic_edges(outgoing)")
+    self.cn.execute("CREATE INDEX dyn_incoming_edge ON dynamic_edges(incoming)")
     self.cn.commit()
 
   def exportGraph(self, graph):
@@ -113,15 +141,23 @@ class Database(object):
 
       for member in group_node.members:
         assert member.id is not None
-        query = "insert into edges (outgoing, incoming, generated) values (?, ?, 0)"
+        query = "insert into edges (outgoing, incoming) values (?, ?)"
         self.cn.execute(query, (group_node.id, member.id))
 
     # Add all edges.
-    for outgoing, incoming, generated in graph.edges:
+    for outgoing, incoming in graph.edges:
       assert type(outgoing.id) is int
       assert type(incoming.id) is int
 
-      query = "INSERT INTO edges (outgoing, incoming, generated) VALUES (?, ?, ?)"
-      self.cn.execute(query, (outgoing.id, incoming.id, int(generated)))
+      query = "INSERT INTO edges (outgoing, incoming) VALUES (?, ?)"
+      self.cn.execute(query, (outgoing.id, incoming.id))
+
+    # Add all weak edges.
+    for outgoing, incoming in graph.weak_edges:
+      assert type(outgoing.id) is int
+      assert type(incoming.id) is int
+
+      query = "INSERT INTO weak_edges (outgoing, incoming) VALUES (?, ?)"
+      self.cn.execute(query, (outgoing.id, incoming.id))
 
     self.cn.commit()

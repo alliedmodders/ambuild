@@ -87,7 +87,8 @@ def ComputeDamageGraph(database, only_changed = False):
   for entry in dirty:
     if (entry.type == nodetypes.Output) and (entry.dirty == nodetypes.NewDirty):
       # Ensure that our command has been marked as dirty.
-      incoming = database.query_incoming(entry)
+      incoming = database.query_strong_inputs(entry)
+      incoming |= database.query_dynamic_inputs(entry)
 
       # There should really only be one command to generate an output.
       if len(incoming) != 1:
@@ -100,5 +101,5 @@ def ComputeDamageGraph(database, only_changed = False):
     else:
       add_dirty(entry)
 
-  graph.complete()
+  graph.finish()
   return graph

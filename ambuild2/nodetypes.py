@@ -58,8 +58,14 @@ Symlink = 'ln'
 # are used when using AMBuild2's automated C++ builders.
 Cxx = 'cxx'
 
+def IsFile(type):
+  return type == Output or type == Source
+
 def IsCommand(type):
   return type != Output and type != Source and type != Group
+
+def HasAutoDependencies(type):
+  return type == CopyFolder or type == Cxx
 
 NotDirty = 0
 KnownDirty = (1 << 0)
@@ -103,12 +109,24 @@ class Node(object):
     # otherwise.
     self.generated = generated
 
-    # Incoming and outgoing edges. Lazily computed.
-    self.incoming = None
-    self.outgoing = None
+    #########################################
+    # Remaining fields are lazily computed. #
+    #########################################
 
+    # Strong inputs are used to force updates. Dynamic inputs force updates,
+    # but are added and removed as dependencies change. Weak updates do not
+    # force updates, but only ordering.
+    self.strong_inputs = None
+    self.dynamic_inputs = None
+    self.weak_inputs = None
+
+    self.outgoing = None
+    
   def isCommand(self):
     return IsCommand(self.type)
+
+  def isFile(self):
+    return IsFile(self.type)
 
   @property
   def folder_name(self):
@@ -128,4 +146,6 @@ class Node(object):
       return 'cp "{0}" "{1}"'.format(self.blob[0], os.path.join(self.folder_name, self.blob[1]))
     if self.type == Cxx:
       return '[' + self.blob['type'] + ']' + ' -> ' + (' '.join([arg for arg in self.blob['argv']]))
+    if self.type == Group:
+      return 'group "{0}"'.format(self.path)
     return (' '.join([arg for arg in self.blob]))

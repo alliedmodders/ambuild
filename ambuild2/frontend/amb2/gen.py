@@ -84,6 +84,8 @@ class Generator(base_gen.Generator):
         folder=folderNode,
         data=cxxData
       )
+      for dep in binary.compiler.sourcedeps:
+        self.graph.addWeakDependency(cxxNode, dep)
       self.graph.addDependency(cxxNode, srcNode)
       self.graph.addDependency(objNode, cxxNode)
       self.graph.addDependency(linkCmd, objNode)

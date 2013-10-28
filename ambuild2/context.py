@@ -78,6 +78,8 @@ class Context(object):
     if self.options.show_changed:
       dmg_list = damage.ComputeDamageGraph(self.db, only_changed=True)
       for entry in dmg_list:
+        if not entry.isFile():
+          continue
         print(entry.format())
       return True
 
@@ -90,8 +92,10 @@ class Context(object):
       dmg_graph.printGraph()
       return True
 
+    dmg_graph.filter_commands()
+
     if self.options.show_commands:
-      dmg_graph.printCommands()
+      dmg_graph.printGraph()
       return True
     
     builder = Builder(self, dmg_graph)

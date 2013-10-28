@@ -64,23 +64,27 @@ class Database(object):
       row=row
     )
 
-  def add_edge(self, from_entry, to_entry, generated):
+  def add_dynamic_edge(self, from_entry, to_entry):
     query = """
-      insert into edges
-      (outgoing, incoming, generated)
+      insert into dynamic_edges
+      (outgoing, incoming)
       values
-      (?, ?, ?)
+      (?, ?)
     """
-    self.cn.execute(query, (to_entry.id, from_entry.id, int(generated)))
+    self.cn.execute(query, (to_entry.id, from_entry.id))
+    if to_entry.dynamic_inputs:
+      to_entry.dynamic_inputs.add(from_entry)
 
-  def drop_edge(self, from_entry, to_entry):
+  def drop_dynamic_edge(self, from_entry, to_entry):
     query = """
-      delete from edges
+      delete from dynamic_edges edges
       where
         outgoing = ? and
         incoming = ?
     """
     self.cn.execute(query, (to_entry.id, from_entry.id))
+    if to_entry.dynamic_inputs:
+      to_entry.dynamic_inputs.remote(from_entry)
 
   def query_node(self, id):
     if id in self.node_cache_:
@@ -132,27 +136,60 @@ class Database(object):
       self.path_cache_[node.path] = node
     return node
 
-  def query_incoming(self, node):
-    if node.incoming:
-      return node.incoming
-
-    query = "select incoming from edges where outgoing = ?"
-    node.incoming = set()
-    for incoming_id, in self.cn.execute(query, (node.id,)):
-      incoming = self.query_node(incoming_id)
-      node.incoming.add(incoming)
-    return node.incoming
-
   def query_outgoing(self, node):
     if node.outgoing:
       return node.outgoing
 
-    query = "select outgoing from edges where incoming = ?"
+    # We don't cache the outgoing set (yet).
     node.outgoing = set()
+
+    query = "select outgoing from edges where incoming = ?"
     for outgoing_id, in self.cn.execute(query, (node.id,)):
-      outgoing = self.query_node(outgoing_id)
-      node.outgoing.add(outgoing)
+      entry = self.query_node(outgoing_id)
+      node.outgoing.add(entry)
+
+    query = "select outgoing from dynamic_edges where incoming = ?"
+    for outgoing_id, in self.cn.execute(query, (node.id,)):
+      entry = self.query_node(outgoing_id)
+      node.outgoing.add(entry)
+
     return node.outgoing
+
+  def query_weak_inputs(self, node):
+    if node.weak_inputs:
+      return node.weak_inputs
+
+    query = "select incoming from weak_edges where outgoing = ?"
+    node.weak_inputs = set()
+    for incoming_id, in self.cn.execute(query, (node.id,)):
+      incoming = self.query_node(incoming_id)
+      node.weak_inputs.add(incoming)
+
+    return node.weak_inputs
+
+  def query_strong_inputs(self, node):
+    if node.strong_inputs:
+      return node.strong_inputs
+
+    query = "select incoming from edges where outgoing = ?"
+    node.strong_inputs = set()
+    for incoming_id, in self.cn.execute(query, (node.id,)):
+      incoming = self.query_node(incoming_id)
+      node.strong_inputs.add(incoming)
+
+    return node.strong_inputs
+
+  def query_dynamic_inputs(self, node):
+    if node.dynamic_inputs:
+      return node.dynamic_inputs
+
+    query = "select incoming from dynamic_edges where outgoing = ?"
+    node.dynamic_inputs = set()
+    for incoming_id, in self.cn.execute(query, (node.id,)):
+      incoming = self.query_node(incoming_id)
+      node.dynamic_inputs.add(incoming)
+
+    return node.dynamic_inputs
 
   def mark_dirty(self, entry):
     query = "update nodes set dirty = 1 where rowid = ?"
@@ -227,5 +264,7 @@ class Database(object):
   def printGraphNode(self, node, indent):
     print(('  ' * indent) + ' - ' + node.format())
 
-    for incoming in self.query_incoming(node):
+    for incoming in self.query_strong_inputs(node):
+      self.printGraphNode(incoming, indent + 1)
+    for incoming in self.query_dynamic_inputs(node):
       self.printGraphNode(incoming, indent + 1)

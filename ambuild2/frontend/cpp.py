@@ -223,7 +223,7 @@ class Compiler(object):
 
     # An array of nodes which should be weak dependencies on each source
     # compilation command.
-    'weak_source_deps',
+    'sourcedeps',
   ]
 
   def __init__(self, cc, cxx):

@@ -9,7 +9,8 @@ from task import Task, TaskMasterParent
 # Given the partial command DAG, compute a task tree we can send to the task
 # thread.
 class TaskTreeBuilder(object):
-  def __init__(self):
+  def __init__(self, cx):
+    self.cx = cx
     self.worklist = []
     self.cache = {}
     self.cmd_list = []
@@ -17,7 +18,7 @@ class TaskTreeBuilder(object):
     self.max_parallel = 0
 
   def buildFromGraph(self, graph):
-    for node in graph.leaf_commands:
+    for node in graph.leafs:
       leaf = self.enqueueCommand(node)
       self.tree_leafs.append(leaf)
 
@@ -25,7 +26,7 @@ class TaskTreeBuilder(object):
     while len(self.worklist):
       task, node = self.worklist.pop()
 
-      for outgoing in node.outgoing_cmds:
+      for outgoing in node.outgoing:
         outgoing_task = self.findTask(outgoing)
         task.addOutgoing(outgoing_task)
 
@@ -42,8 +43,11 @@ class TaskTreeBuilder(object):
   def enqueueCommand(self, node):
     assert node not in self.cache
     assert node.isCommand()
-    outputs = [o.entry.path for o in node.outgoing if o.entry.type == nodetypes.Output]
-    task = Task(len(self.cmd_list), node.entry, outputs)
+    output_list = []
+    for output in self.cx.db.query_outgoing(node.entry):
+      assert output.type == nodetypes.Output
+      output_list.append(output.path)
+    task = Task(len(self.cmd_list), node.entry, output_list)
     self.cache[node] = task
     self.cmd_list.append(node)
     self.worklist.append((task, node))
@@ -54,7 +58,7 @@ class Builder(object):
     self.cx = cx
     self.graph = graph
 
-    tb = TaskTreeBuilder()
+    tb = TaskTreeBuilder(cx)
     self.commands, self.leafs = tb.buildFromGraph(graph)
     self.max_parallel = tb.max_parallel
 
@@ -104,11 +108,9 @@ class Builder(object):
   def findTask(self, task_id):
     return self.commands[task_id]
 
-  def findPath(self, from_entry, to_entry):
-    return False
-
   def lazyUpdateEntry(self, entry):
-    assert entry.type == nodetypes.Source
+    if entry.type != nodetypes.Source:
+      return
     if entry.dirty:
       self.update_set.add(entry)
 
@@ -120,73 +122,152 @@ class Builder(object):
       self.cx.db.unmark_dirty(entry)
     self.cx.db.commit()
 
-  def mergeDependencies(self, cmd_node, discovered):
-    # Grab nodes for each dependency.
+  def addDiscoveredSource(self, path):
+    if not os.path.isabs(path):
+      util.con_err(
+        util.ConsoleRed,
+        'Encountered an error while computing new dependencies: ',
+        'A new dependent file or path was discovered that has no corresponding build entry. ',
+        'This probably means a build script did not explicitly mark a generated file as an output. ',
+        'The build must abort since the ordering of these two steps is undefined. ',
+        util.ConsoleNormal
+      )
+      util.con_err(
+        util.ConsoleRed,
+        'Path: ',
+        util.ConsoleBlue,
+        path,
+        util.ConsoleNormal
+      )
+      return None
+    return self.cx.db.add_source(path)
+
+  def discoverEntries(self, discovered_paths):
     discovered_set = set()
-    for path in discovered:
+    for path in discovered_paths:
       entry = self.cx.db.query_path(path)
       if not entry:
-        if os.path.isabs(path):
-          entry = self.cx.db.add_source(path)
-        else:
-          util.con_err(
-            util.ConsoleRed,
-            'Encountered an error while computing new dependencies: ',
-            'A new dependent file or path was discovered that has no corresponding build entry. ',
-            'This probably means a build script did not explicitly mark a generated file as an output. ',
-            'The build must abort since the ordering of these two steps is undefined. ',
-            util.ConsoleNormal
-          )
-          util.con_err(
-            util.ConsoleRed,
-            'Path: ',
-            util.ConsoleBlue,
-            path,
-            util.ConsoleNormal
-          )
-          return False
+        entry = self.addDiscoveredSource(path)
+        if not entry:
+          return None
 
       if entry.type != nodetypes.Source and entry.type != nodetypes.Output:
-        sys.stderr.write('Fatal error in DAG construction!\n')
-        sys.stderr.write('Dependent path {0} is not a file input!\n'.format(path))
-        return False
-
-      if entry.type == nodetypes.Output:
-        if not self.findPath(entry, cmd_node.entry):
-          util.con_err(
-            util.ConsoleRed,
-            'Encountered an error while computing new dependencies: ' ,
-            'A new dependency was discovered that exists as an output from another build step. ',
-            'However, there is no explicit dependency between that path and this command. ',
-            'The build must abort since the ordering of these two steps is undefined. ',
-            util.ConsoleNormal
-          )
-          util.con_err(
-            util.ConsoleRed,
-            'Dependency: ',
-            util.ConsoleBlue,
-            path,
-            util.ConsoleNormal
-          )
-          return False
+        util.con_err(
+          util.ConsoleRed,
+          'Fatal error in DAG construction! Dependency is not a file input.',
+          util.ConsoleNormal
+        )
+        util.con_err(util.ConsoleRed, 'Path: ', util.ConsoleBlue, path, util.ConsoleNormal)
+        return None
 
       discovered_set.add(entry)
 
-    old_set = self.cx.db.query_incoming(cmd_node.entry)
-    for entry in old_set:
-      if entry not in discovered_set and entry.generated:
-        self.cx.db.drop_edge(entry, cmd_node.entry)
+    return discovered_set
+
+  def findPath(self, source, target):
+    # We search the graph from the target, since we assume there are fewer
+    # predecessor links than successor links that way.
+    assert source != target
+
+    queue = set([target])
+    seen = set()
+    while len(queue):
+      node = queue.pop()
+
+      # Once again, exclude dynamic inputs, it doesn't seem to make sense that
+      # they'd reliably participate in this algorithm.
+      strong_inputs = self.cx.db.query_strong_inputs(node)
+      if source in strong_inputs:
+        return True
+      weak_inputs = self.cx.db.query_weak_inputs(node)
+      if source in weak_inputs:
+        return True
+
+      new_nodes = (strong_inputs - seen) | (weak_inputs - seen)
+      seen |= new_nodes
+      queue |= new_nodes
+
+    return False
+
+  def ensureValidDependency(self, source, target):
+    # Build the set of nodes that are valid connectors for the dependency. For
+    # cxx and cpa commands, the exact dependencies are determined by AMB2, so
+    # we don't allow the user to attach arbitrary strong dependencies; they
+    # are always weak.
+    roots = set()
+
+    inputs = self.cx.db.query_weak_inputs(target)
+    if not nodetypes.HasAutoDependencies(target.type):
+      # Exclude dynamic inputs since they weren't specified in the build.
+      inputs |= self.cx.db.query_strong_inputs(target)
+
+    for input in inputs:
+      if input == source:
+        return True
+
+      if input.type == nodetypes.Group:
+        # As an optimization, see if we can quickly test group membership.
+        members = self.cx.db.query_strong_inputs(input)
+        if input in members:
+          return True
+
+      if self.findPath(source, input):
+        return True
+
+    # There is no explicit ordering defined between these two nodes; we have
+    # abort the build.
+    util.con_err(
+      util.ConsoleRed,
+      'Encountered an error while computing new dependencies: ' ,
+      'A new dependency was discovered that exists as an output from another build step. ',
+      'However, there is no explicit dependency between that path and this command. ',
+      'The build must abort since the ordering of these two steps is undefined. ',
+      util.ConsoleNormal
+    )
+    util.con_err(
+      util.ConsoleRed,
+      'Dependency: ',
+      util.ConsoleBlue,
+      source.path,
+      util.ConsoleNormal
+    )
+    return False
+
+  def mergeDependencies(self, cmd_node, discovered_paths):
+    # Grab nodes for each dependency.
+    discovered_set = self.discoverEntries(discovered_paths)
+    if not discovered_set:
+      return False
+
+    strong_inputs = self.cx.db.query_strong_inputs(cmd_node.entry)
+    dynamic_inputs = self.cx.db.query_dynamic_inputs(cmd_node.entry)
+
+    # Any inputs that were not inputs before, should be linked via the
+    # dynamic edge table now. If the new input is an output (i.e. a
+    # generated file), we have to ensure that there is a valid ordering
+    # between the two.
+    for added in (discovered_set - dynamic_inputs):
+      # Generally the set of dynamic inputs will be larger than the set of
+      # strong inputs, so perform the set difference against the larger set,
+      # and strong set membership manually here.
+      if added in strong_inputs:
         continue
 
-      if entry.type == nodetypes.Source:
-        self.lazyUpdateEntry(entry)
+      if added.type != nodetypes.Source:
+        assert added.type == nodetypes.Output
+        if not self.ensureValidDependency(added, cmd_node.entry):
+          return False
 
+      # Add the edge.
+      self.cx.db.add_dynamic_edge(added, cmd_node.entry)
+
+    # Remove any dynamic links that are no longer needed.
+    for removed in (dynamic_inputs - discovered_set):
+      self.cx.db.drop_dynamic_edge(removed, cmd_node.entry)
+
+    # Update the timestamps of the files we used.
     for entry in discovered_set:
-      if entry in old_set:
-        continue
-      self.cx.db.add_edge(entry, cmd_node.entry, generated=True)
-      if entry.type == nodetypes.Source:
-        self.lazyUpdateEntry(entry)
+      self.lazyUpdateEntry(entry)
 
     return True
 
@@ -196,8 +277,6 @@ class Builder(object):
         return False
 
     for incoming in node.incoming:
-      if incoming.type != nodetypes.Source:
-        continue
       self.lazyUpdateEntry(incoming.entry)
 
     for path, stamp in updates:
@@ -206,3 +285,4 @@ class Builder(object):
     self.cx.db.unmark_dirty(node.entry)
 
     return True
+
