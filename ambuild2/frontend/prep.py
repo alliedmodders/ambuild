@@ -27,6 +27,8 @@ class Preparer(object):
                             help="Build system generator to use. See --list-gen")
     self.options.add_option("--list-gen", action="store_true", dest="list_gen", default=False,
                             help="List available build system generators, then exit.")
+    self.options.add_option("--make-scripts", action="store_true", dest="make_scripts", default=False,
+                            help="Generate extra command-line files for building (build.py, Makefile).")
 
   def Configure(self): 
     options, args = self.options.parse_args()

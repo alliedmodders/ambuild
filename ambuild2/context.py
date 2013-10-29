@@ -46,7 +46,19 @@ class Context(object):
 
   def Build(self):
     if not self.build_internal():
-      sys.exit(1)
+      util.con_err(
+        util.ConsoleHeader,
+        'Build failed.',
+        util.ConsoleNormal
+      )
+      return False
+
+    util.con_out(
+      util.ConsoleHeader,
+      'Build succeeded.',
+      util.ConsoleNormal
+    )
+    return True
 
   def build_internal(self):
     parser = OptionParser("usage: %prog [options]")
@@ -102,15 +114,5 @@ class Context(object):
     if self.options.show_steps:
       builder.printSteps()
       return True
-    if not builder.update():
-      util.con_err(
-        util.ConsoleHeader,
-        'Build failed.',
-        util.ConsoleNormal
-      )
-    else:
-      util.con_out(
-        util.ConsoleHeader,
-        'Build succeeded.',
-        util.ConsoleNormal
-      )
+
+    return builder.update()

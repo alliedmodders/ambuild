@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
-import copy
+import sys, copy
 from ambuild2 import util
 from ambuild2.frontend import cpp
 from ambuild2.frontend import graphbuilder
@@ -159,11 +159,32 @@ class Generator(object):
     self.popContext()
     return rvalue
 
+  def generateBuildFiles(self):
+    build_py = os.path.join(self.buildPath, 'build.py')
+    with open(build_py, 'w') as fp:
+      fp.write("""
+#!{exe}
+# vim set: ts=8 sts=2 sw=2 tw=99 et:
+import sys
+from ambuild2 import run
+
+if not run.Build(r"{build}"):
+  sys.exit(1)
+""".format(exe=sys.executable, build=self.buildPath))
+
+    with open(os.path.join(self.buildPath, 'Makefile'), 'w') as fp:
+      fp.write("""
+all:
+	"{exe}" "{py}"
+""".format(exe=sys.executable, py=build_py))
+
   def Generate(self):
     try:
       self.preGenerate()
       self.parseBuildScripts()
       self.postGenerate()
+      if self.options.make_scripts:
+        self.generateBuildFiles()
     except ConfigureException:
       return False
     return True

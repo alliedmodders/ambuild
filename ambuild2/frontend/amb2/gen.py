@@ -98,19 +98,6 @@ class Generator(base_gen.Generator):
       database.createTables()
       database.exportGraph(self.graph)
     self.saveVars()
-    self.generateBuildFile()
-
-  def generateBuildFile(self):
-    with open(os.path.join(self.buildPath, 'build.py'), 'w') as fp:
-      fp.write("""
-# vim set: ts=8 sts=2 sw=2 tw=99 et:
-import sys
-sys.path.append('/home/dvander/alliedmodders/ambuild/ambuild2')
-import run
-
-if not run.Build(r"{build}"):
-  sys.exit(1)
-""".format(build=self.buildPath))
 
   def saveVars(self):
     vars = {
