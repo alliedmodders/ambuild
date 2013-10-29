@@ -15,13 +15,13 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import struct
-import winapi
 import ctypes
 import os, sys
 import traceback
 from . import process
+from . import winapi
 from . process import Channel, Error, Special
-import ambuild2.util
+from ambuild2 import util
 
 def child_main():
   if 'LOG' in os.environ:
@@ -79,10 +79,10 @@ class NamedPipe(Channel):
     winapi.CloseHandle(self.handle)
 
   def send_impl(self, obj, channels=()):
-    if len(channels) and type(obj) is not dict:
+    if channels and len(channels) and type(obj) is not dict:
       raise Exception('must have dictionary message to send channels')
 
-    if len(channels):
+    if channels:
       assert kChannelsKey not in obj
 
       # Unlike posix we can cheat here and just send the paths for the pipes.
@@ -121,7 +121,7 @@ class NamedPipe(Channel):
       ctypes.cast(buffer, ctypes.c_void_p),
       len(data),
       ctypes.byref(nwritten),
-      ctypes.byref(self.write_op)
+      ctypes.cast(ctypes.pointer(self.write_op), ctypes.c_void_p)
     )
     if not result:
       if winapi.GetLastError() != winapi.ERROR_IO_PENDING:
@@ -187,7 +187,7 @@ class NamedPipe(Channel):
         ctypes.cast(self.input_obj, ctypes.c_void_p),
         len(self.input_buffer),
         ctypes.byref(bytes_read),
-        ctypes.byref(self.read_op)
+        ctypes.cast(ctypes.pointer(self.read_op), ctypes.c_void_p)
       )
 
       if not result:
@@ -415,14 +415,14 @@ class MessagePump(process.MessagePump):
     if len(self.pending):
       self.processPendingEvents()
 
-    result, nbytes, key, poverlapped = winapi.GetQueuedCompletionStatus(self.port, winapi.INFINITE)
+    result, nbytes, key, overlapped = winapi.GetQueuedCompletionStatus(self.port, winapi.INFINITE)
 
     # There is no way to remove a file from a completion port, so just as a
     # precaution, we check this.
     if key.value not in self.listeners:
       return False
 
-    address = ctypes.addressof(poverlapped.contents)
+    address = ctypes.addressof(overlapped)
     channel, listener = self.listeners[key.value]
 
     # We only care about read events, so if we're receiving some kind of white

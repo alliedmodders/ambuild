@@ -1,7 +1,14 @@
 #!/usr/bin/env python
 # vim: set ts=2 sw=2 tw=99 et: 
-
+import sys
 from distutils.core import setup
+
+scripts = [
+  'scripts/ambuild'
+]
+
+if sys.platform == 'win32':
+  scripts.append('scripts/ambuild.bat')
 
 setup(
   name = 'AMBuild',
@@ -17,9 +24,7 @@ setup(
     'ambuild2.ipc',
     'ambuild2.frontend.amb2'
   ],
-  scripts = [
-    'scripts/ambuild'
-  ]
+  scripts = scripts
 )
 
 

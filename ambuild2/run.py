@@ -15,11 +15,11 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
-import util
 import os, sys
-from frontend.prep import Preparer
-from context import Context
 from optparse import OptionParser
+from ambuild2 import util
+from ambuild2.frontend.prep import Preparer
+from ambuild2.context import Context
 
 def Build(buildPath):
   with Context(buildPath=buildPath) as cx:

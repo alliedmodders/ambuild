@@ -18,6 +18,7 @@ import ctypes
 import os, sys
 import tempfile
 from ctypes import WinError
+from ambuild2 import util
 
 handle_t = ctypes.c_void_p
 handlep_t = ctypes.POINTER(handle_t)
@@ -80,6 +81,8 @@ class Overlapped(ctypes.Structure):
   def event(self):
     return ctypes.cast(ctypes.c_void_p((self.hEvent.value >> 1) << 1), handle_t)
 
+# Given the occasional shitfest that is ctypes, it doesn't work to byref() a
+# struct. We have to keep the POINTER type around and use from_address.
 LPOVERLAPPED = ctypes.POINTER(Overlapped)
 
 fnCreateIoCompletionPort = ctypes.windll.kernel32.CreateIoCompletionPort
@@ -96,7 +99,7 @@ fnGetQueuedCompletionStatus.argtypes = [
   handle_t,                         # HANDLE CompletionPort
   ctypes.POINTER(ctypes.c_int),     # LPDWORD
   ctypes.POINTER(ctypes.c_size_t),  # PULONG_PTR lpCompletionKey
-  ctypes.POINTER(LPOVERLAPPED),     # LPOVERLAPPED *lpOverlapped
+  ctypes.POINTER(ctypes.c_void_p),  # LPOVERLAPPED *lpOverlapped
   ctypes.c_int                      # DWORD
 ]
 fnGetQueuedCompletionStatus.restype = ctypes.c_int
@@ -141,7 +144,7 @@ fnWriteFile.argtypes = [
   ctypes.c_void_p,                  # LPCVOID lpBuffer
   ctypes.c_int,                     # DWORD nNumberOfBytesToWrite
   ctypes.POINTER(ctypes.c_int),     # LPDWORD lpNumberOfBytesWritten
-  ctypes.POINTER(Overlapped)        # LPOVERLAPPED lpOverlapped
+  ctypes.c_void_p                   # LPOVERLAPPED lpOverlapped
 ]
 fnWriteFile.restype = ctypes.c_int
 
@@ -151,7 +154,7 @@ fnReadFile.argtypes = [
   ctypes.c_void_p,                  # LPVOID lpBuffer,
   ctypes.c_int,                     # DWORD lpNumberOfBytesRead,
   ctypes.POINTER(ctypes.c_int),     # LPDWORD lpNumberOfBytesWritten,
-  ctypes.POINTER(Overlapped)        # LPOVERLAPPED lpOverlapped
+  ctypes.c_void_p                   # LPOVERLAPPED lpOverlapped
 ]
 fnReadFile.restype = ctypes.c_int
 
@@ -273,7 +276,7 @@ def CreateNamedPipe():
   flags = PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE
 
   rval = fnCreateNamedPipeA(
-    pipe_name,
+    util.str2b(pipe_name),
     flags,
     PIPE_TYPE_BYTE | PIPE_TYPE_READMODE_BYTE,
     1,
@@ -288,7 +291,7 @@ def CreateNamedPipe():
 
 def OpenPipe(path):
   rval = fnCreateFileA(
-    path,
+    util.str2b(path),
     GENERIC_READ | GENERIC_WRITE,
     0,
     None,
@@ -352,7 +355,7 @@ def RegisterIoCompletion(port, handle, key):
 def GetQueuedCompletionStatus(port, wait):
   nbytes = ctypes.c_int()
   key = ctypes.c_size_t()
-  poverlapped = LPOVERLAPPED()
+  poverlapped = ctypes.c_void_p()
 
   result = fnGetQueuedCompletionStatus(
     port,
@@ -361,12 +364,19 @@ def GetQueuedCompletionStatus(port, wait):
     ctypes.byref(poverlapped),
     wait
   )
+
+  if not poverlapped.value:
+    overlapped = None
+  else:
+    overlapped = ctypes.cast(poverlapped.value, LPOVERLAPPED)
+    overlapped = overlapped.contents
+
   if not result:
     if not poverlapped:
-      return False, 0, -1, None
-    return False, 0, key, poverlapped
+      return False, 0, -1, overlapped
+    return False, 0, key, overlapped
 
-  return True, nbytes, key, poverlapped
+  return True, nbytes, key, overlapped
 
 
 def GetCurrentProcess():
@@ -428,6 +438,7 @@ class Process(object):
     argv += ['--pipe', '{0}'.format(channel.path)]
 
     cmdline = ' '.join(['"{0}"'.format(arg) for arg in argv])
+    cmdline = util.str2b(cmdline)
     cmdline_buffer = ctypes.create_string_buffer(cmdline)
 
     startup_info = StartupInfo()
@@ -439,7 +450,7 @@ class Process(object):
     proc_info = ProcessInformation()
 
     rval = fnCreateProcessA(
-      sys.executable,
+      util.str2b(sys.executable),
       cmdline_buffer,
       None,
       None,
