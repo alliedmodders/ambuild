@@ -235,11 +235,11 @@ class SocketChannel(Channel):
       b += new_bytes
     return b
 
-  def send_impl(self, obj, channels=()):
+  def send_impl(self, obj, channels=None):
     data = util.pickle.dumps(obj)
 
     # If no channels, just send the data.
-    if not len(channels):
+    if not channels:
       self.sock.sendall(struct.pack('ii', len(data), 0))
       self.sock.sendall(data)
       return

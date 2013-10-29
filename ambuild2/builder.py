@@ -119,7 +119,7 @@ class Builder(object):
           util.ConsoleBlue,
           ' -> ',
           util.ConsoleRed,
-          '{0}'.format(task.format()),
+          '{0}'.format(task.entry.format()),
           util.ConsoleNormal
         )
 

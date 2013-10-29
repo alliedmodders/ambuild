@@ -50,7 +50,7 @@ class Channel(object):
   # If channels is a tuple of Channel objects, they will be attached to the
   # message dictionary to a 'channels' key, and reconstructed on the other
   # side.
-  def send(self, message, channels=()):
+  def send(self, message, channels=None):
     self.send_impl(message, channels)
     self.log_send(message, channels)
 
@@ -82,6 +82,8 @@ class Channel(object):
     if not __debug__:
       return
     msgid = Channel.formatMessage(message)
+    if not channels:
+      channels = ()
     logging.info('[{0}:{1}] {2} sent message: {3} ({4} channels)'.format(
       os.getpid(),
       time.time(),
@@ -146,7 +148,7 @@ class ChildProcessListener(object):
   def receiveMessage(self, channel, message):
     if message['id'] in self.messageMap:
       return self.messageMap[message['id']](channel, message)
-    raise Exception('Unhandled message: ' + str(message['id']))
+    raise Exception('Unhandled message in {0}: {1}'.format(self, str(message['id'])))
 
   # Called when the parent process requests safe shutdown.
   def receiveClose(self, channel):

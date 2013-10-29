@@ -44,10 +44,9 @@ class Task(object):
     return (' '.join([arg for arg in self.data]))
 
 class WorkerChild(ChildProcessListener):
-  def __init__(self, pump, channel, buildPath, channels):
+  def __init__(self, pump, channel, buildPath):
     super(WorkerChild, self).__init__(pump, channel)
     self.buildPath = buildPath
-    self.resultChannel = Channel.connect(channels[0], 'WorkerIOChild')
     self.pid = os.getpid()
     self.messageMap = {
       'task': lambda channel, message: self.receiveTask(channel, message)
@@ -59,25 +58,10 @@ class WorkerChild(ChildProcessListener):
       'cp': lambda message: self.doCopy(message),
     }
 
-    # Spew! We can't print to stdout since it could race.
-    self.resultChannel.send({
-      'id': 'spawned',
-      'pid': os.getpid()
-    })
-
     self.channel.send({
       'id': 'ready',
       'finished': None
     })
-
-  def receiveClose(self, channel):
-    try:
-      self.resultChannel.finished()
-    except:
-      # The channel could have been closed from the other side already, so
-      # just ignore errors.
-      pass
-    super(WorkerChild, self).receiveClose(channel)
 
   def receiveTask(self, channel, message):
     # :TODO: test this.
@@ -110,13 +94,6 @@ class WorkerChild(ChildProcessListener):
     return self.issueResponse(message, response)
 
   def issueResponse(self, message, response):
-    # Send a message to the task master indicating whether we succeeded.
-    self.channel.send({
-      'id': 'ranTask',
-      'ok': response['ok'],
-      'task_id': message['task_id']
-    })
-
     # Compute new timestamps for all command outputs.
     new_timestamps = []
     if response['ok']:
@@ -129,12 +106,7 @@ class WorkerChild(ChildProcessListener):
     response['pid'] = self.pid
     response['task_id'] = message['task_id']
     response['updates'] = new_timestamps
-    try:
-      self.resultChannel.send(response)
-    except:
-      # If we failed to send the message, it means the parent side has already
-      # closed the channel due to some failure on its end.
-      pass
+    self.channel.send(response)
 
   def doCommand(self, message):
     task_folder = message['task_folder']
@@ -241,34 +213,26 @@ class WorkerChild(ChildProcessListener):
 
 # The WorkerParent is in the same process as the TaskMasterChild.
 class WorkerParent(ParentProcessListener):
-  def __init__(self, taskMaster, child_channel):
+  def __init__(self, taskMaster):
     super(WorkerParent, self).__init__('Worker')
     self.taskMaster = taskMaster
-    self.child_channel = child_channel
     self.messageMap = {
       'ready': lambda child, message: self.receiveReady(child, message),
-      'ranTask': lambda child, message: self.receiveRanTask(child, message),
+      'results': lambda child, message: self.receiveResults(child, message),
     }
 
-  def receiveConnected(self, child):
-    super(WorkerParent, self).receiveConnected(child)
-    # We're just a conduit for this pipe. Now that the child has received it,
-    # it's safe to free our references to it.
-    self.child_channel.close()
-    self.child_channel = None
-
   def receiveReady(self, child, message):
-    self.taskMaster.onWorkerReady(child)
+    self.taskMaster.onWorkerReady(child, message)
 
-  def receiveRanTask(self, child, message):
-    self.taskMaster.onWorkerRanTask(child, message)
+  def receiveResults(self, child, message):
+    self.taskMaster.onWorkerResults(child, message)
 
   def receiveError(self, child, error):
     self.taskMaster.onWorkerDied(child, error)
 
 # The TaskMasterChild is in the same process as the WorkerParent.
 class TaskMasterChild(ChildProcessListener):
-  def __init__(self, pump, channel, task_graph, buildPath, child_channels):
+  def __init__(self, pump, channel, task_graph, buildPath, num_processes):
     super(TaskMasterChild, self).__init__(pump, channel)
     self.task_graph = task_graph
     self.outstanding = {}
@@ -277,17 +241,17 @@ class TaskMasterChild(ChildProcessListener):
     self.build_completed = False
 
     self.procman = ProcessManager(pump)
-    for channel in child_channels:
+    for i in range(num_processes):
       self.procman.spawn(
-        WorkerParent(self, channel),
+        WorkerParent(self),
         WorkerChild,
-        args=(buildPath,),
-        channels=(channel,)
+        args=(buildPath,)
       )
 
     self.channel.send({
       'id': 'spawned',
-      'pid': os.getpid()
+      'pid': os.getpid(),
+      'type': 'taskmaster'
     })
 
   def buildFailed(self):
@@ -304,7 +268,10 @@ class TaskMasterChild(ChildProcessListener):
       self.build_failed = True
     self.procman.shutdown()
 
-  def onWorkerRanTask(self, child, message):
+  def onWorkerResults(self, child, message):
+    # Forward the results to the master process.
+    self.channel.send(message)
+
     if not message['ok']:
       self.channel.send({
         'id': 'completed',
@@ -325,12 +292,12 @@ class TaskMasterChild(ChildProcessListener):
       if len(outgoing.incoming) == 0:
         self.task_graph.append(outgoing)
 
-    self.onWorkerReady(child)
+    self.onWorkerReady(child, None)
 
     # If more stuff was queued, and we have idle processes, use them.
     while len(self.task_graph) and len(self.idle):
       child = self.idle.pop()
-      if not self.onWorkerReady(child):
+      if not self.onWorkerReady(child, None):
         break
 
   def close_idle(self):
@@ -338,7 +305,14 @@ class TaskMasterChild(ChildProcessListener):
       self.procman.close(child)
     self.idle = set()
 
-  def onWorkerReady(self, child):
+  def onWorkerReady(self, child, message):
+    if message and not message['finished']:
+      self.channel.send({
+        'id': 'spawned',
+        'pid': child.pid,
+        'type': 'worker'
+      })
+
     # If the build failed, ignore the message.
     if self.build_failed:
       return False
@@ -404,35 +378,6 @@ class TaskMasterChild(ChildProcessListener):
     self.channel.finished()
     self.pump.cancel()
 
-class WorkerIOListener(MessageListener):
-  def __init__(self, taskMaster, close_on_ack):
-    super(WorkerIOListener, self).__init__(close_on_ack)
-    self.taskMaster = taskMaster
-    self.messageMap = {
-      'results': lambda channel, message: self.taskMaster.processResults(message),
-      'spawned': lambda channel, message: self.receiveSpawned(message)
-    }
-
-  def receiveSpawned(self, message):
-    util.con_out(
-      util.ConsoleHeader,
-      'Spawned worker (pid: {0})'.format(message['pid']),
-      util.ConsoleNormal
-    )
-
-  def receiveError(self, channel, error):
-    # We currently ignore errors on the worker IO channel, because the master
-    # process has no way of knowing when the workers are about to die. Even if
-    # the worker sends a closing message, it could close the pipe before we
-    # have a chance to read the data. If task manager sent us a message, that
-    # could race too. Rather than trying to solve this, we just rely on the
-    # task manager telling us when errors occur.
-    #
-    # As an additional precaution, at the end of the build, we check to make
-    # sure that a successful build actually sent results for all tasks. We may
-    # need some debugging option to spew errors here if we encounter problems.
-    pass
-
 class TaskMasterParent(ParentProcessListener):
   def __init__(self, cx, builder, task_graph, max_parallel):
     super(TaskMasterParent, self).__init__('TaskMaster')
@@ -442,6 +387,7 @@ class TaskMasterParent(ParentProcessListener):
     self.messageMap = {
       'completed': lambda child, message: self.receiveCompleted(child, message),
       'spawned': lambda child, message: self.receiveSpawned(message),
+      'results': lambda child, message: self.processResults(message)
     }
 
     # Figure out how many tasks to create.
@@ -461,21 +407,11 @@ class TaskMasterParent(ParentProcessListener):
     if num_processes > max_parallel:
       num_processes = max_parallel
 
-    # Create the list of pipes we'll be using.
-    self.channels = []
-    child_channels = []
-    for i in range(num_processes):
-      parent_channel, child_channel = cx.messagePump.createChannel('WorkerIO')
-      listener = WorkerIOListener(self, close_on_ack=child_channel)
-      cx.messagePump.addChannel(parent_channel, listener)
-      child_channels.append(child_channel)
-
     # Spawn the task master.
     cx.procman.spawn(
       self,
       TaskMasterChild,
-      args=(task_graph, cx.buildPath),
-      channels=child_channels
+      args=(task_graph, cx.buildPath, num_processes)
     )
 
   def processResults(self, message):
@@ -526,7 +462,7 @@ class TaskMasterParent(ParentProcessListener):
   def receiveSpawned(self, message):
     util.con_out(
       util.ConsoleHeader,
-      'Spawned task master (pid: {0})'.format(message['pid']),
+      'Spawned {0} (pid: {1})'.format(message['type'], message['pid']),
       util.ConsoleNormal
     )
 
@@ -537,7 +473,7 @@ class TaskMasterParent(ParentProcessListener):
 
   def receiveCompleted(self, child, message):
     if message['status'] == 'crashed':
-      task = self.builder.findTask(message['task_id'])
+      task = self.builder.commands[message['task_id']]
       sys.stderr.write('Crashed trying to perform update:\n')
       sys.stderr.write('  : {0}\n'.format(task.entry.format()))
       self.terminateBuild(graceful=True)
