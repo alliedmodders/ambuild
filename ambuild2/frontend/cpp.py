@@ -17,7 +17,7 @@
 from __future__ import print_function
 import subprocess
 import re, os, copy
-from .. import util
+from ambuild2 import util
 
 class Vendor(object):
   def __init__(self, name, version, behavior, command, objSuffix):

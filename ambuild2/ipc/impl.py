@@ -16,7 +16,7 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os, sys
 from . import process
-from .. import util
+from ambuild2 import util
 
 if util.IsWindows():
   from . import windows as ipc_impl

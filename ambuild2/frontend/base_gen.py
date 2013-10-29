@@ -16,9 +16,9 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
 import copy
-from .. import util
-from . import cpp
-from . import graphbuilder
+from ambuild2 import util
+from ambuild2.frontend import cpp
+from ambuild2.frontend import graphbuilder
 
 # AMBuild 2 scripts are parsed recursively. Each script is supplied with a
 # "builder" object, which maps to a Context object. Each script gets its own
@@ -66,6 +66,10 @@ class Context(object):
   @property
   def buildPath(self):
     return self.generator.buildPath
+
+  @property
+  def target_platform(self):
+    return self.generator.target_platform
 
   def SetBuildFolder(self, folder):
     if folder == '/' or folder == '.' or folder == './':
@@ -120,6 +124,10 @@ class Generator(object):
     self.contextStack_ = [None]
     self.configure_failed = False
     self.graph = graphbuilder.GraphBuilder()
+
+    # This is a hack... if we ever do cross-compiling or something, we'll have
+    # to change this.
+    self.target_platform = util.Platform()
 
   def parseBuildScripts(self):
     root = os.path.join(self.sourcePath, 'AMBuildScript')

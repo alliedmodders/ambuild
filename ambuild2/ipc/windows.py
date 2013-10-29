@@ -19,9 +19,9 @@ import winapi
 import ctypes
 import os, sys
 import traceback
-from .. import util
 from . import process
 from . process import Channel, Error, Special
+import ambuild2.util
 
 def child_main():
   if 'LOG' in os.environ:

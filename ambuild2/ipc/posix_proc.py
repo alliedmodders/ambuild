@@ -20,7 +20,7 @@ import socket
 import signal
 import traceback
 import os, sys, fcntl
-from .. import util
+from ambuild2 import util
 from . process import Channel, ProcessHost, Special
 
 kStartFd = 3

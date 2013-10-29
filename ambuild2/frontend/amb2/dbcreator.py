@@ -15,8 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import sqlite3
-from ... import util
-from ... import nodetypes
+from ambuild2 import util
+from ambuild2 import nodetypes
 
 class Database(object):
   def __init__(self, path):
