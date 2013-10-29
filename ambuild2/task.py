@@ -161,7 +161,11 @@ class WorkerChild(ChildProcessListener):
     source_path, output_path = message['task_data']
 
     with util.FolderChanger(task_folder):
-      rcode, stdout, stderr = util.symlink(source_path, output_path)
+      if os.path.exists(source_path):
+        rcode, stdout, stderr = util.symlink(source_path, output_path)
+      else:
+        rcode = 1
+        stderr = 'File not found: {0}'.format(source_path)
 
     reply = {
       'ok': rcode == 0,
@@ -176,13 +180,19 @@ class WorkerChild(ChildProcessListener):
     source_path, output_path = message['task_data']
 
     with util.FolderChanger(task_folder):
-      shutil.copy(source_path, output_path)
+      if os.path.exists(source_path):
+        shutil.copy(source_path, output_path)
+        ok = True
+        stderr = ''
+      else:
+        ok = False
+        stderr = 'File not found: {0}'.format(source_path)
 
     reply = {
-      'ok': True,
+      'ok': ok,
       'cmdline': 'cp "{0}" "{1}"'.format(source_path, os.path.join(task_folder, output_path)),
       'stdout': '',
-      'stderr': '',
+      'stderr': stderr,
     }
     return reply
 
