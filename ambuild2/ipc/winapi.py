@@ -166,7 +166,7 @@ fnCreateEvent.restype = handle_t
 
 fnResetEvent = ctypes.windll.kernel32.ResetEvent
 fnResetEvent.argtypes = [ handle_t ]
-fnResetEvent.restypes = ctypes.c_int
+fnResetEvent.restype = ctypes.c_int
 
 fnGetLastError = ctypes.windll.kernel32.GetLastError
 fnGetLastError.restype = ctypes.c_int
@@ -186,7 +186,11 @@ fnWaitForMultipleObjects.restype = ctypes.c_int
 
 fnConnectNamedPipe = ctypes.windll.kernel32.ConnectNamedPipe
 fnConnectNamedPipe.argtypes = [ handle_t, ctypes.POINTER(Overlapped) ]
-fnConnectNamedPipe.restypes = ctypes.c_int
+fnConnectNamedPipe.restype = ctypes.c_int
+
+fnGetExitCodeProcess = ctypes.windll.kernel32.GetExitCodeProcess
+fnGetExitCodeProcess.argtypes = [ handle_t, ctypes.POINTER(ctypes.c_int) ]
+fnGetExitCodeProcess.restype = ctypes.c_int
 
 PIPE_ACCESS_DUPLEX =            0x00000003
 PIPE_TYPE_BYTE =                0x00000000
@@ -208,6 +212,7 @@ WAIT_ABANDONED =                0x00000080
 WAIT_OBJECT_0 =                 0x00000000
 WAIT_TIMEOUT =                  0x00000102
 WAIT_FAILED =                   -1
+STILL_ACTIVE =                  259
 
 pipe_counter_ = 0
 
@@ -396,6 +401,22 @@ class Process(object):
   def __init__(self, handle, pid):
     self.handle = handle
     self.pid = pid
+    self.returncode = None
+
+  def is_alive(self):
+    if self.returncode != None:
+      return False
+
+    status = ctypes.c_int()
+    rval = fnGetExitCodeProcess(self.handle, ctypes.byref(status))
+    if not rval:
+      raise WinError()
+
+    if status.value == 259:
+      return True
+
+    self.returncode = status.value
+    return False
 
   @classmethod
   def spawn(cls, channel):
