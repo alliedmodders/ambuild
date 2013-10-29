@@ -132,6 +132,7 @@ class NamedPipe(Channel):
         raise Exception('unexpected return value from WaitForSingleObject()')
       print('Done waiting!')
 
+
     # Done.
     return
 
@@ -159,17 +160,22 @@ class NamedPipe(Channel):
     self.waiting_input = False
 
     messages = []
-    while True:
-      message, nbytes = self.receive_bytes(nbytes)
-      if nbytes == -1:
-        break
-      if message:
+
+    message = self.receive_bytes(nbytes)
+    if message:
+      messages.append(message)
+      while True:
+        message = self.seek_remaining_message()
+        if not message:
+          break
         messages.append(message)
+
+    if not self.waiting_input:
+      self.receive_bytes(0)
 
     # We should always be awaiting input again, otherwise, we'll never receive
     # more events from the IO Completion Port.
     assert self.waiting_input
-
     return messages
 
   def receive_bytes(self, nbytes):
@@ -187,7 +193,7 @@ class NamedPipe(Channel):
       if not result:
         if winapi.GetLastError() == winapi.ERROR_IO_PENDING:
           self.waiting_input = True
-          return None, -1
+          return None
         raise winapi.WinError()
 
       # Even if the ReadFile() succeeds, and we have data immediately
@@ -195,19 +201,18 @@ class NamedPipe(Channel):
       # sense to me, but the IOCP API is awful in general. We just return
       # immediately if this is the case, to avoid reading the data twice.
       self.waiting_input = True
-      return None, -1
+      return None
 
     total_length = len(self.input_overflow) + nbytes
 
     # Do we have enough for a message prefix?
     if total_length < 4:
       self.input_overflow += self.input_buffer
-      nbytes = 0
-      return None, 0
+      return None
 
     # Get the message prefix.
     msg_prefix = self.input_overflow[0:kPrefixLength]
-    if len(msg_prefix) < 4:
+    if len(msg_prefix) < kPrefixLength:
       start = len(msg_prefix)
       end = kPrefixLength - start
       msg_prefix = self.input_buffer[start:end]
@@ -216,21 +221,47 @@ class NamedPipe(Channel):
     msg_size, = struct.unpack('i', bytes(msg_prefix))
     if total_length - kPrefixLength < msg_size:
       self.input_overflow += self.input_buffer
-      nbytes = 0
-      return None, 0
+      return None
 
-    # If there's no overflow buffer, we can avoid a lot of copying[?]
+    # This is a horrible amount of copying... maybe consider using a deque
+    # of bytes or something if it's a performance problem.
     if not len(self.input_overflow):
-      message = util.pickle.loads(bytes(self.input_buffer[kPrefixLength:]))
+      message = util.pickle.loads(
+          bytes(self.input_buffer[kPrefixLength : kPrefixLength + msg_size])
+      )
+      self.input_overflow += self.input_buffer[kPrefixLength + msg_size : nbytes]
     else:
-      self.input_overflow += self.input_buffer
-      message = util.pickle.loads(bytes(self.input_overflow[kPrefixLength:]))
-      self.input_overflow[0:msg_size + kPrefixLength] = bytearray()
+      # Steal remaining bytes from the input buffer, if needed.
+      if len(self.input_overflow) < kPrefixLength + msg_size:
+        msg_remaining = kPrefixLength + msg_size - len(self.input_overflow)
+        self.input_overflow += self.input_buffer[:msg_remaining]
+      else:
+        msg_remaining = 0
 
-    nbytes -= msg_size + kPrefixLength
-    assert(nbytes >= 0)
+      message = util.pickle.loads(
+        bytes(self.input_overflow[kPrefixLength : kPrefixLength + msg_size])
+      )
 
-    return message, nbytes
+      # Adjust the input buffer.
+      del self.input_overflow[0 : kPrefixLength + msg_size]
+      self.input_overflow += self.input_buffer[msg_remaining : nbytes]
+
+    return message
+
+  def seek_remaining_message(self):
+    if len(self.input_overflow) < kPrefixLength:
+      return None
+
+    msg_size, = struct.unpack('i', bytes(self.input_overflow[0:kPrefixLength]))
+    if kPrefixLength + msg_size < len(self.input_overflow):
+      return None
+
+    message = util.pickle.loads(
+      bytes(self.input_overflow[kPrefixLength : kPrefixLength + msg_size])
+    )
+    del self.input_overflow[0 : kPrefixLength + msg_size]
+
+    return message
 
   def connect_async(self):
     result = winapi.fnConnectNamedPipe(self.handle, ctypes.byref(self.read_op))
