@@ -21,7 +21,7 @@ import select, os
 import multiprocessing as mp
 from . import process
 from . import posix_proc
-from ipc.process import ProcessHost, Channel, Error, Special
+from . process import ProcessHost, Channel, Error, Special
 
 # Linux multiprocess support is implemented using epoll() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.

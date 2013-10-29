@@ -14,14 +14,14 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import util
 import struct
 import winapi
 import ctypes
 import os, sys
 import traceback
+from .. import util
 from . import process
-from ipc.process import Channel, Error, Special
+from . process import Channel, Error, Special
 
 def child_main():
   if 'LOG' in os.environ:

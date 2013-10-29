@@ -15,11 +15,11 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
-import util
-import nodetypes
-from frontend.cpp import DetectCompiler
-from frontend.amb2 import dbcreator
-from frontend import base_gen
+from ... import util
+from ... import nodetypes
+from .. cpp import DetectCompiler
+from .. import base_gen
+from . import dbcreator
 
 class CppNodes(object):
   def __init__(self, output, debug_outputs):

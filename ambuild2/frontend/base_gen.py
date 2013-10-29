@@ -15,9 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
-import util, copy
-from frontend import cpp
-from frontend import graphbuilder
+import copy
+from .. import util
+from . import cpp
+from . import graphbuilder
 
 # AMBuild 2 scripts are parsed recursively. Each script is supplied with a
 # "builder" object, which maps to a Context object. Each script gets its own

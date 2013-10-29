@@ -14,9 +14,9 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import util
 import os, sys
-import nodetypes
+from .. import util
+from .. import nodetypes
 
 class NodeBuilder(object):
   def __init__(self, type, path=None, folder=None, blob=None, generated=False):

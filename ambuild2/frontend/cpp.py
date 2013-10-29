@@ -15,9 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
-import util
 import subprocess
 import re, os, copy
+from .. import util
 
 class Vendor(object):
   def __init__(self, name, version, behavior, command, objSuffix):

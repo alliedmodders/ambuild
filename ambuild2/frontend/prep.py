@@ -38,7 +38,7 @@ class Preparer(object):
       sys.exit(0)
 
     if options.generator == 'ambuild2':
-      from frontend.amb2 import gen
+      from . amb2 import gen
       builder = gen.Generator(self.sourcePath, self.buildPath, options, args)
     elif options.generator == 'vcxproj':
       from frontend import vcxproj_gen

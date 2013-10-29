@@ -14,14 +14,14 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import util
 import struct
 import ctypes
 import socket
 import signal
 import traceback
 import os, sys, fcntl
-from .process import Channel, ProcessHost, Special
+from .. import util
+from . process import Channel, ProcessHost, Special
 
 kStartFd = 3
 

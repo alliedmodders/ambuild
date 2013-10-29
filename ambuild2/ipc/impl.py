@@ -14,15 +14,16 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import os, sys, util
+import os, sys
 from . import process
+from .. import util
 
 if util.IsWindows():
-  import ipc.windows as ipc_impl
+  from . import windows as ipc_impl
 elif util.IsLinux():
-  import ipc.linux as ipc_impl
+  from . import linux as ipc_impl
 elif util.IsBSD():
-  import ipc.bsd as ipc_impl
+  from . import bsd as ipc_impl
 else:
   raise Exception('Unknown platform: ' + util.Platform())
 
@@ -30,9 +31,9 @@ ProcessManager = ipc_impl.ProcessManager
 MessagePump = ipc_impl.MessagePump
 
 if util.IsWindows():
-  from ipc.windows import NamedPipe as Channel
+  from . windows import NamedPipe as Channel
 else:
-  from ipc.posix_proc import SocketChannel as Channel
+  from . posix_proc import SocketChannel as Channel
 
 class ChildWrapperListener(process.MessageListener):
   def __init__(self, mp, channel):
