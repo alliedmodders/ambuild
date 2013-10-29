@@ -471,10 +471,3 @@ class Process(object):
     posix_spawn_file_actions_destroy(file_actions)
 
     return cls(pid.value)
-
-if __name__ == '__main__':
-  parent, child = SocketChannel.pair()
-  parent.send('egg')
-  Process.spawn(child)
-  while True:
-    pass

@@ -421,9 +421,17 @@ class WorkerIOListener(MessageListener):
     )
 
   def receiveError(self, channel, error):
-    if error != Error.NormalShutdown:
-      # This should only really happen if processResults throws.
-      self.taskMaster.terminateBuild(graceful=True)
+    # We currently ignore errors on the worker IO channel, because the master
+    # process has no way of knowing when the workers are about to die. Even if
+    # the worker sends a closing message, it could close the pipe before we
+    # have a chance to read the data. If task manager sent us a message, that
+    # could race too. Rather than trying to solve this, we just rely on the
+    # task manager telling us when errors occur.
+    #
+    # As an additional precaution, at the end of the build, we check to make
+    # sure that a successful build actually sent results for all tasks. We may
+    # need some debugging option to spew errors here if we encounter problems.
+    pass
 
 class TaskMasterParent(ParentProcessListener):
   def __init__(self, cx, builder, task_graph, max_parallel):
@@ -499,8 +507,7 @@ class TaskMasterParent(ParentProcessListener):
 
     task_id = message['task_id']
     updates = message['updates']
-    node = self.builder.findTask(task_id)
-    if not self.builder.updateGraph(node, updates, message):
+    if not self.builder.updateGraph(task_id, updates, message):
       util.con_out(
         util.ConsoleRed,
         'Failed to update node!',

@@ -61,6 +61,7 @@ class Builder(object):
     tb = TaskTreeBuilder(cx)
     self.commands, self.leafs = tb.buildFromGraph(graph)
     self.max_parallel = tb.max_parallel
+    self.num_completed_tasks = 0
 
     # Set of nodes we'll mark as clean in the database.
     self.update_set = set()
@@ -103,10 +104,26 @@ class Builder(object):
     tm = TaskMasterParent(self.cx, self, self.leafs, self.max_parallel)
     success = tm.run()
     self.commit()
-    return success
 
-  def findTask(self, task_id):
-    return self.commands[task_id]
+    if success and len(self.commands) != self.num_completed_tasks:
+      util.con_err(
+        util.ConsoleRed,
+        'Build marked as completed, but some commands were not executed?!\n',
+        'Commands:',
+        util.ConsoleNormal
+      )
+      for task in self.commands:
+        if not task:
+          continue
+        util.con_err(
+          util.ConsoleBlue,
+          ' -> ',
+          util.ConsoleRed,
+          '{0}'.format(task.format()),
+          util.ConsoleNormal
+        )
+
+    return success
 
   def lazyUpdateEntry(self, entry):
     if entry.type != nodetypes.Source:
@@ -271,7 +288,21 @@ class Builder(object):
 
     return True
 
-  def updateGraph(self, node, updates, message):
+  def updateGraph(self, task_id, updates, message):
+    if not self.commands[task_id]:
+      util.con_err(
+        util.ConsoleRed,
+        'Received update for task_id {0} that was already completed!\n'.format(task_id),
+        util.ConsoleBlue,
+        'Message details:\n',
+        util.ConsoleNormal,
+        '{0}'.format(message)
+      )
+      return False
+
+    node = self.commands[task_id]
+    self.commands[task_id] = None
+
     if 'deps' in message:
       if not self.mergeDependencies(node, message['deps']):
         return False
@@ -286,5 +317,6 @@ class Builder(object):
       self.cx.db.unmark_dirty(entry, stamp)
     self.cx.db.unmark_dirty(node.entry)
 
+    self.num_completed_tasks += 1
     return True
 
