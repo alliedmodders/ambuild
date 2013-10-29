@@ -1,0 +1,31 @@
+#!/usr/bin/python
+# vim: set sts=2 ts=8 sw=2 tw=99 et:
+import os, sys
+from ambuild2 import run
+from optparse import OptionParser
+
+def main():
+  parser = OptionParser(usage="Usage: %prog [options] [path]")
+  options, argv = parser.parse_args()
+
+  if len(argv) > 1:
+    parser.error("expected path, found extra arguments")
+
+  if not len(argv):
+    folder = '.'
+  else:
+    folder = argv[0]
+    if not os.path.exists(folder):
+      sys.stderr.write('Error: path does not exist: {0}\n'.format(folder))
+      sys.exit(1)
+
+  cache_path = os.path.join(folder, '.ambuild2', 'graph')
+  if not os.path.exists(cache_path):
+    sys.stderr.write('Error: folder was not configured for AMBuild.\n')
+    sys.exit(1)
+
+  run.Build(os.path.abspath(folder))
+
+if __name__ == '__main__':
+  main()
+
