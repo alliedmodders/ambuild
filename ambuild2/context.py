@@ -32,6 +32,12 @@ class Context(object):
       except ValueError as exn:
         sys.stderr.write('Build was configured with Python 3; use python3 instead.\n')
         sys.exit(1)
+      except Exception as exn:
+        if os.path.exists(os.path.join(self.cacheFolder, 'vars')):
+          sys.stderr.write('There does not appear to be a build configured here.\n')
+        else:
+          sys.stderr.write('The build configured here looks corrupt; you will have to delete your objdir.\n')
+        sys.exit(1)
     self.db = database.Database(self.dbpath)
     self.db.connect()
     self.messagePump = MessagePump()
