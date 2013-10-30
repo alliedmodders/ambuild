@@ -105,4 +105,4 @@ class Generator(base_gen.Generator):
       'buildPath': self.buildPath
     }
     with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
-      util.pickle.dump(vars, fp)
+      util.DiskPickle(vars, fp)

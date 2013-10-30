@@ -116,7 +116,7 @@ class Database(object):
       if node.blob == None:
         blob = None
       else:
-        blob = util.BlobType(util.pickle.dumps(node.blob))
+        blob = util.BlobType(util.CompatPickle(node.blob))
       if node.folder == None:
         folder_id = None
       else:

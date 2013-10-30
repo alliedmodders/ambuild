@@ -165,6 +165,16 @@ def Unpickle(blob):
     blob = bytes(blob)
   return pickle.loads(blob)
 
+# We don't want to dump Python 3 pickle format since then ambuild couldn't
+# run it if you using Python 2.
+PICKLE_PROTOCOL = min(2, pickle.HIGHEST_PROTOCOL)
+
+def DiskPickle(obj, fp):
+  return pickle.dump(obj, fp, PICKLE_PROTOCOL)
+
+def CompatPickle(obj):
+  return pickle.dumps(obj, PICKLE_PROTOCOL)
+
 def str2b(s):
   if bytes is str:
     return s
