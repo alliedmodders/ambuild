@@ -124,5 +124,5 @@ class Graph(object):
       for incoming in node.incoming:
         printNode(incoming, indent + 1)
 
-    for node in self.roots:
+    for node in [node for node in self.node_list if not len(node.incoming)]:
       printNode(node, 0)

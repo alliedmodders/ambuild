@@ -430,7 +430,7 @@ class Process(object):
 
   @classmethod
   def spawn(cls, channel):
-    eval = 'from ipc.windows import child_main; child_main()'
+    eval = 'from ambuild2.ipc.windows import child_main; child_main()'
     argv = [sys.executable, '-c', eval]
     argv += ['--name', '{0}'.format(channel.name)]
 

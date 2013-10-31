@@ -396,6 +396,8 @@ class Library(BinaryBuilder):
   def generateBinary(self, cx, argv):
     name = self.name + util.SharedLibSuffix()
 
+    if isinstance(self.linker, MSVC):
+      argv.append('/link')
     argv.extend(LinkFlags(self.compiler))
     if isinstance(self.linker, MSVC):
       argv.append('/OUT:' + name)

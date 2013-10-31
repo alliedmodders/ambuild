@@ -127,11 +127,8 @@ class NamedPipe(Channel):
       if winapi.GetLastError() != winapi.ERROR_IO_PENDING:
         raise winapi.WinError()
 
-      print('Waiting!')
       if not winapi.WaitForSingleObject(self.write_op.hEvent, winapi.INFINITE):
         raise Exception('unexpected return value from WaitForSingleObject()')
-      print('Done waiting!')
-
 
     # Done.
     return
@@ -253,7 +250,7 @@ class NamedPipe(Channel):
       return None
 
     msg_size, = struct.unpack('i', bytes(self.input_overflow[0:kPrefixLength]))
-    if kPrefixLength + msg_size < len(self.input_overflow):
+    if len(self.input_overflow) < kPrefixLength + msg_size:
       return None
 
     message = util.pickle.loads(

@@ -24,6 +24,7 @@ class Preparer(object):
     self.sourcePath = sourcePath
     self.buildPath = buildPath
     self.host_platform = util.Platform()
+    self.target_platform = util.Platform()
 
     self.options = OptionParser("usage: %prog [options]")
     self.options.add_option("-g", "--gen", type="string", dest="generator", default="ambuild2",
