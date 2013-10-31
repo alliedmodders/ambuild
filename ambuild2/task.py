@@ -399,7 +399,7 @@ class TaskMasterParent(ParentProcessListener):
       if mp.cpu_count() == 1:
         num_processes = 2
       else:
-        num_processes = int(mp.cpu_count() * 1.5)
+        num_processes = int(mp.cpu_count() * 1.25)
     else:
       num_processes = cx.options.jobs
 

@@ -68,7 +68,7 @@ class Context(object):
     parser.add_option("--show-steps", dest="show_steps", action="store_true", default=False,
                       help="Show the computed build steps and then exit.")
     parser.add_option("-j", "--jobs", dest="jobs", type="int", default=0,
-                      help="Number of worker processes. Minimum number is 1; default is #cores * 1.5.")
+                      help="Number of worker processes. Minimum number is 1; default is #cores * 1.25.")
     self.options, self.args = parser.parse_args()
 
     # This doesn't completely work yet because it's not communicated to child
