@@ -17,9 +17,10 @@
 import util
 import os, sys
 import sqlite3
+import util
 import nodetypes
 import traceback
-from nodetypes import Node
+from nodetypes import Entry
 
 class Database(object):
   def __init__(self, path):
@@ -47,44 +48,196 @@ class Database(object):
   def commit(self):
     self.cn.commit()
 
-  def add_source(self, path):
+  def create_tables(self):
+    queries = [
+      "create table if not exists nodes(      \
+        type varchar(4) not null,             \
+        stamp real not null default 0.0,      \
+        dirty int not null default 0,         \
+        generated int not null default 0,     \
+        path text,                            \
+        folder int,                           \
+        data blob                             \
+      )",
+
+      # The edge table stores links that are specified by the build scripts;
+      # this table is essentially immutable (except for reconfigures).
+      "create table if not exists edges(      \
+        outgoing int not null,                \
+        incoming int not null,                \
+        unique (outgoing, incoming)           \
+      )",
+
+      # The weak edge table stores links that are specified by build scripts,
+      # but only to enforce ordering. They do not propagate damage or updates.
+      "create table if not exists weak_edges( \
+        outgoing int not null,                \
+        incoming int not null,                \
+        unique (outgoing, incoming)           \
+      )",
+
+      # The dynamic edge table stores edges that are discovered as a result of
+      # executing a command; for example, a |cp *| or C++ #includes.
+      "create table if not exists dynamic_edges( \
+        outgoing int not null,                   \
+        incoming int not null,                   \
+        unique (outgoing, incoming)              \
+      )",
+
+      "create index if not exists outgoing_edge on edges(outgoing)",
+      "create index if not exists incoming_edge on edges(incoming)",
+      "create index if not exists weak_outgoing_edge on weak_edges(outgoing)",
+      "create index if not exists weak_incoming_edge on weak_edges(incoming)",
+      "create index if not exists dyn_outgoing_edge on dynamic_edges(outgoing)",
+      "create index if not exists dyn_incoming_edge on dynamic_edges(incoming)",
+    ]
+    for query in queries:
+      self.cn.execute(query)
+    self.cn.commit()
+
+  def add_folder(self, path, generated):
     assert path not in self.path_cache_
+    assert not os.path.isabs(path)
 
-    query = """
-      insert into nodes
-      (type, generated, path)
-      values
-      (?, ?, ?)
-    """
+    return self.add_file(nodetypes.Mkdir, path, generated)
 
-    cursor = self.cn.execute(query, (nodetypes.Source, 1, path))
-    row = (nodetypes.Source, 0, 1, 1, path, None, None)
+  def add_output(self, folder_entry, path):
+    if folder_entry:
+      path = os.path.join(folder_entry.path, path)
+
+    assert path not in self.path_cache_
+    assert not os.path.isabs(path)
+
+    return self.add_file(nodetypes.Output, path, False, folder_entry)
+
+  def find_or_add_source(self, path):
+    node = self.query_path(path)
+    if node:
+      assert node.type == nodetypes.Source
+      return node
+
+    return self.add_source(path)
+
+  def add_source(self, path, generated=False):
+    assert path not in self.path_cache_
+    assert os.path.isabs(path)
+
+    return self.add_file(nodetypes.Source, path, generated)
+
+  def add_file(self, type, path, generated, folder_entry = None):
+    if folder_entry:
+      folder_id = folder_entry.id
+    else:
+      folder_id = None
+
+    query = "insert into nodes (type, generated, path, folder) values (?, ?, ?, ?)"
+
+    cursor = self.cn.execute(query, (type, int(generated), path, folder_id))
+    row = (type, 0, 1, 1, path, folder_entry, None)
     return self.import_node(
       id=cursor.lastrowid,
       row=row
     )
 
-  def add_dynamic_edge(self, from_entry, to_entry):
+  def update_command(self, entry, type, folder, data):
+    if not data:
+      blob = None
+    else:
+      blob = util.BlobType(util.CompatPickle(data))
+
+    if entry.type == type and entry.folder == folder and entry.blob == data:
+      return False
+
+    if not folder:
+      folder_id = None
+    else:
+      folder_id = folder.id
+
     query = """
-      insert into dynamic_edges
-      (outgoing, incoming)
-      values
-      (?, ?)
+      update nodes
+      set
+        type = ?,
+        folder = ?,
+        data = ?,
+        dirty = ?
+      where rowid = ?
     """
+    self.cn.execute(query, (type, folder_id, blob, 1, entry.id))
+    entry.type = type
+    entry.folder = folder
+    entry.blob = blob
+    entry.dirty = True
+    return True
+
+  def add_command(self, type, folder, data):
+    if not data:
+      blob = None
+    else:
+      blob = util.BlobType(util.CompatPickle(data))
+    if not folder:
+      folder_id = None
+    else:
+      folder_id = folder.id
+
+    query = "insert into nodes (type, folder, data, dirty) values (?, ?, ?, ?)"
+    cursor = self.cn.execute(query, (type, folder_id, blob, 1))
+
+    entry = Entry(
+      id=cursor.lastrowid,
+      type=type,
+      path=None,
+      blob=data,
+      folder=folder,
+      stamp=0,
+      dirty=True,
+      generated=False
+    )
+    self.node_cache_[entry.id] = entry
+    return entry
+
+  def add_weak_edge(self, from_entry, to_entry):
+    query = "insert into edges (outgoing, incoming) values (?, ?)"
+    self.cn.execute(query, (to_entry.id, from_entry.id))
+    if to_entry.weak_inputs:
+      to_entry.weak_inputs.add(from_entry)
+
+  def add_strong_edge(self, from_entry, to_entry):
+    query = "insert into edges (outgoing, incoming) values (?, ?)"
+    self.cn.execute(query, (to_entry.id, from_entry.id))
+    if to_entry.strong_inputs:
+      to_entry.strong_inputs.add(from_entry)
+    if from_entry.outgoing:
+      from_entry.outgoing.add(to_entry)
+
+  def add_dynamic_edge(self, from_entry, to_entry):
+    query = "insert into dynamic_edges (outgoing, incoming) values (?, ?)"
     self.cn.execute(query, (to_entry.id, from_entry.id))
     if to_entry.dynamic_inputs:
       to_entry.dynamic_inputs.add(from_entry)
+    if from_entry.outgoing:
+      from_entry.outgoing.add(to_entry)
 
   def drop_dynamic_edge(self, from_entry, to_entry):
-    query = """
-      delete from dynamic_edges edges
-      where
-        outgoing = ? and
-        incoming = ?
-    """
+    query = "delete from dynamic_edges edges where outgoing = ? and incoming = ?"
     self.cn.execute(query, (to_entry.id, from_entry.id))
     if to_entry.dynamic_inputs:
-      to_entry.dynamic_inputs.remote(from_entry)
+      to_entry.dynamic_inputs.remove(from_entry)
+    if from_entry.outgoing:
+      from_entry.outgoing.remove(to_entry)
+
+  def drop_weak_edge(self, from_entry, to_entry):
+    query = "delete from weak_edges edges where outgoing = ? and incoming = ?"
+    self.cn.execute(query, (to_entry.id, from_entry.id))
+    if to_entry.weak_inputs:
+      to_entry.weak_inputs.remove(from_entry)
+
+  def drop_strong_edge(self, from_entry, to_entry):
+    query = "delete from edges where outgoing = ? and incoming = ?"
+    self.cn.execute(query, (to_entry.id, from_entry.id))
+    if to_entry.strong_inputs:
+      to_entry.strong_inputs.remove(from_entry)
+    if from_entry.outgoing:
+      from_entry.outgoing.remove(to_entry)
 
   def query_node(self, id):
     if id in self.node_cache_:
@@ -93,6 +246,12 @@ class Database(object):
     query = "select type, stamp, dirty, generated, path, folder, data from nodes where rowid = ?"
     cursor = self.cn.execute(query, (id,))
     return self.import_node(id, cursor.fetchone())
+
+  def query_relpath(self, folder_entry, path):
+    if folder_entry:
+      path = os.path.join(folder_entry.path, path)
+
+    return self.query_path(path)
 
   def query_path(self, path):
     if path in self.path_cache_:
@@ -115,6 +274,8 @@ class Database(object):
 
     if not row[5]:
       folder = None
+    elif type(row[5]) is nodetypes.Entry:
+      folder = row[5]
     else:
       folder = self.query_node(row[5])
     if not row[6]:
@@ -122,25 +283,33 @@ class Database(object):
     else:
       blob = util.Unpickle(row[6])
 
-    node = Node(id=id,
-                type=row[0],
-                path=row[4],
-                blob=blob,
-                folder=folder,
-                stamp=row[1],
-                dirty=row[2],
-                generated=bool(row[3]))
+    node = Entry(id=id,
+                 type=row[0],
+                 path=row[4],
+                 blob=blob,
+                 folder=folder,
+                 stamp=row[1],
+                 dirty=row[2],
+                 generated=bool(row[3]))
     self.node_cache_[id] = node
     if node.path:
       assert node.path not in self.path_cache_
       self.path_cache_[node.path] = node
     return node
 
+  def query_strong_outgoing(self, node):
+    # Not cached yet.
+    outgoing = set()
+    query = "select outgoing from edges where incoming = ?"
+    for outgoing_id, in self.cn.execute(query, (node.id,)):
+      entry = self.query_node(outgoing_id)
+      outgoing.add(entry)
+    return outgoing
+
   def query_outgoing(self, node):
     if node.outgoing:
       return node.outgoing
 
-    # We don't cache the outgoing set (yet).
     node.outgoing = set()
 
     query = "select outgoing from edges where incoming = ?"
@@ -206,7 +375,12 @@ class Database(object):
           stamp = os.path.getmtime(entry.path)
         except:
           traceback.print_exc()
-          sys.stderr.write('Could not unmark file as dirty; leaving dirty.\n')
+          util.con_err(
+            util.ConsoleRed,
+            'Could not unmark file as dirty; leaving dirty.',
+            util.ConsoleNormal
+          )
+
     self.cn.execute(query, (stamp, entry.id))
     entry.dirty = False
     entry.stamp = stamp
@@ -244,6 +418,20 @@ class Database(object):
       from nodes
       where dirty = 0
       and (type == 'src' or type == 'out' or type == 'cpa')
+    """
+    for row in self.cn.execute(query):
+      id = row[7]
+      node = self.import_node(id, row)
+      aggregate(node)
+
+  def query_commands(self, aggregate):
+    query = """
+      select type, stamp, dirty, generated, path, folder, data, rowid
+      from nodes
+      where (type != 'src' and
+             type != 'out' and
+             type != 'grp' and
+             type != 'mkd')
     """
     for row in self.cn.execute(query):
       id = row[7]

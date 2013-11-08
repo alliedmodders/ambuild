@@ -58,6 +58,18 @@ Symlink = 'ln'
 # are used when using AMBuild2's automated C++ builders.
 Cxx = 'cxx'
 
+NodeNames = {
+  Source: 'source',
+  Command: 'command',
+  Output: 'output',
+  Group: 'group',
+  Mkdir: 'mkdir',
+  Copy: 'copy',
+  CopyFolder: 'copy -R',
+  Symlink: 'symlink',
+  Cxx: 'c++'
+}
+
 def IsFile(type):
   return type == Output or type == Source
 
@@ -72,7 +84,7 @@ KnownDirty = (1 << 0)
 NewDirty = (1 << 1)
 
 # The basic properties of a node as it exists in the database.
-class Node(object):
+class Entry(object):
   def __init__(self, id, type, path, blob, folder, stamp, dirty, generated):
     # Unique node ID (integer)
     self.id = id

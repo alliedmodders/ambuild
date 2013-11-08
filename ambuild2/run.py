@@ -22,8 +22,9 @@ from ambuild2.frontend.prep import Preparer
 from ambuild2.context import Context
 
 def Build(buildPath):
-  with Context(buildPath=buildPath) as cx:
-    return cx.Build()
+  with util.FolderChanger(buildPath):
+    with Context(buildPath=buildPath) as cx:
+      return cx.Build()
 
 def PrepareBuild(sourcePath, buildPath=None):
   if buildPath == None:

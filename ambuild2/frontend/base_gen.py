@@ -18,7 +18,6 @@ import os
 import sys, copy
 from ambuild2 import util
 from ambuild2.frontend import cpp
-from ambuild2.frontend import graphbuilder
 
 # AMBuild 2 scripts are parsed recursively. Each script is supplied with a
 # "builder" object, which maps to a Context object. Each script gets its own
@@ -123,10 +122,10 @@ class Generator(object):
     self.compiler = None
     self.contextStack_ = [None]
     self.configure_failed = False
-    self.graph = graphbuilder.GraphBuilder()
 
     # This is a hack... if we ever do cross-compiling or something, we'll have
     # to change this.
+    self.host_platform = util.Platform()
     self.target_platform = util.Platform()
 
   def parseBuildScripts(self):
@@ -199,25 +198,21 @@ all:
     self.compiler = cpp.Compiler(cc, cxx)
     return self.compiler
 
-  def AddSource(self, context, source_path):
-    return self.graph.addSource(source_path)
-
   def AddSymlink(self, context, source, output_path):
-    if util.IsWindows():
+    if util.host_platform == 'windows':
       # Windows pre-Vista does not support symlinks. Windows Vista+ supports
       # symlinks via mklink, but it's Administrator-only by default.
-      return self.graph.addCopy(context, source, output_path)
-    return self.graph.addSymlink(context, source, output_path)
+      return self.AddCopy(context, source, output_path)
+    raise Exception('Must be implemented!')
 
   def AddFolder(self, context, folder):
-    folder = os.path.join(context.buildFolder, folder)
-    return self.graph.generateFolder(context, folder)
+    raise Exception('Must be implemented!')
 
   def AddCopy(self, context, source, output_path):
-    return self.graph.addCopy(context, source, output_path)
+    raise Exception('Must be implemented!')
 
   def AddCommand(self, context, inputs, argv, outputs):
-    return self.graph.addShellCommand(context, inputs, argv, outputs)
+    raise Exception('Must be implemented!')
 
   def AddGroup(self, context, name):
-    return self.graph.addGroup(context, name)
+    raise Exception('Must be implemented!')

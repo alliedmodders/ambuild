@@ -32,102 +32,7 @@ class Database(object):
     if self.cn:
       self.cn.close()
 
-  def createTables(self):
-    query = """
-      CREATE TABLE nodes(
-        type VARCHAR(4) NOT NULL,
-        stamp REAL NOT NULL DEFAULT 0.0,
-        dirty INT NOT NULL DEFAULT 0,
-        generated INT NOT NULL,
-        path TEXT,
-        folder INT,
-        data BLOB
-      );
-    """
-    self.cn.execute(query)
-
-    # The edge table stores links that are specified by the build scripts;
-    # this table is essentially immutable (except for reconfigures).
-    query = """
-      CREATE TABLE edges(
-        outgoing INT NOT NULL,
-        incoming INT NOT NULL,
-        UNIQUE (outgoing, incoming)
-      );
-    """
-    self.cn.execute(query)
-
-    # The weak edge table stores links that are specified by build scripts,
-    # but only to enforce ordering. They do not propagate damage or updates.
-    query = """
-      create table weak_edges(
-        outgoing int not null,
-        incoming int not null,
-        unique (outgoing, incoming)
-      );
-    """
-
-    # The dynamic edge table stores edges that are discovered as a result of
-    # executing a command; for example, a |cp *| or C++ #includes.
-    self.cn.execute(query)
-    query = """
-      create table dynamic_edges(
-        outgoing int not null,
-        incoming int not null,
-        unique (outgoing, incoming)
-      );
-    """
-    self.cn.execute(query)
-    self.cn.execute("CREATE INDEX outgoing_edge ON edges(outgoing)")
-    self.cn.execute("CREATE INDEX incoming_edge ON edges(incoming)")
-    self.cn.execute("CREATE INDEX weak_outgoing_edge ON weak_edges(outgoing)")
-    self.cn.execute("CREATE INDEX weak_incoming_edge ON weak_edges(incoming)")
-    self.cn.execute("CREATE INDEX dyn_outgoing_edge ON dynamic_edges(outgoing)")
-    self.cn.execute("CREATE INDEX dyn_incoming_edge ON dynamic_edges(incoming)")
-    self.cn.commit()
-
   def exportGraph(self, graph):
-    # Create all folder nodes.
-    for path in graph.folders:
-      node = graph.folders[path]
-
-      assert node.id is None
-      query = """
-        INSERT INTO nodes (type, generated, path, dirty) VALUES (?, ?, ?, 0)
-      """
-      cursor = self.cn.execute(query, (node.type, int(node.generated), node.path))
-      node.id = cursor.lastrowid
-
-    # Create all file nodes.
-    for path in graph.files:
-      node = graph.files[path]
-
-      assert node.id is None
-      query = """
-        INSERT INTO nodes (type, generated, path) VALUES (?, ?, ?)
-      """
-      cursor = self.cn.execute(query, (node.type, int(node.generated), node.path))
-      node.id = cursor.lastrowid
-
-    # Create all command nodes.
-    for node in graph.commands:
-      assert node.id is None
-      
-      if node.blob == None:
-        blob = None
-      else:
-        blob = util.BlobType(util.CompatPickle(node.blob))
-      if node.folder == None:
-        folder_id = None
-      else:
-        folder_id = node.folder.id
-
-      query = """
-        INSERT INTO nodes (type, generated, path, folder, data, dirty) VALUES (?, ?, ?, ?, ?, 1)
-      """
-      cursor = self.cn.execute(query, (node.type, int(node.generated), node.path, folder_id, blob))
-      node.id = cursor.lastrowid
-
     # Create all group nodes.
     for group_name in graph.groups:
       group_node = graph.groups[group_name]
@@ -143,21 +48,5 @@ class Database(object):
         assert member.id is not None
         query = "insert into edges (outgoing, incoming) values (?, ?)"
         self.cn.execute(query, (group_node.id, member.id))
-
-    # Add all edges.
-    for outgoing, incoming in graph.edges:
-      assert type(outgoing.id) is int
-      assert type(incoming.id) is int
-
-      query = "INSERT INTO edges (outgoing, incoming) VALUES (?, ?)"
-      self.cn.execute(query, (outgoing.id, incoming.id))
-
-    # Add all weak edges.
-    for outgoing, incoming in graph.weak_edges:
-      assert type(outgoing.id) is int
-      assert type(incoming.id) is int
-
-      query = "INSERT INTO weak_edges (outgoing, incoming) VALUES (?, ?)"
-      self.cn.execute(query, (outgoing.id, incoming.id))
 
     self.cn.commit()

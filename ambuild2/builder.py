@@ -157,7 +157,7 @@ class Builder(object):
         util.ConsoleNormal
       )
       return None
-    return self.cx.db.add_source(path)
+    return self.cx.db.add_source(path, generated=True)
 
   def discoverEntries(self, discovered_paths):
     discovered_set = set()
