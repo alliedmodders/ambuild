@@ -217,7 +217,12 @@ class Generator(base_gen.Generator):
 
     return CppNodes(binNodes[0], binNodes[1:])
 
+  def cleanup(self):
+    for cmd_entry in self.old_commands_:
+      self.db.drop_command(cmd_entry)
+
   def postGenerate(self):
+    self.cleanup()
     self.db.commit()
     self.saveVars()
 

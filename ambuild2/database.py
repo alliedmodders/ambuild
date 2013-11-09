@@ -438,6 +438,54 @@ class Database(object):
       node = self.import_node(id, row)
       aggregate(node)
 
+  def drop_entry(self, entry):
+    query = "delete from nodes where rowid = ?"
+    self.cn.execute(query, (entry.id,))
+
+    query = "delete from edges where incoming = ? or outgoing = ?"
+    self.cn.execute(query, (entry.id, entry.id))
+
+    query = "delete from dynamic_edges where incoming = ? or outgoing = ?"
+    self.cn.execute(query, (entry.id, entry.id))
+
+    query = "delete from weak_edges where incoming = ? or outgoing = ?"
+    self.cn.execute(query, (entry.id, entry.id))
+
+    del self.node_cache_[entry.id]
+
+  def drop_output(self, output):
+    assert not os.path.isabs(output.path)
+    try:
+      os.unlink(output.path)
+    except OSError as exn:
+      if exn.errno != errno.ENOENT:
+        util.con_err(
+          util.ConsoleRed,
+          'Could not remove file: ',
+          util.ConsoleBlue,
+          '{0}'.format(output.path),
+          util.ConsoleNormal,
+          '\n',
+          util.ConsoleRed,
+          '{0}'.format(exn),
+          util.ConsoleNormal
+        )
+    util.con_out(
+      util.ConsoleHeader,
+      'Removing old output: ',
+      util.ConsoleBlue,
+      '{0}'.format(output.path),
+      util.ConsoleNormal
+    )
+    self.drop_entry(output)
+
+  def drop_command(self, cmd_entry):
+    for output in self.query_outgoing(cmd_entry):
+      # Commands should never have dynamic outgoing edges, FWIW.
+      assert output.type == nodetypes.Output
+      self.drop_output(output)
+    self.drop_entry(cmd_entry)
+
   def printGraph(self):
     # Find all mkdir nodes.
     query = "select path from nodes where type = 'mkd'"
