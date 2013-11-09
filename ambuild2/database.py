@@ -88,7 +88,7 @@ class Database(object):
       # List of nodes which trigger a reconfigure.
       "create table if not exists reconfigure(    \
         stamp real not null default 0.0,          \
-        path text                                 \
+        path text unique                          \
       )",
 
       "create index if not exists outgoing_edge on edges(outgoing)",
@@ -492,6 +492,19 @@ class Database(object):
       assert output.type == nodetypes.Output
       self.drop_output(output)
     self.drop_entry(cmd_entry)
+
+  def add_or_update_script(self, path):
+    stamp = os.path.getmtime(path)
+    query = "insert or replace into reconfigure (path, stamp) values (?, ?)"
+    self.cn.execute(query, (path, stamp))
+
+  def query_scripts(self, aggregate):
+    query = "select rowid, path, stamp from reconfigure"
+    for rowid, path, stamp in self.cn.execute(query):
+      aggregate(rowid, path, stamp)
+
+  def drop_script(self, path):
+    self.cn.execute("delete from reconfigure where path = ?", (path,))
 
   def printGraph(self):
     # Find all mkdir nodes.

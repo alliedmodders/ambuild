@@ -96,22 +96,22 @@ class Context(object):
     return taskbuilder.generate(self.generator, self)
 
   def AddSource(self, source_path):
-    return self.generator.AddSource(self, source_path)
+    return self.generator.addSource(self, source_path)
 
   def AddSymlink(self, source, output_path):
-    return self.generator.AddSymlink(self, source, output_path)
+    return self.generator.addSymlink(self, source, output_path)
 
   def AddFolder(self, folder):
-    return self.generator.AddFolder(self, folder)
+    return self.generator.addFolder(self, folder)
 
   def AddCopy(self, source, output_path):
-    return self.generator.AddCopy(self, source, output_path)
+    return self.generator.addCopy(self, source, output_path)
 
   def AddCommand(self, inputs, argv, outputs):
-    return self.generator.AddCommand(self, inputs, argv, outputs)
+    return self.generator.addShellCommand(self, inputs, argv, outputs)
 
   def AddGroup(self, name):
-    return self.generator.AddGroup(self, name)
+    return self.generator.addGroup(self, name)
 
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
@@ -141,6 +141,8 @@ class Generator(object):
   def evalScript(self, file, vars={}):
     cx = Context(self, self.contextStack_[-1], file)
     self.pushContext(cx)
+
+    self.addConfigureFile(cx, os.path.join(self.sourcePath, file))
 
     new_vars = copy.copy(vars)
     new_vars['builder'] = cx
@@ -177,7 +179,7 @@ all:
 	"{exe}" "{py}"
 """.format(exe=sys.executable, py=build_py))
 
-  def Generate(self):
+  def generate(self):
     try:
       self.preGenerate()
       self.parseBuildScripts()
@@ -198,21 +200,24 @@ all:
     self.compiler = cpp.Compiler(cc, cxx)
     return self.compiler
 
-  def AddSymlink(self, context, source, output_path):
+  def addSymlink(self, context, source, output_path):
     if util.host_platform == 'windows':
       # Windows pre-Vista does not support symlinks. Windows Vista+ supports
       # symlinks via mklink, but it's Administrator-only by default.
-      return self.AddCopy(context, source, output_path)
+      return self.addCopy(context, source, output_path)
     raise Exception('Must be implemented!')
 
-  def AddFolder(self, context, folder):
+  def addFolder(self, context, folder):
     raise Exception('Must be implemented!')
 
-  def AddCopy(self, context, source, output_path):
+  def addCopy(self, context, source, output_path):
     raise Exception('Must be implemented!')
 
-  def AddCommand(self, context, inputs, argv, outputs):
+  def addShellCommand(self, context, inputs, argv, outputs):
     raise Exception('Must be implemented!')
 
-  def AddGroup(self, context, name):
+  def addGroup(self, context, name):
+    raise Exception('Must be implemented!')
+
+  def addConfigureFile(self, context, path):
     raise Exception('Must be implemented!')

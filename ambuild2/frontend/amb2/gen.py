@@ -31,6 +31,7 @@ class Generator(base_gen.Generator):
     super(Generator, self).__init__(sourcePath, buildPath, options, args)
     self.cacheFolder = os.path.join(self.buildPath, '.ambuild2')
     self.db = database.Database(os.path.join(self.cacheFolder, 'graph'))
+    self.old_scripts_ = set()
     self.old_folders_ = set()
     self.bad_outputs_ = set()
     self.old_commands_ = set()
@@ -41,6 +42,7 @@ class Generator(base_gen.Generator):
     self.db.connect()
     self.db.create_tables()
 
+    self.db.query_scripts(lambda id,path,stamp: self.old_scripts_.add(path))
     self.db.query_mkdir(lambda entry: self.old_folders_.add(entry))
     self.db.query_commands(lambda entry: self.old_commands_.add(entry))
 
@@ -221,6 +223,9 @@ class Generator(base_gen.Generator):
     for cmd_entry in self.old_commands_:
       self.db.drop_command(cmd_entry)
 
+    for path in self.old_scripts_:
+      self.db.drop_script(path)
+
   def postGenerate(self):
     self.cleanup()
     self.db.commit()
@@ -234,25 +239,29 @@ class Generator(base_gen.Generator):
     with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
       util.DiskPickle(vars, fp)
 
-  def AddSource(self, context, source_path):
+  def addSource(self, context, source_path):
     return self.graph.addSource(source_path)
 
-  def AddSymlink(self, context, source, output_path):
+  def addSymlink(self, context, source, output_path):
     if util.IsWindows():
       # Windows pre-Vista does not support symlinks. Windows Vista+ supports
       # symlinks via mklink, but it's Administrator-only by default.
       return self.graph.addCopy(context, source, output_path)
     return self.graph.addSymlink(context, source, output_path)
 
-  def AddFolder(self, context, folder):
+  def addFolder(self, context, folder):
     folder = os.path.join(context.buildFolder, folder)
     return self.graph.generateFolder(context, folder)
 
-  def AddCopy(self, context, source, output_path):
+  def addCopy(self, context, source, output_path):
     return self.graph.addCopy(context, source, output_path)
 
-  def AddCommand(self, context, inputs, argv, outputs):
+  def addShellCommand(self, context, inputs, argv, outputs):
     return self.graph.addShellCommand(context, inputs, argv, outputs)
 
-  def AddGroup(self, context, name):
+  def addGroup(self, context, name):
     return self.graph.addGroup(context, name)
+
+  def addConfigureFile(self, context, path):
+    self.old_scripts_.discard(path)
+    self.db.add_or_update_script(path)

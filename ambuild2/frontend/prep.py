@@ -96,6 +96,6 @@ class Preparer(object):
       sys.exit(1)
 
     with util.FolderChanger(self.buildPath):
-      if not builder.Generate():
+      if not builder.generate():
         sys.stderr.write('Configure failed.\n')
         sys.exit(1)
