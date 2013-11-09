@@ -253,7 +253,7 @@ class Builder(object):
   def mergeDependencies(self, cmd_node, discovered_paths):
     # Grab nodes for each dependency.
     discovered_set = self.discoverEntries(discovered_paths)
-    if not discovered_set:
+    if discovered_set is None:
       return False
 
     strong_inputs = self.cx.db.query_strong_inputs(cmd_node.entry)
