@@ -50,38 +50,45 @@ class Database(object):
 
   def create_tables(self):
     queries = [
-      "create table if not exists nodes(      \
-        type varchar(4) not null,             \
-        stamp real not null default 0.0,      \
-        dirty int not null default 0,         \
-        generated int not null default 0,     \
-        path text,                            \
-        folder int,                           \
-        data blob                             \
+      "create table if not exists nodes(            \
+        id integer primary key autoincrement,       \
+        type varchar(4) not null,                   \
+        stamp real not null default 0.0,            \
+        dirty int not null default 0,               \
+        generated int not null default 0,           \
+        path text,                                  \
+        folder int,                                 \
+        data blob                                   \
       )",
 
       # The edge table stores links that are specified by the build scripts;
       # this table is essentially immutable (except for reconfigures).
-      "create table if not exists edges(      \
-        outgoing int not null,                \
-        incoming int not null,                \
-        unique (outgoing, incoming)           \
+      "create table if not exists edges(          \
+        outgoing int not null,                    \
+        incoming int not null,                    \
+        unique (outgoing, incoming)               \
       )",
 
       # The weak edge table stores links that are specified by build scripts,
       # but only to enforce ordering. They do not propagate damage or updates.
-      "create table if not exists weak_edges( \
-        outgoing int not null,                \
-        incoming int not null,                \
-        unique (outgoing, incoming)           \
+      "create table if not exists weak_edges(     \
+        outgoing int not null,                    \
+        incoming int not null,                    \
+        unique (outgoing, incoming)               \
       )",
 
       # The dynamic edge table stores edges that are discovered as a result of
       # executing a command; for example, a |cp *| or C++ #includes.
-      "create table if not exists dynamic_edges( \
-        outgoing int not null,                   \
-        incoming int not null,                   \
-        unique (outgoing, incoming)              \
+      "create table if not exists dynamic_edges(  \
+        outgoing int not null,                    \
+        incoming int not null,                    \
+        unique (outgoing, incoming)               \
+      )",
+
+      # List of nodes which trigger a reconfigure.
+      "create table if not exists reconfigure(    \
+        stamp real not null default 0.0,          \
+        path text                                 \
       )",
 
       "create index if not exists outgoing_edge on edges(outgoing)",
@@ -160,7 +167,7 @@ class Database(object):
         folder = ?,
         data = ?,
         dirty = ?
-      where rowid = ?
+      where id = ?
     """
     self.cn.execute(query, (type, folder_id, blob, 1, entry.id))
     entry.type = type
@@ -243,7 +250,7 @@ class Database(object):
     if id in self.node_cache_:
       return self.node_cache_[id]
 
-    query = "select type, stamp, dirty, generated, path, folder, data from nodes where rowid = ?"
+    query = "select type, stamp, dirty, generated, path, folder, data from nodes where id = ?"
     cursor = self.cn.execute(query, (id,))
     return self.import_node(id, cursor.fetchone())
 
@@ -258,7 +265,7 @@ class Database(object):
       return self.path_cache_[path]
 
     query = """
-      select type, stamp, dirty, generated, path, folder, data, rowid
+      select type, stamp, dirty, generated, path, folder, data, id
       from nodes
       where path = ?
     """
@@ -361,12 +368,12 @@ class Database(object):
     return node.dynamic_inputs
 
   def mark_dirty(self, entry):
-    query = "update nodes set dirty = 1 where rowid = ?"
+    query = "update nodes set dirty = 1 where id = ?"
     self.cn.execute(query, (entry.id,))
     entry.dirty |= nodetypes.KnownDirty
 
   def unmark_dirty(self, entry, stamp=None):
-    query = "update nodes set dirty = 0, stamp = ? where rowid = ?"
+    query = "update nodes set dirty = 0, stamp = ? where id = ?"
     if not stamp:
       if entry.isCommand():
         stamp = 0.0
@@ -388,7 +395,7 @@ class Database(object):
   # Query all mkdir nodes.
   def query_mkdir(self, aggregate):
     query = """
-      select type, stamp, dirty, generated, path, folder, data, rowid
+      select type, stamp, dirty, generated, path, folder, data, id
       from nodes
       where type == 'mkd'
     """
@@ -400,7 +407,7 @@ class Database(object):
   # Intended to be called before any nodes are imported.
   def query_known_dirty(self, aggregate):
     query = """
-      select type, stamp, dirty, generated, path, folder, data, rowid
+      select type, stamp, dirty, generated, path, folder, data, id
       from nodes
       where dirty = 1
       and type != 'mkd'
@@ -414,7 +421,7 @@ class Database(object):
   # be called after query_dirty, and returns a mutually exclusive list.
   def query_maybe_dirty(self, aggregate):
     query = """
-      select type, stamp, dirty, generated, path, folder, data, rowid
+      select type, stamp, dirty, generated, path, folder, data, id
       from nodes
       where dirty = 0
       and (type == 'src' or type == 'out' or type == 'cpa')
@@ -426,7 +433,7 @@ class Database(object):
 
   def query_commands(self, aggregate):
     query = """
-      select type, stamp, dirty, generated, path, folder, data, rowid
+      select type, stamp, dirty, generated, path, folder, data, id
       from nodes
       where (type != 'src' and
              type != 'out' and
@@ -439,7 +446,7 @@ class Database(object):
       aggregate(node)
 
   def drop_entry(self, entry):
-    query = "delete from nodes where rowid = ?"
+    query = "delete from nodes where id = ?"
     self.cn.execute(query, (entry.id,))
 
     query = "delete from edges where incoming = ? or outgoing = ?"
@@ -492,7 +499,7 @@ class Database(object):
     for path, in self.cn.execute(query):
       print(' : mkdir \"' + path + '\"')
     # Find all other nodes that have no outgoing edges.
-    query = "select rowid from nodes where rowid not in (select incoming from edges) and type != 'mkd'"
+    query = "select id from nodes where id not in (select incoming from edges) and type != 'mkd'"
     for id, in self.cn.execute(query):
       node = self.query_node(id)
       self.printGraphNode(node, 0)
