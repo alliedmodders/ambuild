@@ -35,7 +35,8 @@ class Database(object):
     self.cn.execute("PRAGMA journal_mode = WAL;")
 
   def close(self):
-    self.cn.close()
+    if self.cn:
+      self.cn.close()
     self.cn = None
 
   def __enter__(self):
@@ -47,6 +48,10 @@ class Database(object):
 
   def commit(self):
     self.cn.commit()
+
+  def flush_caches(self):
+    self.node_cache_ = {}
+    self.path_cache_ = {}
 
   def create_tables(self):
     queries = [

@@ -180,15 +180,11 @@ all:
 """.format(exe=sys.executable, py=build_py))
 
   def generate(self):
-    try:
-      self.preGenerate()
-      self.parseBuildScripts()
-      self.postGenerate()
-      if self.options.make_scripts:
-        self.generateBuildFiles()
-    except ConfigureException:
-      return False
-    return True
+    self.preGenerate()
+    self.parseBuildScripts()
+    self.postGenerate()
+    if self.options.make_scripts:
+      self.generateBuildFiles()
 
   def DetectCompilers(self):
     if self.compiler:

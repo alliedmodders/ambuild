@@ -27,19 +27,22 @@ class CppNodes(object):
     self.debug = debug_outputs
 
 class Generator(base_gen.Generator):
-  def __init__(self, sourcePath, buildPath, options, args):
+  def __init__(self, sourcePath, buildPath, options, args, db=None):
     super(Generator, self).__init__(sourcePath, buildPath, options, args)
     self.cacheFolder = os.path.join(self.buildPath, '.ambuild2')
-    self.db = database.Database(os.path.join(self.cacheFolder, 'graph'))
     self.old_scripts_ = set()
     self.old_folders_ = set()
     self.bad_outputs_ = set()
     self.old_commands_ = set()
+    self.db = db
+    self.is_bootstrap = not self.db
 
   def preGenerate(self):
     if not os.path.isdir(self.cacheFolder):
       os.mkdir(self.cacheFolder)
-    self.db.connect()
+    if not self.db:
+      self.db = database.Database(os.path.join(self.cacheFolder, 'graph'))
+      self.db.connect()
     self.db.create_tables()
 
     self.db.query_scripts(lambda id,path,stamp: self.old_scripts_.add(path))
@@ -229,12 +232,16 @@ class Generator(base_gen.Generator):
   def postGenerate(self):
     self.cleanup()
     self.db.commit()
-    self.saveVars()
+    if self.is_bootstrap:
+      self.saveVars()
+      self.db.close()
 
   def saveVars(self):
     vars = {
       'sourcePath': self.sourcePath,
-      'buildPath': self.buildPath
+      'buildPath': self.buildPath,
+      'options': self.options,
+      'args': self.args
     }
     with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
       util.DiskPickle(vars, fp)

@@ -39,9 +39,9 @@ class Context(object):
           sys.stderr.write('The build configured here looks corrupt; you will have to delete your objdir.\n')
         sys.exit(1)
     self.db = database.Database(self.dbpath)
-    self.db.connect()
     self.messagePump = MessagePump()
     self.procman = ProcessManager(self.messagePump)
+    self.db.connect()
 
   def __enter__(self):
     return self
@@ -50,7 +50,55 @@ class Context(object):
     self.procman.shutdown()
     self.db.close()
 
+  def reconfigure(self):
+    # See if we need to reconfigure.
+    files = []
+    reconfigure_needed = False
+    self.db.query_scripts(lambda row,path,stamp: files.append((path, stamp)))
+    for path, stamp in files:
+      if not os.path.exists(path) or os.path.getmtime(path) > stamp:
+        reconfigure_needed = True
+        break
+
+    if not reconfigure_needed:
+      return True
+
+    util.con_out(
+      util.ConsoleHeader,
+      'Reparsing build scripts.',
+      util.ConsoleNormal
+    )
+
+    from ambuild2.frontend.amb2.gen import Generator
+    gen = Generator(
+      self.vars['sourcePath'],
+      self.vars['buildPath'],
+      self.vars['options'],
+      self.vars['args'],
+      self.db
+    )
+    try:
+      gen.generate()
+    except:
+      traceback.print_exc()
+      util.con_err(
+        util.ConsoleRed,
+        'Failed to reparse build scripts.',
+        util.ConsoleNormal
+      )
+      return False
+
+    # We flush the node cache after this, since database.py expects to get
+    # never-before-seen items at the start. We could change this and make
+    # nodes individually import, which might be cleaner.
+    self.db.flush_caches()
+
+    return True
+
   def Build(self):
+    if not self.reconfigure():
+      return False
+
     return self.build_internal()
 
   def build_internal(self):
