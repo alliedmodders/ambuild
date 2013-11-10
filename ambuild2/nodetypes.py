@@ -105,8 +105,7 @@ class Entry(object):
     self.blob = blob
 
     # For command nodes, this is a link to a 'Mkdir' node describing its
-    # working directory. Mkdir nodes themselves set this to None, since
-    # its paths are fully constructed.
+    # working directory.
     self.folder = folder
 
     # Last modification time.

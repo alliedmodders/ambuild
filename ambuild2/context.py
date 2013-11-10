@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import time
+import traceback
 import os, sys, imp
 import util, database, damage
 from builder import Builder

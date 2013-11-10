@@ -32,8 +32,9 @@ class Generator(base_gen.Generator):
     self.cacheFolder = os.path.join(self.buildPath, '.ambuild2')
     self.old_scripts_ = set()
     self.old_folders_ = set()
-    self.bad_outputs_ = set()
     self.old_commands_ = set()
+    self.bad_outputs_ = set()
+    self.bad_folders_ = set()
     self.db = db
     self.is_bootstrap = not self.db
 
@@ -54,12 +55,27 @@ class Generator(base_gen.Generator):
     if folder.startswith('..'):
       raise Exception('Cannot generate folders outside the build folder')
 
-    entry = self.db.query_path(folder)
-    if not entry:
-      entry = self.db.add_folder(folder, generated)
-    else:
-      # Remove this folder from the set of folders that might be unused.
-      self.old_folders_.remove(entry)
+    path = folder
+    components = []
+    while path:
+      path, name = os.path.split(path)
+      if not name:
+        break
+      components.append(name)
+
+    path = ''
+    parent = None
+    while len(components):
+      name = components.pop()
+      path = os.path.join(path, name)
+      entry = self.db.query_path(path)
+      if not entry:
+        entry = self.db.add_folder(parent, path, generated)
+      elif entry.type == nodetypes.Mkdir:
+        self.old_folders_.discard(entry)
+      else:
+        self.bad_folders_.add(entry)
+      parent = entry
 
     return entry
 
@@ -228,6 +244,42 @@ class Generator(base_gen.Generator):
 
     for path in self.old_scripts_:
       self.db.drop_script(path)
+
+    class Node:
+      def __init__(self):
+        self.incoming = set()
+        self.outgoing = set()
+
+    # Build a tree of dead folders.
+    tracker = {}
+    for entry in self.old_folders_:
+      if entry not in tracker:
+        tracker[entry] = Node()
+
+      if entry.folder is None:
+        continue
+
+      if entry.folder not in tracker:
+        tracker[entry.folder] = Node()
+
+      parent = tracker[entry.folder]
+      child = tracker[entry]
+      parent.incoming.add(entry)
+      child.outgoing.add(entry.folder)
+
+    # Find the leaves. Sets start out >= 1 items. Remove them as they they
+    # are empty.
+    dead_folders = [entry for entry in self.old_folders_ if len(tracker[entry].incoming) == 0]
+    while len(dead_folders):
+      child_entry = dead_folders.pop()
+      child_node = tracker[child_entry]
+
+      self.db.drop_folder(child_entry)
+      for parent_entry in child_node.outgoing:
+        parent_node = tracker[parent_entry]
+        parent_node.incoming.remove(child_entry)
+        if not len(parent_node.incoming):
+          dead_folders.append(parent_entry)
 
   def postGenerate(self):
     self.cleanup()

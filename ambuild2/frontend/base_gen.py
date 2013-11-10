@@ -185,6 +185,7 @@ all:
     self.postGenerate()
     if self.options.make_scripts:
       self.generateBuildFiles()
+    return True
 
   def DetectCompilers(self):
     if self.compiler:

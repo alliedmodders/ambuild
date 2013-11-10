@@ -15,9 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import util
+import errno
 import os, sys
 import sqlite3
-import util
 import nodetypes
 import traceback
 from nodetypes import Entry
@@ -107,11 +107,12 @@ class Database(object):
       self.cn.execute(query)
     self.cn.commit()
 
-  def add_folder(self, path, generated):
+  def add_folder(self, parent, path, generated):
     assert path not in self.path_cache_
     assert not os.path.isabs(path)
+    assert os.path.normpath(path) == path
 
-    return self.add_file(nodetypes.Mkdir, path, generated)
+    return self.add_file(nodetypes.Mkdir, path, generated, parent)
 
   def add_output(self, folder_entry, path):
     if folder_entry:
@@ -465,8 +466,65 @@ class Database(object):
 
     del self.node_cache_[entry.id]
 
+  def drop_folder(self, entry):
+    assert entry.type == nodetypes.Mkdir
+    assert not os.path.isabs(entry.path)
+
+    if os.path.exists(entry.path):
+      util.con_out(
+        util.ConsoleHeader,
+        'Removing old folder: ',
+        util.ConsoleBlue,
+        '{0}'.format(entry.path),
+        util.ConsoleNormal
+      )
+
+    try:
+      os.rmdir(entry.path)
+    except OSError as exn:
+      if exn.errno != errno.ENOENT:
+        util.con_err(
+          util.ConsoleRed,
+          'Could not remove folder: ',
+          util.ConsoleBlue,
+          '{0}'.format(entry.path),
+          util.ConsoleNormal,
+          '\n',
+          util.ConsoleRed,
+          '{0}'.format(exn),
+          util.ConsoleNormal
+        )
+        raise
+
+    cursor = self.cn.execute("select count(*) from nodes where folder = ?", (entry.id,))
+    amount = cursor.fetchone()[0]
+    if amount > 0:
+      util.con_err(
+        util.ConsoleRed,
+        'Database id ',
+        util.ConsoleBlue,
+        '{0} '.format(entry.id),
+        util.ConsoleRed,
+        'is about to be deleted, but is still in use as a folder!',
+        util.ConsoleNormal
+      )
+      raise Exception('folder still in use!')
+
+    self.drop_entry(entry)
+
   def drop_output(self, output):
+    assert output.type == nodetypes.Output
     assert not os.path.isabs(output.path)
+
+    if os.path.exists(output.path):
+      util.con_out(
+        util.ConsoleHeader,
+        'Removing old output: ',
+        util.ConsoleBlue,
+        '{0}'.format(output.path),
+        util.ConsoleNormal
+      )
+
     try:
       os.unlink(output.path)
     except OSError as exn:
@@ -482,13 +540,7 @@ class Database(object):
           '{0}'.format(exn),
           util.ConsoleNormal
         )
-    util.con_out(
-      util.ConsoleHeader,
-      'Removing old output: ',
-      util.ConsoleBlue,
-      '{0}'.format(output.path),
-      util.ConsoleNormal
-    )
+        raise
     self.drop_entry(output)
 
   def drop_command(self, cmd_entry):
