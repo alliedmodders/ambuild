@@ -33,6 +33,7 @@ class Generator(base_gen.Generator):
     self.old_scripts_ = set()
     self.old_folders_ = set()
     self.old_commands_ = set()
+    self.old_groups_ = set()
     self.bad_outputs_ = set()
     self.bad_folders_ = set()
     self.db = db
@@ -49,6 +50,7 @@ class Generator(base_gen.Generator):
     self.db.query_scripts(lambda id,path,stamp: self.old_scripts_.add(path))
     self.db.query_mkdir(lambda entry: self.old_folders_.add(entry))
     self.db.query_commands(lambda entry: self.old_commands_.add(entry))
+    self.db.query_groups(lambda entry:self.old_groups_.add(entry))
 
   def generateFolder(self, context, folder, generated):
     folder = os.path.normpath(os.path.join(context.buildFolder, folder))
@@ -82,7 +84,7 @@ class Generator(base_gen.Generator):
   def addCommand(self, context, node_type, folder, data, inputs, outputs, weak_inputs=[]):
     if not folder and len(context.buildFolder):
       folder = self.generateFolder(context, folder, generated=True)
-    assert type(folder) is nodetypes.Entry
+    assert not folder or type(folder) is nodetypes.Entry
 
     # Build the set of weak links.
     weak_links = set()
@@ -245,6 +247,9 @@ class Generator(base_gen.Generator):
     for path in self.old_scripts_:
       self.db.drop_script(path)
 
+    for group in self.old_groups_:
+      self.db.drop_group(group)
+
     class Node:
       def __init__(self):
         self.incoming = set()
@@ -309,18 +314,54 @@ class Generator(base_gen.Generator):
     return self.graph.addSymlink(context, source, output_path)
 
   def addFolder(self, context, folder):
-    folder = os.path.join(context.buildFolder, folder)
-    return self.graph.generateFolder(context, folder)
+    return self.generateFolder(context, folder, False)
 
   def addCopy(self, context, source, output_path):
     return self.graph.addCopy(context, source, output_path)
 
   def addShellCommand(self, context, inputs, argv, outputs):
-    return self.graph.addShellCommand(context, inputs, argv, outputs)
-
-  def addGroup(self, context, name):
-    return self.graph.addGroup(context, name)
+    return self.addCommand(
+      context=context,
+      node_type=nodetypes.Command,
+      folder=None,
+      data=argv,
+      inputs=inputs,
+      outputs=outputs
+    )
 
   def addConfigureFile(self, context, path):
     self.old_scripts_.discard(path)
     self.db.add_or_update_script(path)
+
+  #def addGroup(self, context, name, members):
+  #  group = self.db.find_group(name)
+  #  if group:
+  #    if group not in self.old_groups_:
+  #      util.con_err(
+  #        util.ConsoleRed,
+  #        'Group ',
+  #        util.ConsoleBlue,
+  #        name,
+  #        util.ConsoleRed,
+  #        ' already exists!',
+  #        util.ConsoleNormal
+  #      )
+  #      raise Exception('Group {0} already exists!'.format(name))
+  #    self.old_groups.remove(group)
+  #  else:
+  #    group = self.db.add_group(name)
+
+  #  for entry in members:
+  #    if entry.type != nodetypes.Output:
+  #      util.con_err(
+  #        util.ConsoleRed,
+  #        'Groups can only contain output nodes. Given: ',
+  #        util.ConsoleBlue,
+  #        entry.format(),
+  #        util.ConsoleNormal
+  #      )
+  #      raise Exception('Groups can only contain output nodes!')
+  #    self.db.add_strong_edge(entry, group)
+
+  #  return group
+

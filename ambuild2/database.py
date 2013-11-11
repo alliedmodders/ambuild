@@ -22,6 +22,8 @@ import nodetypes
 import traceback
 from nodetypes import Entry
 
+GroupPrefix = '//group/./'
+
 class Database(object):
   def __init__(self, path):
     self.path = path
@@ -151,6 +153,14 @@ class Database(object):
       id=cursor.lastrowid,
       row=row
     )
+
+  def find_group(self, name):
+    path = GroupPrefix + name
+    return self.query_path(path)
+
+  def add_group(self, name):
+    path = GroupPrefix + name
+    return self.add_file(nodetypes.Group, path, False)
 
   def update_command(self, entry, type, folder, data):
     if not data:
@@ -560,8 +570,22 @@ class Database(object):
     for rowid, path, stamp in self.cn.execute(query):
       aggregate(rowid, path, stamp)
 
+  def query_groups(self, aggregate):
+    query = """
+      select type, stamp, dirty, generated, path, folder, data, id
+      from nodes
+      where type == 'grp'
+    """
+    for row in self.cn.execute(query):
+      id = row[7]
+      entry = self.import_node(id, row)
+      aggregate(entry)
+
   def drop_script(self, path):
     self.cn.execute("delete from reconfigure where path = ?", (path,))
+
+  def drop_group(self, group):
+    self.drop_entry(group)
 
   def printGraph(self):
     # Find all mkdir nodes.

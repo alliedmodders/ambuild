@@ -64,8 +64,6 @@ class WorkerChild(ChildProcessListener):
     })
 
   def receiveTask(self, channel, message):
-    # :TODO: test this.
-    # sys.exit(1)
     task_id = message['task_id']
     task_type = message['task_type']
     task_folder = message['task_folder']

@@ -110,9 +110,6 @@ class Context(object):
   def AddCommand(self, inputs, argv, outputs):
     return self.generator.addShellCommand(self, inputs, argv, outputs)
 
-  def AddGroup(self, name):
-    return self.generator.addGroup(self, name)
-
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
     self.sourcePath = sourcePath
@@ -211,9 +208,6 @@ all:
     raise Exception('Must be implemented!')
 
   def addShellCommand(self, context, inputs, argv, outputs):
-    raise Exception('Must be implemented!')
-
-  def addGroup(self, context, name):
     raise Exception('Must be implemented!')
 
   def addConfigureFile(self, context, path):
