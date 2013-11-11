@@ -288,3 +288,6 @@ if str == bytes:
 else:
   def IsString(v):
     return type(v) == str
+
+class Expando(object):
+  pass

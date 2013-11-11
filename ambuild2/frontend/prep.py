@@ -18,6 +18,7 @@ import os, sys
 import platform
 from ambuild2 import util
 from optparse import OptionParser
+from optparse import Values
 
 class Preparer(object):
   def __init__(self, sourcePath, buildPath):
@@ -39,7 +40,16 @@ class Preparer(object):
     return 'obj-' + util.Platform() + '-' + platform.machine()
 
   def Configure(self): 
-    options, args = self.options.parse_args()
+    v_options, args = self.options.parse_args()
+
+    # In order to support pickling, we need to rewrite |options| to not use
+    # optparse.Values, since its implementation changes across Python versions.
+    options = util.Expando()
+    ignore_attrs = set(dir(Values))
+    for attr in dir(v_options):
+      if attr in ignore_attrs:
+        continue
+      setattr(options, attr, getattr(v_options, attr))
 
     if options.list_gen:
       print('Available build system generators:')
@@ -82,10 +92,10 @@ class Preparer(object):
       self.buildPath = new_buildpath
 
     if options.generator == 'ambuild2':
-      from . amb2 import gen
+      from ambuild2.frontend.amb2 import gen
       builder = gen.Generator(self.sourcePath, self.buildPath, options, args)
     elif options.generator == 'vcxproj':
-      from frontend import vcxproj_gen
+      from ambuild2.frontend import vcxproj_gen
       builder = vcxproj_gen.Generator(self.sourcePath, self.buildPath, options, args)
     else:
       sys.stderr.write('Unrecognized build generator: ' + options.generator + '\n')

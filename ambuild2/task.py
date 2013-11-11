@@ -131,11 +131,7 @@ class WorkerChild(ChildProcessListener):
     source_path, output_path = message['task_data']
 
     with util.FolderChanger(task_folder):
-      if os.path.exists(source_path):
-        rcode, stdout, stderr = util.symlink(source_path, output_path)
-      else:
-        rcode = 1
-        stderr = 'File not found: {0}'.format(source_path)
+      rcode, stdout, stderr = util.symlink(source_path, output_path)
 
     reply = {
       'ok': rcode == 0,

@@ -498,7 +498,11 @@ class Generator(base_gen.Generator):
       if output_path[-1] == os.sep or output_path[-1] == os.altsep:
         detected_folder = os.path.join(context.buildFolder, os.path.normpath(output_path))
       elif output_path == '.' or output_path == '':
-        detected_folder = context.localFolder
+        detected_folder = context.buildFolder
+
+      # Since we're building something relative to the context folder, ensure
+      # that the context folder exists.
+      self.getLocalFolder(context)
     else:
       assert output_path.type != nodetypes.Source
       local_path = os.path.relpath(output_path.path, context.buildFolder)
@@ -509,13 +513,23 @@ class Generator(base_gen.Generator):
 
     # This is similar to a "cp a b/", so we append to get "b/a" as the path.
     if detected_folder is not None:
-      base, name = os.path.split(source_entry.path)
-      assert len(name)
+      base, output_path = os.path.split(source_entry.path)
+      assert len(output_path)
 
-      output_path = os.path.join(detected_folder, name)
+      output_folder = detected_folder
     else:
-      output_path = nodetypes.combine(context.localFolder, output_path)
-    
+      output_folder = context.localFolder
+
+    output_path = os.path.join(output_folder, output_path)
+
+    # For copy operations, it's okay to use the path from the current folder.
+    # However, when performing symlinks, the symlink must be relative to
+    # the link.
+    if cmd == nodetypes.Symlink:
+      source_path = os.path.relpath(source_entry.path, output_folder)
+    else:
+      source_path = source_entry.path
+
     # For clarity of spew, we always execute file operations in the root of
     # the build folder. This means that no matter what context we're in,
     # we can use absolute-ish folders and get away with it.
@@ -523,7 +537,7 @@ class Generator(base_gen.Generator):
       context = context,
       node_type = cmd,
       folder = None,
-      data = (source_entry.path, output_path),
+      data = (source_path, output_path),
       inputs = [source_entry],
       outputs = [output_path]
     )
