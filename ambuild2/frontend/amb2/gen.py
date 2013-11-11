@@ -190,6 +190,125 @@ class Generator(base_gen.Generator):
 
     return entry
 
+  def isValidFolderEntry(self, folder_entry):
+    # If it's a mkdir and it's created, we're done.
+    if folder_entry.type == nodetypes.Mkdir and folder_entry not in self.old_folders_:
+      return True
+
+    # If it's an output and it's in the bad folders list, we can continue.
+    return folder_entry.type == nodetypes.Output and folder_entry in self.bad_folders_
+
+  def validateOutputFolder(self, path):
+    # Empty path is the root folder, which is null.
+    if not len(path):
+      return None
+
+    # The folder must already exist.
+    folder_entry = self.db.query_path(path)
+    if not folder_entry:
+      util.con_err(util.ConsoleRed, 'Path "',
+                   util.ConsoleBlue, path,
+                   util.ConsoleRed, '" specifies a folder that does not exist.',
+                   util.ConsoleNormal)
+      raise Exception('path specifies a folder that does not exist')
+
+    if self.isValidFolderEntry(folder_entry):
+      return folder_entry
+
+    # If it's a folder or an output, we can give a better error message.
+    if folder_entry.type == nodetypes.Output or folder_entry.type == nodetypes.Mkdir:
+      util.con_err(util.ConsoleRed, 'Folder "',
+                   util.ConsoleBlue, folder_entry.path,
+                   util.ConsoleRed, '" was never created.',
+                   util.ConsoleNormal)
+      raise Exception('path {0} was never created', folder_entry.path)
+
+    util.con_err(util.ConsoleRed, 'Attempted to use node "',
+                 util.ConsoleBlue, folder_entry.format(),
+                 util.ConsoleRed, '" as a path component.',
+                 util.ConsoleNormal)
+    raise Exception('illegal path component')
+
+  def parseOutput(self, cwd_entry, path):
+    if path[-1] == os.sep or path[-1] == os.altsep or path == '.' or path == '':
+      util.con_err(util.ConsoleRed, 'Path "',
+                   util.ConsoleBlue, path,
+                   util.ConsoleRed, '" looks like a folder; a folder was not expected.',
+                   util.ConsoleNormal)
+      raise Exception('Expected folder, but path has a trailing slash')
+
+    path, name = os.path.split(path)
+    path = nodetypes.combine(cwd_entry, path)
+
+    # We should have caught a case like 'x/' earlier.
+    assert len(name)
+
+    folder_entry = self.validateOutputFolder(path)
+    output_path = os.path.join(path, name)
+
+    entry = self.db.query_path(output_path)
+    if not entry:
+      return self.db.add_output(folder_entry, output_path)
+
+    if entry.type == nodetypes.Output:
+      return entry
+
+    if entry.type != nodetypes.Mkdir:
+      util.con_err(util.ConsoleRed, 'Attempted to re-use output path of node: "',
+                   util.ConsoleBlue, entry.format(),
+                   util.ConsoleRed, '"',
+                   util.ConsoleNormal)
+      raise Exception('Attempted to re-use an incompatible node as an output')
+
+    # This is a folder node, check to see if it's been used.
+    if entry not in self.old_folders_ or entry in self.bad_outputs_:
+      util.con_err(util.ConsoleRed, 'Attempted to re-use output path: ',
+                   util.ConsoleBlue, output_path,
+                   util.ConsoleNormal)
+      raise Exception('Attempted to re-use output path')
+
+    self.bad_outputs_.add(entry)
+    return entry
+
+  # Note that parseInput() does not accept a context, and therefore, it will
+  # not accept output-relative path strings as 'source', since we can't build
+  # a relative path. This may change later, but it's nice to force use of the
+  # DAG.
+  def parseInput(self, source):
+    if type(source) is str:
+      entry = self.db.query_path(source)
+      if not entry:
+        if not os.path.isabs(source):
+          util.con_err(util.ConsoleRed, 'Input file path "',
+                       util.ConsoleBlue, source,
+                       util.ConsoleRed, '" is not absolute. If it\'s an output,',
+                       'Use the appropriate output node instead.',
+                       util.ConsoleNormal)
+          raise Exception('Input paths must be absolute')
+
+        # Brand new node.
+        return self.db.add_source(source)
+
+      # We'll have to validate the node.
+      source = entry
+
+    if source.type == nodetypes.Source or source.type == nodetypes.Output:
+      return source
+
+    if source.type == nodetypes.Mkdir:
+      if source not in self.bad_outputs_:
+        util.con_err(util.ConsoleRed, 'Tried to use folder path ',
+                     util.ConsoleBlue, source.path,
+                     util.ConsoleRed, ' as a file path.',
+                     util.ConsoleNormal)
+        raise Exception('Tried to use folder path as a file path')
+
+    util.con_err(util.ConsoleRed, 'Tried to use incompatible node "',
+                 util.ConsoleBlue, source.format(),
+                 util.ConsoleRed, '" as a file path.',
+                 util.ConsoleNormal)
+    raise Exception('Tried to use non-file node as a file path')
+
   def addCommand(self, context, node_type, folder, data, inputs, outputs, weak_inputs=[]):
     if not folder:
       folder = context.localFolder
@@ -205,49 +324,31 @@ class Generator(base_gen.Generator):
     # Build the set of strong links.
     strong_links = set()
     for strong_input in inputs:
-      if type(strong_input) is str:
-        strong_input = self.db.find_or_add_source(strong_input)
+      strong_input = self.parseInput(strong_input)
       strong_links.add(strong_input)
 
     cmd_entry = None
     output_nodes = []
     for output in outputs:
-      output_node = self.db.query_relpath(folder, output)
-      if not output_node:
-        output_node = self.db.add_output(folder, output)
-      else:
-        if output_node.type != nodetypes.Output:
-          if output_node.type != nodetypes.Mkdir or \
-             output_node not in self.old_folders_ or \
-             output_node in self.bad_outputs_:
-            type_string = nodetypes.NodeNames[output_node.type]
-            raise Exception('Output already exists as node type: {0}'.format(type_string))
-
-          # The output_node mkdir might be removed later, so remember to recheck.
-          self.bad_outputs_.add(output_node)
-
-        incoming = self.db.query_strong_inputs(output_node)
-
-        if len(incoming):
-          assert len(incoming) == 1
-
-          input_entry = list(incoming)[0]
-          assert input_entry.isCommand()
-
-          # Make sure this output won't be duplicated.
-          if input_entry not in self.old_commands_:
-            util.con_err(
-              util.ConsoleRed,
-              'Command: ',
-              input_entry.format(),
-              util.ConsoleNormal
-            )
-            raise Exception('Output has been duplicated: {0}'.format(output_node.path))
-
-          if not cmd_entry:
-            cmd_entry = input_entry
-
+      output_node = self.parseOutput(folder, output)
       output_nodes.append(output_node)
+
+      incoming = self.db.query_strong_inputs(output_node)
+      assert len(incoming) <= 1
+
+      if not len(incoming):
+        continue
+
+      input_entry = list(incoming)[0]
+      assert input_entry.isCommand()
+
+      # Make sure this output won't be duplicated.
+      if input_entry not in self.old_commands_:
+        util.con_err(util.ConsoleRed, 'Command: ', input_entry.format(), util.ConsoleNormal)
+        raise Exception('Output has been duplicated: {0}'.format(output_node.path))
+
+      if not cmd_entry:
+        cmd_entry = input_entry
     # end for
 
     must_link = set(output_nodes)
@@ -324,13 +425,13 @@ class Generator(base_gen.Generator):
         'type': binary.linker.behavior
       }
       cxxCmd, (cxxNode,) = self.addCommand(
-        context=cx,
-        weak_inputs=binary.compiler.sourcedeps,
-        inputs=[objfile.sourceFile],
-        outputs=[objfile.outputFile],
-        node_type=nodetypes.Cxx,
-        folder=folder_node,
-        data=cxxData
+        context = cx,
+        weak_inputs = binary.compiler.sourcedeps,
+        inputs = [objfile.sourceFile],
+        outputs = [objfile.outputFile],
+        node_type = nodetypes.Cxx,
+        folder = folder_node,
+        data = cxxData
       )
       inputs.append(cxxNode)
 
@@ -339,50 +440,49 @@ class Generator(base_gen.Generator):
       outputs.append(binary.pdbFile)
   
     linkCmd, binNodes = self.addCommand(
-      context=cx,
-      node_type=nodetypes.Command,
-      folder=folder_node,
-      data=binary.argv,
-      inputs=inputs,
-      outputs=outputs
+      context = cx,
+      node_type = nodetypes.Command,
+      folder = folder_node,
+      data = binary.argv,
+      inputs = inputs,
+      outputs = outputs
     )
 
     return CppNodes(binNodes[0], binNodes[1:])
 
-  @staticmethod
-  def getPathInContext(context, node):
-    if node.type == nodetypes.Source:
-      assert os.path.isabs(node.path)
-      return node.path
+  def addFileOp(self, cmd, context, source, output_path):
+    # Try to detect if our output_path is actually a folder, via trailing
+    # slash or '.'/'' indicating the context folder.
+    detected_folder = None
+    if type(output_path) is str:
+      if output_path[-1] == os.sep or output_path[-1] == os.altsep:
+        detected_folder = os.path.join(context.buildFolder, os.path.normpath(output_path))
+      elif output_path == '.' or output_path == '':
+        detected_folder = context.localFolder
+    else:
+      assert output_path.type != nodetypes.Source
+      detected_folder = output_path.path
+
+    source_entry = self.parseInput(source)
+
+    # This is similar to a "cp a b/", so we append to get "b/a" as the path.
+    if detected_folder is not None:
+      base, name = os.path.split(source_entry.path)
+      assert len(name)
+
+      output_path = os.path.join(detected_folder, name)
     
-    assert not os.path.isabs(node.path)
-    assert node.type == nodetypes.Output
-    return os.path.relpath(node.path, context.buildFolder)
-
-  @staticmethod
-  def find_folder(context, path):
-    if path[-1] == os.sep or path[-1] == os.altsep:
-      return path
-    if os.path.normpath(path) == '.':
-      return '.' + os.sep
-    path = os.path.normpath(os.path.join(context.buildFolder, path))
-    return self.db.query_path(path)
-
-  # def outputFolderInContext(self, context, path):
-  #   if output_path[-1] == os.sep or output_path[-1] == os.altsep:
-  #     return os.path.join(context.buildFolder, output_path)
-  #   if os.path.normpath(output_path) == '.':
-  #     return context.buildFolder
-
-  #   else:
-  #     output_folder = os.path.join(context.buildFolder, output_path)
-  #     output_folder = os.path.normpath(output_folder)
-  #     output_entry = self.db.query_path(output_folder)
-  #     if output_entry and output_entry.type != nodetypes.
-  #       # If 
-
-  #def addFileOp(self, cmd, context, source, output_path):
-    # Find the folder the destination file will be in.
+    # For clarity of spew, we always execute file operations in the root of
+    # the build folder. This means that no matter what context we're in,
+    # we can use absolute-ish folders and get away with it.
+    return self.addCommand(
+      context = context,
+      node_type = cmd,
+      folder = None,
+      data = (source_path, output_path),
+      inputs = [source_entry],
+      outputs = [output_path]
+    )
 
   def addSource(self, context, source_path):
     return self.graph.addSource(source_path)

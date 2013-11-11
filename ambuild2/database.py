@@ -118,11 +118,9 @@ class Database(object):
     return self.add_file(nodetypes.Mkdir, path, False, parent)
 
   def add_output(self, folder_entry, path):
-    if folder_entry:
-      path = os.path.join(folder_entry.path, path)
-
     assert path not in self.path_cache_
     assert not os.path.isabs(path)
+    assert not folder_entry or os.path.split(path)[0] == folder_entry.path
 
     return self.add_file(nodetypes.Output, path, False, folder_entry)
 
@@ -270,12 +268,6 @@ class Database(object):
     query = "select type, stamp, dirty, generated, path, folder, data from nodes where id = ?"
     cursor = self.cn.execute(query, (id,))
     return self.import_node(id, cursor.fetchone())
-
-  def query_relpath(self, folder_entry, path):
-    if folder_entry:
-      path = os.path.join(folder_entry.path, path)
-
-    return self.query_path(path)
 
   def query_path(self, path):
     if path in self.path_cache_:

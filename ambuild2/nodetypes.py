@@ -160,3 +160,15 @@ class Entry(object):
     if self.type == Group:
       return 'group "{0}"'.format(self.path)
     return (' '.join([arg for arg in self.blob]))
+
+def combine(a, b):
+  text_a = ''
+  if a:
+    text_a = a.path
+  if type(b) is str:
+    if not len(b):
+      return text_a
+    text_b = b
+  else:
+    text_b = b.path
+  return os.path.join(text_a, text_b)
