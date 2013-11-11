@@ -165,7 +165,7 @@ def combine(a, b):
   text_a = ''
   if a:
     text_a = a.path
-  if type(b) is str:
+  if type(b) is not Entry:
     if not len(b):
       return text_a
     text_b = b

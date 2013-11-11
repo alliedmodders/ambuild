@@ -76,7 +76,8 @@ class Context(object):
       self.vars['buildPath'],
       self.vars['options'],
       self.vars['args'],
-      self.db
+      self.db,
+      self.options.refactor
     )
     try:
       gen.generate()
@@ -97,12 +98,6 @@ class Context(object):
     return True
 
   def Build(self):
-    if not self.reconfigure():
-      return False
-
-    return self.build_internal()
-
-  def build_internal(self):
     parser = OptionParser("usage: %prog [options]")
     parser.add_option("--no-color", dest="no_color", action="store_true", default=False,
                       help="Disable console colors.")
@@ -118,6 +113,8 @@ class Context(object):
                       help="Show the computed build steps and then exit.")
     parser.add_option("-j", "--jobs", dest="jobs", type="int", default=0,
                       help="Number of worker processes. Minimum number is 1; default is #cores * 1.25.")
+    parser.add_option('--refactor', dest="refactor", action="store_true", default=False,
+                      help="Abort the build if the dependency graph would change.")
     self.options, self.args = parser.parse_args()
 
     # This doesn't completely work yet because it's not communicated to child
@@ -125,6 +122,12 @@ class Context(object):
     if self.options.no_color:
       util.DisableConsoleColors()
 
+    if not self.reconfigure():
+      return False
+
+    return self.build_internal()
+
+  def build_internal(self):
     if self.options.show_graph:
       self.db.printGraph()
       return True

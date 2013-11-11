@@ -163,8 +163,13 @@ int main()
   if vendor == 'gcc' and mode == 'CXX':
     args.extend(['-fno-exceptions', '-fno-rtti'])
   args.extend([filename, '-o', executable])
-  print('Checking {0} compiler (vendor test {1})... '.format(mode, vendor), end = '')
-  print(args)
+  util.con_out(
+    util.ConsoleHeader,
+    'Checking {0} compiler (vendor test {1})... '.format(mode, vendor),
+    util.ConsoleBlue,
+    '{0}'.format(args),
+    util.ConsoleNormal
+  )
   p = util.CreateProcess(args)
   if p == None:
     print('not found')
@@ -200,7 +205,11 @@ int main()
     print('Unknown vendor {0}'.format(vendor))
     return False
 
-  print('found {0} version {1}'.format(vendor, version))
+  util.con_out(
+    util.ConsoleHeader,
+    'found {0} version {1}'.format(vendor, version),
+    util.ConsoleNormal
+  )
   return v
 
 class Compiler(object):
@@ -285,12 +294,12 @@ class ObjectFile(object):
 def LinkFlags(compiler):
   argv = []
   for item in compiler.linkflags:
-    if type(item) is str:
+    if type(item) is not Dep:
       argv.append(item)
     else:
       argv.append(item.text)
   for item in compiler.postlink:
-    if type(item) is str:
+    if type(item) is not Dep:
       argv.append(item)
     else:
       argv.append(item.text)

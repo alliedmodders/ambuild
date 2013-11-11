@@ -50,7 +50,7 @@ class Preparer(object):
     source_abspath = os.path.normpath(os.path.abspath(self.sourcePath))
     build_abspath = os.path.normpath(os.path.abspath(self.buildPath))
     if source_abspath == build_abspath:
-      if type(self.default_build_folder) is str:
+      if util.IsString(self.default_build_folder):
         objfolder = self.default_build_folder
       else:
         objfolder = self.default_build_folder(self)

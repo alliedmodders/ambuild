@@ -161,7 +161,7 @@ class Database(object):
     path = GroupPrefix + name
     return self.add_file(nodetypes.Group, path, False)
 
-  def update_command(self, entry, type, folder, data):
+  def update_command(self, entry, type, folder, data, refactoring):
     if not data:
       blob = None
     else:
@@ -169,6 +169,19 @@ class Database(object):
 
     if entry.type == type and entry.folder == folder and entry.blob == data:
       return False
+
+    if refactoring:
+      util.con_err(util.ConsoleRed, 'Command changed! \n',
+                   util.ConsoleRed, 'Old: ',
+                   util.ConsoleBlue, entry.format(),
+                   util.ConsoleNormal)
+      entry.type = type
+      entry.folder = folder
+      entry.blob = blob
+      util.con_err(util.ConsoleRed, 'New: ',
+                   util.ConsoleBlue, entry.format(),
+                   util.ConsoleNormal)
+      raise Exception('Refactoring error: command changed')
 
     if not folder:
       folder_id = None
@@ -218,7 +231,7 @@ class Database(object):
     return entry
 
   def add_weak_edge(self, from_entry, to_entry):
-    query = "insert into edges (outgoing, incoming) values (?, ?)"
+    query = "insert into weak_edges (outgoing, incoming) values (?, ?)"
     self.cn.execute(query, (to_entry.id, from_entry.id))
     if to_entry.weak_inputs:
       to_entry.weak_inputs.add(from_entry)

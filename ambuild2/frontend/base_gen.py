@@ -93,7 +93,7 @@ class Context(object):
     return self.generator.evalScript(file, vars)
 
   def RunBuildScripts(self, files, vars={}):
-    if type(files) is str:
+    if util.IsString(files):
       self.generator.evalScript(files, vars)
     else:
       for script in files:

@@ -27,7 +27,7 @@ class CppNodes(object):
     self.debug = debug_outputs
 
 class Generator(base_gen.Generator):
-  def __init__(self, sourcePath, buildPath, options, args, db=None):
+  def __init__(self, sourcePath, buildPath, options, args, db=None, refactoring=False):
     super(Generator, self).__init__(sourcePath, buildPath, options, args)
     self.cacheFolder = os.path.join(self.buildPath, '.ambuild2')
     self.old_scripts_ = set()
@@ -38,6 +38,7 @@ class Generator(base_gen.Generator):
     self.bad_folders_ = set()
     self.db = db
     self.is_bootstrap = not self.db
+    self.refactoring = refactoring
 
   def preGenerate(self):
     if not os.path.isdir(self.cacheFolder):
@@ -248,6 +249,11 @@ class Generator(base_gen.Generator):
 
     entry = self.db.query_path(output_path)
     if not entry:
+      if self.refactoring:
+        util.con_err(util.ConsoleRed, 'New output introduced: ',
+                     util.ConsoleBlue, path,
+                     util.ConsoleNormal)
+        raise Exception('Refactoring error')
       return self.db.add_output(folder_entry, output_path)
 
     if entry.type == nodetypes.Output:
@@ -267,6 +273,12 @@ class Generator(base_gen.Generator):
                    util.ConsoleNormal)
       raise Exception('Attempted to re-use output path')
 
+    if self.refactoring:
+      util.con_err(util.ConsoleRed, 'New output introduced: ',
+                   util.ConsoleBlue, path,
+                   util.ConsoleNormal)
+      raise Exception('Refactoring error')
+
     self.bad_outputs_.add(entry)
     return entry
 
@@ -275,7 +287,7 @@ class Generator(base_gen.Generator):
   # a relative path. This may change later, but it's nice to force use of the
   # DAG.
   def parseInput(self, source):
-    if type(source) is str:
+    if util.IsString(source):
       entry = self.db.query_path(source)
       if not entry:
         if not os.path.isabs(source):
@@ -310,8 +322,6 @@ class Generator(base_gen.Generator):
     raise Exception('Tried to use non-file node as a file path')
 
   def addCommand(self, context, node_type, folder, data, inputs, outputs, weak_inputs=[]):
-    if not folder:
-      folder = context.localFolder
     assert not folder or type(folder) is nodetypes.Entry
 
     # Build the set of weak links.
@@ -355,7 +365,7 @@ class Generator(base_gen.Generator):
 
     if cmd_entry:
       # Update the entry in the database.
-      self.db.update_command(cmd_entry, node_type, folder, data)
+      self.db.update_command(cmd_entry, node_type, folder, data, self.refactoring)
 
       # Disconnect any outputs that are no longer connected to this output.
       # It's okay to use must_link since there should never be duplicate
@@ -372,16 +382,30 @@ class Generator(base_gen.Generator):
     else:
       cmd_entry = self.db.add_command(node_type, folder, data)
 
+    def check_refactoring(node):
+      if not self.refactoring:
+        return
+      util.con_err(util.ConsoleRed, 'New input introduced: ',
+                   util.ConsoleBlue, node.path + '\n',
+                   util.ConsoleRed, 'Command: ',
+                   util.ConsoleBlue, cmd_entry.format(),
+                   util.ConsoleNormal)
+      raise Exception('Refactoring error: new input introduced')
+
     # Connect each output.
     for output_node in must_link:
+      check_refactoring(output_node)
       self.db.add_strong_edge(cmd_entry, output_node)
 
     # Connect/disconnect strong inputs.
     strong_inputs = self.db.query_strong_inputs(cmd_entry)
     strong_added = strong_links - strong_inputs
     strong_removed = strong_inputs - strong_links 
+
     for strong_input in strong_added:
+      check_refactoring(strong_input)
       self.db.add_strong_edge(strong_input, cmd_entry)
+
     for strong_input in strong_removed:
       self.db.drop_strong_edge(strong_input, cmd_entry)
 
@@ -389,8 +413,11 @@ class Generator(base_gen.Generator):
     weak_inputs = self.db.query_weak_inputs(cmd_entry)
     weak_added = weak_links - weak_inputs
     weak_removed = weak_inputs - weak_links 
+
     for weak_input in weak_added:
+      check_refactoring(weak_input)
       self.db.add_weak_edge(weak_input, cmd_entry)
+
     for weak_input in weak_removed:
       self.db.drop_weak_edge(weak_input, cmd_entry)
 
@@ -401,23 +428,30 @@ class Generator(base_gen.Generator):
 
     return cmd_entry, output_nodes
 
+  def parseCxxDeps(self, context, binary, inputs, items):
+    for val in items:
+      if util.IsString(val):
+        if os.path.isabs(val):
+          inputs.append(val)
+        continue
+
+      if util.IsLambda(val.node):
+        item = val.node(context, binary)
+      else:
+        item = val.node
+
+      if type(item) is list:
+        inputs.extend(item)
+      else:
+        inputs.append(item)
+
   def addCxxTasks(self, cx, binary):
     folder_node = self.generateFolder(cx.localFolder, binary.localFolder)
 
-    inputs = []
-
     # Find dependencies
-    for item in binary.compiler.linkflags:
-      if type(item) is str:
-        continue
-      inputs.append(item.node)
-
-    for item in binary.compiler.postlink:
-      if type(item) is str:
-        node = self.graph.depNodeForPath(item)
-      else:
-        node = item.node
-      inputs.append(node)
+    inputs = []
+    self.parseCxxDeps(cx, binary, inputs, binary.compiler.linkflags)
+    self.parseCxxDeps(cx, binary, inputs, binary.compiler.postlink)
 
     for objfile in binary.objfiles:
       cxxData = {
@@ -454,14 +488,16 @@ class Generator(base_gen.Generator):
     # Try to detect if our output_path is actually a folder, via trailing
     # slash or '.'/'' indicating the context folder.
     detected_folder = None
-    if type(output_path) is str:
+    if util.IsString(output_path):
       if output_path[-1] == os.sep or output_path[-1] == os.altsep:
         detected_folder = os.path.join(context.buildFolder, os.path.normpath(output_path))
       elif output_path == '.' or output_path == '':
         detected_folder = context.localFolder
     else:
       assert output_path.type != nodetypes.Source
-      detected_folder = output_path.path
+      local_path = os.path.relpath(output_path.path, context.buildFolder)
+      detected_folder = os.path.join(context.buildFolder, local_path)
+      detected_folder = os.path.normpath(detected_folder)
 
     source_entry = self.parseInput(source)
 
@@ -471,6 +507,8 @@ class Generator(base_gen.Generator):
       assert len(name)
 
       output_path = os.path.join(detected_folder, name)
+    else:
+      output_path = nodetypes.combine(context.localFolder, output_path)
     
     # For clarity of spew, we always execute file operations in the root of
     # the build folder. This means that no matter what context we're in,
@@ -479,7 +517,7 @@ class Generator(base_gen.Generator):
       context = context,
       node_type = cmd,
       folder = None,
-      data = (source_path, output_path),
+      data = (source_entry.path, output_path),
       inputs = [source_entry],
       outputs = [output_path]
     )
@@ -500,17 +538,17 @@ class Generator(base_gen.Generator):
   def addFolder(self, context, folder):
     return self.generateFolder(context.localFolder, folder)
 
-  def addCopy(self, context, source, output_path):
-    return self.graph.addCopy(context, source, output_path)
+  def addShellCommand(self, context, inputs, argv, outputs, folder=-1):
+    if folder is -1:
+      folder = context.localFolder
 
-  def addShellCommand(self, context, inputs, argv, outputs):
     return self.addCommand(
-      context=context,
-      node_type=nodetypes.Command,
-      folder=None,
-      data=argv,
-      inputs=inputs,
-      outputs=outputs
+      context = context,
+      node_type = nodetypes.Command,
+      folder = folder,
+      data = argv,
+      inputs = inputs,
+      outputs = outputs
     )
 
   def addConfigureFile(self, context, path):

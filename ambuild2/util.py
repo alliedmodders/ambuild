@@ -276,3 +276,11 @@ def con_out(*args):
 
 def con_err(*args):
   con_print(sys.stderr, args)
+
+LambdaType = type(lambda: None)
+
+def IsLambda(v):
+  return type(v) == LambdaType
+
+def IsString(v):
+  return type(v) == str or type(v) == unicode
