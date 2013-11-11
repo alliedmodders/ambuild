@@ -1,6 +1,6 @@
--- WIP AMB2 not yet released. --
-
 AMBuild is a lightweight build system designed for performance and accuracy. There are two versions provided - the original version, released in 2009, and AMBuild 2, a modernized rewrite released in 2013. Both are geared at C/C++ projects which require programmatic flexibility in their builds, and precise control over C/C++ compiler flags.
+
+AMBuild requires Python 2.7 or higher, or Python 3.1 or higher.
 
 # AMBuild 2
 
@@ -9,7 +9,7 @@ AMBuild 2 is intended as a replacement for "Alpha"-generation[1] dependency-base
 * Efficiency. There are two steps in a build: computing the dependencies which need to be rebuilt, and actually rebuilding them.
     * Tools such as Make must recursively visit every edge in the dependency graph. AMB2 instead computes a linear file change list, then uses this to efficiently find all dependent tasks.
     * AMB2 executes all independent tasks in parallel, based on the number of CPUs and cores available. For example, usually all C/C++ compilation units are independent of each other, and that is automatically parallelized.
-* Accuracy. "Clobber" builds, or builds which require deleting the build folder and re-configuring, should be unnecessary. AMB2 will merge old and new dependency graphs, even deleting generated files which should not exist in the new build.
+* Accuracy. "Clobber" builds, or builds which require deleting the build folder and re-configuring, should be unnecessary. AMB2 will merge old and new dependency graphs, even deleting generated files which should not exist in the new build. A fresh build should always be identical to an incremental build.
 * Programmability. Since AMB2 scripts are written in Python, a great deal of flexibility is available when describing compilation parameters and jobs.
 
 Build scripts for AMB2 are parsed once upon configuration, and are responsible for defining build jobs. If build scripts change, the build is automatically reconfigured. Out of box, build scripts support the following actions:
