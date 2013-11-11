@@ -116,7 +116,6 @@ class Generator(base_gen.Generator):
     with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
       util.DiskPickle(vars, fp)
 
-
   def getLocalFolder(self, context):
     if type(context.localFolder_) is nodetypes.Entry or context.localFolder_ is None:
       return context.localFolder_

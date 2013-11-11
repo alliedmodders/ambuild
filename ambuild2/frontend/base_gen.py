@@ -174,7 +174,7 @@ class Generator(object):
 import sys
 from ambuild2 import run
 
-if not run.Build(r"{build}"):
+if not run.CompatBuild(r"{build}"):
   sys.exit(1)
 """.format(exe=sys.executable, build=self.buildPath))
 

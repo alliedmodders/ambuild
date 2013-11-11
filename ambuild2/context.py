@@ -23,8 +23,10 @@ from ipc import ProcessManager, MessagePump
 from optparse import OptionParser
 
 class Context(object):
-  def __init__(self, buildPath):
+  def __init__(self, buildPath, options, args):
     self.buildPath = buildPath
+    self.options = options
+    self.args = args
     self.cacheFolder = os.path.join(buildPath, '.ambuild2')
     self.dbpath = os.path.join(self.cacheFolder, 'graph')
     with open(os.path.join(self.cacheFolder, 'vars'), 'rb') as fp:
@@ -98,25 +100,6 @@ class Context(object):
     return True
 
   def Build(self):
-    parser = OptionParser("usage: %prog [options]")
-    parser.add_option("--no-color", dest="no_color", action="store_true", default=False,
-                      help="Disable console colors.")
-    parser.add_option("--show-graph", dest="show_graph", action="store_true", default=False,
-                      help="Show the dependency graph and then exit.")
-    parser.add_option("--show-changed", dest="show_changed", action="store_true", default=False,
-                      help="Show the list of dirty nodes and then exit.")
-    parser.add_option("--show-damage", dest="show_damage", action="store_true", default=False,
-                      help="Show the computed change graph and then exit.")
-    parser.add_option("--show-commands", dest="show_commands", action="store_true", default=False,
-                      help="Show the computed command graph and then exit.")
-    parser.add_option("--show-steps", dest="show_steps", action="store_true", default=False,
-                      help="Show the computed build steps and then exit.")
-    parser.add_option("-j", "--jobs", dest="jobs", type="int", default=0,
-                      help="Number of worker processes. Minimum number is 1; default is #cores * 1.25.")
-    parser.add_option('--refactor', dest="refactor", action="store_true", default=False,
-                      help="Abort the build if the dependency graph would change.")
-    self.options, self.args = parser.parse_args()
-
     # This doesn't completely work yet because it's not communicated to child
     # processes. We'll have to send a message down or up to fix this.
     if self.options.no_color:

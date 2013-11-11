@@ -63,7 +63,7 @@ class Preparer(object):
       )
       if os.path.exists(os.path.join(new_buildpath)):
         has_amb2 = os.path.exists(os.path.join(new_buildpath, '.ambuild2'))
-        if int(has_amb2) != len(os.listdir(new_buildpath)):
+        if not has_amb2 and len(os.listdir(new_buildpath)):
           util.con_err(util.ConsoleRed, 'Tried to use ',
                        util.ConsoleBlue, objfolder,
                        util.ConsoleRed, ' as a build folder, but it is not empty!',
