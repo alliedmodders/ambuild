@@ -109,12 +109,13 @@ class Database(object):
       self.cn.execute(query)
     self.cn.commit()
 
-  def add_folder(self, parent, path, generated):
+  def add_folder(self, parent, path):
     assert path not in self.path_cache_
     assert not os.path.isabs(path)
     assert os.path.normpath(path) == path
 
-    return self.add_file(nodetypes.Mkdir, path, generated, parent)
+    # We don't use the generated bit for folders right now.
+    return self.add_file(nodetypes.Mkdir, path, False, parent)
 
   def add_output(self, folder_entry, path):
     if folder_entry:

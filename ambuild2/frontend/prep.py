@@ -61,27 +61,23 @@ class Preparer(object):
         'Warning: build is being configured in the source tree.',
         util.ConsoleNormal
       )
-      if os.path.exists(os.path.join(new_buildpath, '.ambuild2')):
-        util.con_err(
-          util.ConsoleHeader,
-          'Re-using build folder: ',
-          util.ConsoleBlue,
-          '{0}'.format(objfolder),
-          util.ConsoleNormal
-        )
-      elif os.path.exists(os.path.join(new_buildpath)) and len(os.listdir(new_buildpath)):
-        sys.stderr.write('Tried to use "{0}" as a build folder, but it is not empty!\n'.format(objfolder))
-        sys.exit(1)
+      if os.path.exists(os.path.join(new_buildpath)):
+        has_amb2 = os.path.exists(os.path.join(new_buildpath, '.ambuild2'))
+        if int(has_amb2) != len(os.listdir(new_buildpath)):
+          util.con_err(util.ConsoleRed, 'Tried to use ',
+                       util.ConsoleBlue, objfolder,
+                       util.ConsoleRed, ' as a build folder, but it is not empty!',
+                       util.ConsoleNormal)
+          raise Exception('build folder has unrecognized files')
+
+        util.con_err(util.ConsoleHeader, 'Re-using build folder: ',
+                     util.ConsoleBlue, '{0}'.format(objfolder),
+                     util.ConsoleNormal)
       else:
-        util.con_err(
-          util.ConsoleHeader,
-          'Creating "',
-          util.ConsoleBlue,
-          '{0}'.format(objfolder),
-          util.ConsoleHeader,
-          '" as a build folder.',
-          util.ConsoleNormal
-        )
+        util.con_err(util.ConsoleHeader, 'Creating "',
+                     util.ConsoleBlue, '{0}'.format(objfolder),
+                     util.ConsoleHeader, '" as a build folder.',
+                     util.ConsoleNormal)
         os.mkdir(new_buildpath)
       self.buildPath = new_buildpath
 

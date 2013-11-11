@@ -52,6 +52,7 @@ class Context(object):
     else:
       self.currentSourcePath = generator.sourcePath
       self.buildFolder = ''
+    self.localFolder_ = self.buildFolder
 
   # Root source folder.
   @property
@@ -66,6 +67,12 @@ class Context(object):
   def buildPath(self):
     return self.generator.buildPath
 
+  # In build systems with dependency graphs, this can return a node
+  # representing buildFolder. Otherwise, it returns buildFolder.
+  @property
+  def localFolder(self):
+    return self.generator.getLocalFolder(self)
+
   @property
   def target_platform(self):
     return self.generator.target_platform
@@ -75,6 +82,7 @@ class Context(object):
       self.buildFolder = ''
     else:
       self.buildFolder = os.path.normpath(folder)
+    self.localFolder_ = self.buildFolder
 
   def DetectCompilers(self):
     if not self.compiler:
@@ -193,6 +201,9 @@ all:
       cxx = cpp.DetectCompiler(self, os.environ, 'CXX')
     self.compiler = cpp.Compiler(cc, cxx)
     return self.compiler
+
+  def getLocalFolder(self, context):
+    return context.localFolder_
 
   def addSymlink(self, context, source, output_path):
     if util.host_platform == 'windows':

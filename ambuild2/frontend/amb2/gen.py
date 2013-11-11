@@ -52,38 +52,147 @@ class Generator(base_gen.Generator):
     self.db.query_commands(lambda entry: self.old_commands_.add(entry))
     self.db.query_groups(lambda entry:self.old_groups_.add(entry))
 
-  def generateFolder(self, context, folder, generated):
-    folder = os.path.normpath(os.path.join(context.buildFolder, folder))
-    if folder.startswith('..'):
+  def cleanup(self):
+    for cmd_entry in self.old_commands_:
+      self.db.drop_command(cmd_entry)
+
+    for path in self.old_scripts_:
+      self.db.drop_script(path)
+
+    for group in self.old_groups_:
+      self.db.drop_group(group)
+
+    class Node:
+      def __init__(self):
+        self.incoming = set()
+        self.outgoing = set()
+
+    # Build a tree of dead folders.
+    tracker = {}
+    for entry in self.old_folders_:
+      if entry not in tracker:
+        tracker[entry] = Node()
+
+      if entry.folder is None:
+        continue
+
+      if entry.folder not in tracker:
+        tracker[entry.folder] = Node()
+
+      parent = tracker[entry.folder]
+      child = tracker[entry]
+      parent.incoming.add(entry)
+      child.outgoing.add(entry.folder)
+
+    # Find the leaves. Sets start out >= 1 items. Remove them as they they
+    # are empty.
+    dead_folders = [entry for entry in self.old_folders_ if len(tracker[entry].incoming) == 0]
+    while len(dead_folders):
+      child_entry = dead_folders.pop()
+      child_node = tracker[child_entry]
+
+      self.db.drop_folder(child_entry)
+      for parent_entry in child_node.outgoing:
+        parent_node = tracker[parent_entry]
+        parent_node.incoming.remove(child_entry)
+        if not len(parent_node.incoming):
+          dead_folders.append(parent_entry)
+
+  def postGenerate(self):
+    self.cleanup()
+    self.db.commit()
+    if self.is_bootstrap:
+      self.saveVars()
+      self.db.close()
+
+  def saveVars(self):
+    vars = {
+      'sourcePath': self.sourcePath,
+      'buildPath': self.buildPath,
+      'options': self.options,
+      'args': self.args
+    }
+    with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
+      util.DiskPickle(vars, fp)
+
+
+  def getLocalFolder(self, context):
+    if type(context.localFolder_) is nodetypes.Entry or context.localFolder_ is None:
+      return context.localFolder_
+
+    if len(context.buildFolder):
+      context.localFolder_ = self.generateFolder(None, context.buildFolder)
+    else:
+      context.localFolder_ = None
+    return context.localFolder_
+
+  def generateFolder(self, parent, folder):
+    parent_path = ''
+    if parent:
+      parent_path = parent.path
+    path = os.path.normpath(os.path.join(parent_path, folder))
+
+    if path.startswith('..'):
+      util.con_err(
+        util.ConsoleRed,
+        'Output path ',
+        util.ConsoleBlue,
+        path,
+        util.ConsoleRed,
+        ' is outside the build folder!',
+        util.ConsoleNormal
+      )
       raise Exception('Cannot generate folders outside the build folder')
 
-    path = folder
+    # Quick check. If this folder is not in our old folder list, and it's in
+    # the DB, then we already have an entry for it that has fixed up its
+    # parent paths.
+    old_entry = self.db.query_path(path)
+    if old_entry and old_entry not in self.old_folders_:
+      # We have to make sure it's actually a folder entry, or if it isn't,
+      # it's something we will try to fix up to a folder later.
+      if old_entry.type == nodetypes.Mkdir or old_entry in self.bad_folders_:
+        return old_entry
+
     components = []
-    while path:
-      path, name = os.path.split(path)
+    while folder:
+      folder, name = os.path.split(folder)
       if not name:
         break
       components.append(name)
 
-    path = ''
-    parent = None
+    path = parent_path
     while len(components):
       name = components.pop()
       path = os.path.join(path, name)
       entry = self.db.query_path(path)
       if not entry:
-        entry = self.db.add_folder(parent, path, generated)
-      elif entry.type == nodetypes.Mkdir:
-        self.old_folders_.discard(entry)
+        entry = self.db.add_folder(parent, path)
       else:
-        self.bad_folders_.add(entry)
+        # We let the same folder be generated twice, so use discard, not remove.
+        self.old_folders_.discard(entry)
+
+        # If the old entry is not an output/mkdir, error.
+        if entry.type != nodetypes.Mkdir and entry.type != nodetypes.Output:
+          util.con_err(
+            util.ConsoleRed,
+            'Folder has the same node signature as: ',
+            util.ConsoleBlue,
+            entry.format(),
+            util.ConsoleNormal
+          )
+          raise Exception('Output has been duplicated: {0}'.format(entry.path))
+
+        # If the old entry is an output, we can tell if it's unused later.
+        # :TODO:
+
       parent = entry
 
     return entry
 
   def addCommand(self, context, node_type, folder, data, inputs, outputs, weak_inputs=[]):
-    if not folder and len(context.buildFolder):
-      folder = self.generateFolder(context, folder, generated=True)
+    if not folder:
+      folder = context.localFolder
     assert not folder or type(folder) is nodetypes.Entry
 
     # Build the set of weak links.
@@ -192,7 +301,7 @@ class Generator(base_gen.Generator):
     return cmd_entry, output_nodes
 
   def addCxxTasks(self, cx, binary):
-    folder_node = self.generateFolder(cx, binary.localFolder, generated=True)
+    folder_node = self.generateFolder(cx.localFolder, binary.localFolder)
 
     inputs = []
 
@@ -240,81 +349,56 @@ class Generator(base_gen.Generator):
 
     return CppNodes(binNodes[0], binNodes[1:])
 
-  def cleanup(self):
-    for cmd_entry in self.old_commands_:
-      self.db.drop_command(cmd_entry)
+  @staticmethod
+  def getPathInContext(context, node):
+    if node.type == nodetypes.Source:
+      assert os.path.isabs(node.path)
+      return node.path
+    
+    assert not os.path.isabs(node.path)
+    assert node.type == nodetypes.Output
+    return os.path.relpath(node.path, context.buildFolder)
 
-    for path in self.old_scripts_:
-      self.db.drop_script(path)
+  @staticmethod
+  def find_folder(context, path):
+    if path[-1] == os.sep or path[-1] == os.altsep:
+      return path
+    if os.path.normpath(path) == '.':
+      return '.' + os.sep
+    path = os.path.normpath(os.path.join(context.buildFolder, path))
+    return self.db.query_path(path)
 
-    for group in self.old_groups_:
-      self.db.drop_group(group)
+  # def outputFolderInContext(self, context, path):
+  #   if output_path[-1] == os.sep or output_path[-1] == os.altsep:
+  #     return os.path.join(context.buildFolder, output_path)
+  #   if os.path.normpath(output_path) == '.':
+  #     return context.buildFolder
 
-    class Node:
-      def __init__(self):
-        self.incoming = set()
-        self.outgoing = set()
+  #   else:
+  #     output_folder = os.path.join(context.buildFolder, output_path)
+  #     output_folder = os.path.normpath(output_folder)
+  #     output_entry = self.db.query_path(output_folder)
+  #     if output_entry and output_entry.type != nodetypes.
+  #       # If 
 
-    # Build a tree of dead folders.
-    tracker = {}
-    for entry in self.old_folders_:
-      if entry not in tracker:
-        tracker[entry] = Node()
-
-      if entry.folder is None:
-        continue
-
-      if entry.folder not in tracker:
-        tracker[entry.folder] = Node()
-
-      parent = tracker[entry.folder]
-      child = tracker[entry]
-      parent.incoming.add(entry)
-      child.outgoing.add(entry.folder)
-
-    # Find the leaves. Sets start out >= 1 items. Remove them as they they
-    # are empty.
-    dead_folders = [entry for entry in self.old_folders_ if len(tracker[entry].incoming) == 0]
-    while len(dead_folders):
-      child_entry = dead_folders.pop()
-      child_node = tracker[child_entry]
-
-      self.db.drop_folder(child_entry)
-      for parent_entry in child_node.outgoing:
-        parent_node = tracker[parent_entry]
-        parent_node.incoming.remove(child_entry)
-        if not len(parent_node.incoming):
-          dead_folders.append(parent_entry)
-
-  def postGenerate(self):
-    self.cleanup()
-    self.db.commit()
-    if self.is_bootstrap:
-      self.saveVars()
-      self.db.close()
-
-  def saveVars(self):
-    vars = {
-      'sourcePath': self.sourcePath,
-      'buildPath': self.buildPath,
-      'options': self.options,
-      'args': self.args
-    }
-    with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
-      util.DiskPickle(vars, fp)
+  #def addFileOp(self, cmd, context, source, output_path):
+    # Find the folder the destination file will be in.
 
   def addSource(self, context, source_path):
     return self.graph.addSource(source_path)
+
+  def addCopy(self, context, source, output_path):
+    return self.addFileOp(nodetypes.Copy, context, source, output_path)
 
   def addSymlink(self, context, source, output_path):
     if util.IsWindows():
       # Windows pre-Vista does not support symlinks. Windows Vista+ supports
       # symlinks via mklink, but it's Administrator-only by default.
-      return self.graph.addCopy(context, source, output_path)
-    return self.graph.addSymlink(context, source, output_path)
+      return self.addFileOp(nodetypes.Copy, context, source, output_path)
+    return self.addFileOp(nodetypes.Symlink, context, source, output_path)
 
   def addFolder(self, context, folder):
-    return self.generateFolder(context, folder, False)
+    return self.generateFolder(context.localFolder, folder)
 
   def addCopy(self, context, source, output_path):
     return self.graph.addCopy(context, source, output_path)
@@ -332,36 +416,4 @@ class Generator(base_gen.Generator):
   def addConfigureFile(self, context, path):
     self.old_scripts_.discard(path)
     self.db.add_or_update_script(path)
-
-  #def addGroup(self, context, name, members):
-  #  group = self.db.find_group(name)
-  #  if group:
-  #    if group not in self.old_groups_:
-  #      util.con_err(
-  #        util.ConsoleRed,
-  #        'Group ',
-  #        util.ConsoleBlue,
-  #        name,
-  #        util.ConsoleRed,
-  #        ' already exists!',
-  #        util.ConsoleNormal
-  #      )
-  #      raise Exception('Group {0} already exists!'.format(name))
-  #    self.old_groups.remove(group)
-  #  else:
-  #    group = self.db.add_group(name)
-
-  #  for entry in members:
-  #    if entry.type != nodetypes.Output:
-  #      util.con_err(
-  #        util.ConsoleRed,
-  #        'Groups can only contain output nodes. Given: ',
-  #        util.ConsoleBlue,
-  #        entry.format(),
-  #        util.ConsoleNormal
-  #      )
-  #      raise Exception('Groups can only contain output nodes!')
-  #    self.db.add_strong_edge(entry, group)
-
-  #  return group
 
