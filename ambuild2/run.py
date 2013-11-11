@@ -21,6 +21,28 @@ from ambuild2 import util
 from ambuild2.frontend.prep import Preparer
 from ambuild2.context import Context
 
+SampleScript = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+builder.DetectCompilers()
+builder.compiler.cflags += [
+  '-Wall',
+  '-Werror'
+]
+
+program = builder.compiler.Program('sample')
+program.sources += [
+  'main.cpp',
+]
+builder.Add(program)
+"""
+
+SampleConfigure = """# vim: set sts=2 ts=8 sw=2 tw=99 et:
+import sys
+from ambuild2 import run
+
+builder = run.PrepareBuild(sourcePath = sys.path[0])
+builder.Configure()
+"""
+
 def BuildOptions():
   parser = OptionParser("usage: %prog [options] [path]")
   parser.add_option("--no-color", dest="no_color", action="store_true", default=False,
@@ -39,11 +61,29 @@ def BuildOptions():
                     help="Number of worker processes. Minimum number is 1; default is #cores * 1.25.")
   parser.add_option('--refactor', dest="refactor", action="store_true", default=False,
                     help="Abort the build if the dependency graph would change.")
+  parser.add_option('--new-project', dest="new_project", action="store_true", default=False,
+                    help="Export a sample AMBuildScript in the current folder.")
 
   options, argv = parser.parse_args()
 
   if len(argv) > 1:
     parser.error("expected path, found extra arguments")
+
+  if options.new_project:
+    if os.path.exists('AMBuildScript'):
+      sys.stderr.write('An AMBuildScript file already exists here; aborting.\n')
+      sys.exit(1)
+    if os.path.exists('configure.py'):
+      sys.stderr.write('A configure.py file already exists here; aborting.\n')
+      sys.exit(1)
+
+    with open('AMBuildScript', 'w') as fp:
+      fp.write(SampleScript)
+    with open('configure.py', 'w') as fp:
+      fp.write(SampleConfigure)
+
+    sys.stdout.write('Sample AMBuildScript and configure.py scripts generated.\n')
+    sys.exit(0)
 
   return options, argv
 
