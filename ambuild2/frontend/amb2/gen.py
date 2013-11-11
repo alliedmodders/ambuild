@@ -168,6 +168,11 @@ class Generator(base_gen.Generator):
       path = os.path.join(path, name)
       entry = self.db.query_path(path)
       if not entry:
+        if self.refactoring:
+          util.con_err(util.ConsoleRed, 'New folder introduced: ',
+                       util.ConsoleBlue, path,
+                       util.ConsoleNormal)
+          raise Exception('Refactoring error')
         entry = self.db.add_folder(parent, path)
       else:
         # We let the same folder be generated twice, so use discard, not remove.
@@ -382,9 +387,7 @@ class Generator(base_gen.Generator):
     else:
       cmd_entry = self.db.add_command(node_type, folder, data)
 
-    def check_refactoring(node):
-      if not self.refactoring:
-        return
+    def refactoring_error(node):
       util.con_err(util.ConsoleRed, 'New input introduced: ',
                    util.ConsoleBlue, node.path + '\n',
                    util.ConsoleRed, 'Command: ',
@@ -392,9 +395,11 @@ class Generator(base_gen.Generator):
                    util.ConsoleNormal)
       raise Exception('Refactoring error: new input introduced')
 
+    if len(must_link) and self.refactoring:
+      refactoring_error(must_link.pop())
+
     # Connect each output.
     for output_node in must_link:
-      check_refactoring(output_node)
       self.db.add_strong_edge(cmd_entry, output_node)
 
     # Connect/disconnect strong inputs.
@@ -402,10 +407,11 @@ class Generator(base_gen.Generator):
     strong_added = strong_links - strong_inputs
     strong_removed = strong_inputs - strong_links 
 
-    for strong_input in strong_added:
-      check_refactoring(strong_input)
-      self.db.add_strong_edge(strong_input, cmd_entry)
+    if len(strong_added) and self.refactoring:
+      refactoring_error(strong_added.pop())
 
+    for strong_input in strong_added:
+      self.db.add_strong_edge(strong_input, cmd_entry)
     for strong_input in strong_removed:
       self.db.drop_strong_edge(strong_input, cmd_entry)
 
@@ -414,10 +420,11 @@ class Generator(base_gen.Generator):
     weak_added = weak_links - weak_inputs
     weak_removed = weak_inputs - weak_links 
 
-    for weak_input in weak_added:
-      check_refactoring(weak_input)
-      self.db.add_weak_edge(weak_input, cmd_entry)
+    if len(weak_added) and self.refactoring:
+      refactoring_error(weak_added.pop())
 
+    for weak_input in weak_added:
+      self.db.add_weak_edge(weak_input, cmd_entry)
     for weak_input in weak_removed:
       self.db.drop_weak_edge(weak_input, cmd_entry)
 
