@@ -14,7 +14,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import nodetypes
+from ambuild2 import nodetypes
 
 class GraphNode(object):
   def __init__(self, entry):

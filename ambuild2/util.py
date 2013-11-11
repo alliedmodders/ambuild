@@ -282,5 +282,9 @@ LambdaType = type(lambda: None)
 def IsLambda(v):
   return type(v) == LambdaType
 
-def IsString(v):
-  return type(v) == str or type(v) == unicode
+if str == bytes:
+  def IsString(v):
+    return type(v) == str or type(v) == unicode
+else:
+  def IsString(v):
+    return type(v) == str

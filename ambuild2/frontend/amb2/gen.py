@@ -15,11 +15,11 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
-from ... import util
-from ... import nodetypes
-from .. cpp import DetectCompiler
-from .. import base_gen
-from ... import database
+from ambuild2 import util
+from ambuild2 import nodetypes
+from ambuild2.frontend.cpp import DetectCompiler
+from ambuild2.frontend import base_gen
+from ambuild2 import database
 
 class CppNodes(object):
   def __init__(self, output, debug_outputs):
@@ -326,7 +326,7 @@ class Generator(base_gen.Generator):
     raise Exception('Tried to use non-file node as a file path')
 
   def addCommand(self, context, node_type, folder, data, inputs, outputs, weak_inputs=[]):
-    assert not folder or type(folder) is nodetypes.Entry
+    assert not folder or isinstance(folder, nodetypes.Entry)
 
     # Build the set of weak links.
     weak_links = set()

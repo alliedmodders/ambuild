@@ -14,13 +14,13 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import util
 import errno
 import os, sys
 import sqlite3
-import nodetypes
+from ambuild2 import util
+from ambuild2 import nodetypes
+from ambuild2.nodetypes import Entry
 import traceback
-from nodetypes import Entry
 
 GroupPrefix = '//group/./'
 

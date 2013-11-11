@@ -1,14 +1,14 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
-import util
 import errno
 import shutil
 import os, sys
-import nodetypes
 import traceback
 import multiprocessing as mp
-from ipc import ParentProcessListener, ChildProcessListener
-from ipc import ProcessManager, MessageListener, Error
-from ipc import Channel
+from ambuild2 import util
+from ambuild2 import nodetypes
+from ambuild2.ipc import ParentProcessListener, ChildProcessListener
+from ambuild2.ipc import ProcessManager, MessageListener, Error
+from ambuild2.ipc import Channel
 
 class Task(object):
   def __init__(self, id, entry, outputs):

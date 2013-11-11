@@ -17,9 +17,9 @@
 import time
 import traceback
 import os, sys, imp
-import util, database, damage
-from builder import Builder
-from ipc import ProcessManager, MessagePump
+from ambuild2 import util, database, damage
+from ambuild2.builder import Builder
+from ambuild2.ipc import ProcessManager, MessagePump
 from optparse import OptionParser
 
 class Context(object):
@@ -40,6 +40,7 @@ class Context(object):
           sys.stderr.write('There does not appear to be a build configured here.\n')
         else:
           sys.stderr.write('The build configured here looks corrupt; you will have to delete your objdir.\n')
+        raise
         sys.exit(1)
     self.db = database.Database(self.dbpath)
     self.messagePump = MessagePump()
