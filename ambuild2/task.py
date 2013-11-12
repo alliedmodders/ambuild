@@ -253,10 +253,10 @@ class TaskMasterChild(ChildProcessListener):
 
   def receiveStop(self, channel, message):
     if not message['ok']:
-      self.buildFailed()
+      self.terminateBuild()
     self.close_idle()
 
-  def buildFailed(self):
+  def terminateBuild(self):
     if self.build_failed:
       return
 
@@ -277,7 +277,7 @@ class TaskMasterChild(ChildProcessListener):
         'status': 'failed',
       })
       self.procman.close(child)
-      self.buildFailed()
+      self.terminateBuild()
       return
 
     task_id = message['task_id']
@@ -356,7 +356,7 @@ class TaskMasterChild(ChildProcessListener):
       'status': 'crashed',
       'task_id': task.id,
     })
-    self.buildFailed()
+    self.terminateBuild()
 
   def onWorkerDied(self, child, error):
     if error != Error.NormalShutdown:
@@ -462,12 +462,13 @@ class TaskMasterParent(ParentProcessListener):
       self.terminateBuild()
 
   def terminateBuild(self):
-    if not self.build_failed:
-      self.build_failed = True
-      self.taskMaster.send({
-        'id': 'stop',
-        'ok': False
-      })
+    if self.build_failed:
+      return
+    self.build_failed = True
+    self.taskMaster.send({
+      'id': 'stop',
+      'ok': False
+    })
 
   def receiveSpawned(self, message):
     util.con_out(
@@ -490,7 +491,10 @@ class TaskMasterParent(ParentProcessListener):
     elif message['status'] == 'failed':
       self.terminateBuild()
     else:
-      self.cx.procman.close(child)
+      self.taskMaster.send({
+        'id': 'stop',
+        'ok': True
+      })
 
   def run(self):
     self.cx.messagePump.pump()
