@@ -446,13 +446,13 @@ class MessagePump(process.MessagePump):
     try:
       messages = channel.complete_incoming_io(nbytes=nbytes.value)
     except winapi.WinError as exn:
-      if exn.winerror != winapi.ERROR_NO_DATA:
+      if exn.winerror != winapi.ERROR_BROKEN_PIPE:
         traceback.print_exc()
     except Exception as exn:
       traceback.print_exc()
 
     if messages is None:
-      return False
+      self.handle_channel_error(channel, listener, Error.EOF)
 
     for message in messages:
       self.pending.append((key.value, message))

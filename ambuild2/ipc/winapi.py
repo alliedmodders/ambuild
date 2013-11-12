@@ -214,7 +214,7 @@ WAIT_OBJECT_0 =                 0x00000000
 WAIT_TIMEOUT =                  0x00000102
 WAIT_FAILED =                   -1
 STILL_ACTIVE =                  259
-ERROR_NO_DATA =                 232
+ERROR_BROKEN_PIPE =             109
 ERROR_PIPE_CONNECTED =          535
 ERROR_IO_PENDING =              997
 

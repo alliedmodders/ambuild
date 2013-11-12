@@ -73,6 +73,6 @@ def child_main(channel):
   try:
     mp.pump()
   except:
-    print('>>>>>>>>>>>>>>>>>>>>>EXITING', os.getpid(), '!!!!!!!!!!!!!!!!!!')
+    sys.stdout.write('[{0}] Child process terminating abnormally.\n'.format(os.getpid()))
     raise
-  sys.stdout.write('[{0}] Child process terminating normally.\n'.format(os.getpid()))
+#  sys.stdout.write('[{0}] Child process terminating normally.\n'.format(os.getpid()))
