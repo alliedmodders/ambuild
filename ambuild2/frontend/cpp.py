@@ -356,7 +356,7 @@ class BinaryBuilder(object):
     self.outputFile = name
     self.argv = argv
     if self.linker.pdbSuffix:
-      self.pdbFile = os.path.join(self.localFolder, self.name + self.linker.pdbSuffix)
+      self.pdbFile = self.name
     else:
       self.pdbFile = None
 

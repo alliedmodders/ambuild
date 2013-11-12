@@ -446,8 +446,8 @@ class TaskMasterParent(ParentProcessListener):
       self.terminateBuild(graceful=True)
 
   def terminateBuild(self, graceful):
-    if not graceful:
-      self.cx.messagePump.cancel()
+    #if not graceful:
+    #  self.cx.messagePump.cancel()
 
     if not self.build_failed:
       self.build_failed = True
