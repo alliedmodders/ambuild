@@ -393,10 +393,6 @@ class MessagePump(process.MessagePump):
     del self.listeners[key]
 
   def processMessage(self, message, channel, listener):
-    if not message:
-      self.handle_channel_error(channel, listener, Error.NormalShutdown)
-      return
-
     if message == Special.Closing:
       self.handle_channel_error(channel, listener, Error.NormalShutdown)
       return

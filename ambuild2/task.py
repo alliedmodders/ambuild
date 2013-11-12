@@ -233,6 +233,9 @@ class TaskMasterChild(ChildProcessListener):
     self.idle = set()
     self.build_failed = False
     self.build_completed = False
+    self.messageMap = {
+      'stop': lambda channel, message: self.receiveStop(channel, message)
+    }
 
     self.procman = ProcessManager(pump)
     for i in range(num_processes):
@@ -248,19 +251,21 @@ class TaskMasterChild(ChildProcessListener):
       'type': 'taskmaster'
     })
 
+  def receiveStop(self, channel, message):
+    if not message['ok']:
+      self.buildFailed()
+    self.close_idle()
+
   def buildFailed(self):
-    if not self.build_failed:
-      self.build_failed = True
-      self.close_idle()
+    if self.build_failed:
+      return
+
+    self.build_failed = True
+    self.close_idle()
 
   def receiveClose(self, channel):
-    # We received a close request, so wait for all children to finish.
-    if not self.build_completed:
-      # The master process might have decided we failed, in which case it'll
-      # request an early shutdown. Set our own fail bit so worker processes
-      # don't enqueue more tasks.
-      self.build_failed = True
     self.procman.shutdown()
+    self.pump.cancel()
 
   def onWorkerResults(self, child, message):
     # Forward the results to the master process.
@@ -307,9 +312,11 @@ class TaskMasterChild(ChildProcessListener):
         'type': 'worker'
       })
 
-    # If the build failed, ignore the message.
+    # If the build failed, ignore the message, and shutdown the process.
     if self.build_failed:
-      return False
+      self.procman.close(child)
+      self.maybe_request_shutdown(child)
+      return
 
     if not len(self.task_graph):
       if len(self.outstanding):
@@ -361,16 +368,21 @@ class TaskMasterChild(ChildProcessListener):
           break
 
     self.idle.discard(child)
+    self.maybe_request_shutdown(child)
 
+  def maybe_request_shutdown(self, child):
     for other_child in self.procman.children:
       if other_child == child:
         continue
       if other_child.is_alive():
         return
 
-    # If we got here, no other child processes are live, so we can quit.
-    self.channel.finished()
-    self.pump.cancel()
+    # If we got here, no other child processes are live, so we can ask for
+    # safe shutdown. This is needed to make sure all our messages arrive,
+    # since closing one end of the pipe destroys any leftover data.
+    self.channel.send({
+      'id': 'done'
+    })
 
 class TaskMasterParent(ParentProcessListener):
   def __init__(self, cx, builder, task_graph, max_parallel):
@@ -381,7 +393,8 @@ class TaskMasterParent(ParentProcessListener):
     self.messageMap = {
       'completed': lambda child, message: self.receiveCompleted(child, message),
       'spawned': lambda child, message: self.receiveSpawned(message),
-      'results': lambda child, message: self.processResults(message)
+      'results': lambda child, message: self.processResults(message),
+      'done': lambda child, message: self.receiveDone(message),
     }
 
     # Figure out how many tasks to create.
@@ -402,11 +415,14 @@ class TaskMasterParent(ParentProcessListener):
       num_processes = max_parallel
 
     # Spawn the task master.
-    cx.procman.spawn(
+    self.taskMaster = cx.procman.spawn(
       self,
       TaskMasterChild,
       args=(task_graph, cx.buildPath, num_processes)
     )
+
+  def receiveDone(self, message):
+    self.cx.procman.shutdown()
 
   def processResults(self, message):
     if message['ok']:
@@ -432,7 +448,7 @@ class TaskMasterParent(ParentProcessListener):
         sys.stderr.write('\n')
 
     if not message['ok']:
-      self.terminateBuild(graceful=True)
+      self.terminateBuild()
       return
 
     task_id = message['task_id']
@@ -443,15 +459,15 @@ class TaskMasterParent(ParentProcessListener):
         'Failed to update node!',
         util.ConsoleNormal
       )
-      self.terminateBuild(graceful=True)
+      self.terminateBuild()
 
-  def terminateBuild(self, graceful):
-    #if not graceful:
-    #  self.cx.messagePump.cancel()
-
+  def terminateBuild(self):
     if not self.build_failed:
       self.build_failed = True
-      self.cx.procman.shutdown()
+      self.taskMaster.send({
+        'id': 'stop',
+        'ok': False
+      })
 
   def receiveSpawned(self, message):
     util.con_out(
@@ -463,16 +479,16 @@ class TaskMasterParent(ParentProcessListener):
   def receiveError(self, child, error):
     if error != Error.NormalShutdown:
       sys.stderr.write('Received unexpected error from child process {0}: {1}\n'.format(child.pid, error))
-      self.terminateBuild(graceful=False)
+      self.terminateBuild()
 
   def receiveCompleted(self, child, message):
     if message['status'] == 'crashed':
       task = self.builder.commands[message['task_id']]
       sys.stderr.write('Crashed trying to perform update:\n')
       sys.stderr.write('  : {0}\n'.format(task.entry.format()))
-      self.terminateBuild(graceful=True)
+      self.terminateBuild()
     elif message['status'] == 'failed':
-      self.terminateBuild(graceful=True)
+      self.terminateBuild()
     else:
       self.cx.procman.close(child)
 
