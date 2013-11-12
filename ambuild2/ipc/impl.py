@@ -62,12 +62,17 @@ class ChildWrapperListener(process.MessageListener):
   def receiveError(self, channel, error):
     if self.listener:
       self.listener.receiveError(error)
-    sys.stderr.write('[{0}] Parent process died, terminating...\n'.format(os.getpid()))
+    else:
+      sys.stderr.write('[{0}] Parent process died, terminating...\n'.format(os.getpid()))
     sys.exit(1)
 
 def child_main(channel):
   mp = MessagePump()
   listener = ChildWrapperListener(mp, channel)
   mp.addChannel(channel, listener)
-  mp.pump()
-  #sys.stdout.write('[{0}] Child process terminating normally.\n'.format(os.getpid()))
+  try:
+    mp.pump()
+  except:
+    print('>>>>>>>>>>>>>>>>>>>>>EXITING', os.getpid(), '!!!!!!!!!!!!!!!!!!')
+    raise
+  sys.stdout.write('[{0}] Child process terminating normally.\n'.format(os.getpid()))

@@ -208,14 +208,15 @@ STARTF_USESTDHANDLES =          0x00000100
 STD_INPUT_HANDLE =              -10
 STD_OUTPUT_HANDLE =             -11
 STD_ERROR_HANDLE =              -12
-ERROR_PIPE_CONNECTED =          535
-ERROR_IO_PENDING =              997
 INFINITE =                      -1
 WAIT_ABANDONED =                0x00000080
 WAIT_OBJECT_0 =                 0x00000000
 WAIT_TIMEOUT =                  0x00000102
 WAIT_FAILED =                   -1
 STILL_ACTIVE =                  259
+ERROR_NO_DATA =                 232
+ERROR_PIPE_CONNECTED =          535
+ERROR_IO_PENDING =              997
 
 pipe_counter_ = 0
 

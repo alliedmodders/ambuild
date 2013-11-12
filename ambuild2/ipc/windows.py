@@ -18,6 +18,7 @@ import struct
 import ctypes
 import os, sys
 import traceback
+from collections import deque
 from . import process
 from . import winapi
 from . process import Channel, Error, Special
@@ -133,7 +134,7 @@ class NamedPipe(Channel):
     # Done.
     return
 
-  def complete_incoming_io(self, nbytes):
+  def complete_connection(self, nbytes):
     if not self.waiting_input:
       # We could already be connected, if we're on the child or if the parent
       # has used connect_sync().
@@ -141,7 +142,7 @@ class NamedPipe(Channel):
         assert nbytes == 0
         if not self.connect_async():
           # Connection hasn't occurred yet, so just keep waiting.
-          return
+          return False
 
     # If we got here, we're definitely connected.
     if not self.connected:
@@ -152,9 +153,41 @@ class NamedPipe(Channel):
     # If we're already waiting for input, but we got 0 bytes, just ignore
     # this event (it's probably faked from our own code).
     if self.waiting_input and not nbytes:
-      return
+      return False
 
     self.waiting_input = False
+    return True
+
+  def post_read(self):
+    bytes_read = ctypes.c_int()
+    result = winapi.fnReadFile(
+      self.handle,
+      ctypes.cast(self.input_obj, ctypes.c_void_p),
+      len(self.input_buffer),
+      ctypes.byref(bytes_read),
+      ctypes.cast(ctypes.pointer(self.read_op), ctypes.c_void_p)
+    )
+
+    if not result:
+      if winapi.GetLastError() == winapi.ERROR_IO_PENDING:
+        self.waiting_input = True
+        return None
+      raise winapi.WinError()
+
+    # Even if the ReadFile() succeeds, and we have data immediately
+    # available, Windows still posts to the IOCP. This makes very little
+    # sense to me, but the IOCP API is awful in general. We just return
+    # immediately if this is the case, to avoid reading the data twice.
+    self.waiting_input = True
+
+  # Respond to a GetQueuedCompletionStatus().
+  def complete_incoming_io(self, nbytes):
+    if not self.complete_connection(nbytes):
+      return []
+
+    if not nbytes:
+      self.post_read()
+      return []
 
     messages = []
 
@@ -168,38 +201,21 @@ class NamedPipe(Channel):
         messages.append(message)
 
     if not self.waiting_input:
-      self.receive_bytes(0)
+      self.post_read()
 
     # We should always be awaiting input again, otherwise, we'll never receive
     # more events from the IO Completion Port.
     assert self.waiting_input
     return messages
 
+  # Shorthand for complete_incoming_io(0)
+  def initiate_io(self):
+    if not self.complete_connection(0):
+      return
+    self.post_read()
+
+  # Process newly received bytes.
   def receive_bytes(self, nbytes):
-    # Try to read another block of data.
-    if nbytes == 0:
-      bytes_read = ctypes.c_int()
-      result = winapi.fnReadFile(
-        self.handle,
-        ctypes.cast(self.input_obj, ctypes.c_void_p),
-        len(self.input_buffer),
-        ctypes.byref(bytes_read),
-        ctypes.cast(ctypes.pointer(self.read_op), ctypes.c_void_p)
-      )
-
-      if not result:
-        if winapi.GetLastError() == winapi.ERROR_IO_PENDING:
-          self.waiting_input = True
-          return None
-        raise winapi.WinError()
-
-      # Even if the ReadFile() succeeds, and we have data immediately
-      # available, Windows still posts to the IOCP. This makes very little
-      # sense to me, but the IOCP API is awful in general. We just return
-      # immediately if this is the case, to avoid reading the data twice.
-      self.waiting_input = True
-      return None
-
     total_length = len(self.input_overflow) + nbytes
 
     # Do we have enough for a message prefix?
@@ -245,6 +261,7 @@ class NamedPipe(Channel):
 
     return message
 
+  # Process any remaining messages.
   def seek_remaining_message(self):
     if len(self.input_overflow) < kPrefixLength:
       return None
@@ -307,7 +324,7 @@ class NamedPipe(Channel):
 
     # Fake this to true so we don't try to connect asynchronously.
     self.connected = True
-    self.complete_incoming_io(nbytes=0)
+    self.initiate_io()
 
   @classmethod
   def from_proxy(cls, proxy):
@@ -337,7 +354,7 @@ class MessagePump(process.MessagePump):
     self.listeners = {}
     self.channels = {}
     self.next_key = 0
-    self.pending = []
+    self.pending = deque()
 
   def close(self):
     super(LinuxMessagePump, self).close()
@@ -368,50 +385,44 @@ class MessagePump(process.MessagePump):
     # On Windows, we must initiate a recv() that would block in order to
     # receive io completion events. Since that could return actual data,
     # we enqueue these back into the message loop.
-    messages = channel.complete_incoming_io(nbytes=0)
-    if not messages:
-      return
-
-    for message in messages:
-      self.pending += [(key, message)]
+    channel.initiate_io()
 
   def dropChannel(self, channel):
     key = self.channels[channel.handle.value]
     del self.channels[channel.handle.value]
     del self.listeners[key]
 
-  def processPendingEvents(self):
-    for key, message in self.pending:
-      if key not in self.listeners:
-        continue
-
-      channel, listener = self.listeners[key]
-      self.processMessage(message, channel, listener)
-
-    self.pending = []
-
   def processMessage(self, message, channel, listener):
     if not message:
       self.handle_channel_error(channel, listener, Error.NormalShutdown)
-      return False
+      return
 
     if message == Special.Closing:
       self.handle_channel_error(channel, listener, Error.NormalShutdown)
-      return False
+      return
 
     try:
       listener.receiveMessage(channel, message)
     except Exception as exn:
       traceback.print_exc()
       self.handle_channel_error(channel, listener, Error.User)
-      return False
-
-    return True
 
   def processEvents(self):
-    if len(self.pending):
-      self.processPendingEvents()
+    if not self.pending:
+      if not self.poll_io_port():
+        return
 
+    if not self.pending:
+      return
+
+    key, message = self.pending.popleft()
+    if key not in self.listeners:
+      return
+
+    channel, listener = self.listeners[key]
+    self.processMessage(message, channel, listener)
+
+  def poll_io_port(self):
     result, nbytes, key, overlapped = winapi.GetQueuedCompletionStatus(self.port, winapi.INFINITE)
 
     # There is no way to remove a file from a completion port, so just as a
@@ -431,13 +442,20 @@ class MessagePump(process.MessagePump):
       self.handle_channel_error(channel, listener, Error.EOF)
       return False
 
-    messages = channel.complete_incoming_io(nbytes=nbytes.value)
-    if not messages:
-      return True
+    messages = None
+    try:
+      messages = channel.complete_incoming_io(nbytes=nbytes.value)
+    except winapi.WinError as exn:
+      if exn.winerror != winapi.ERROR_NO_DATA:
+        traceback.print_exc()
+    except Exception as exn:
+      traceback.print_exc()
+
+    if messages is None:
+      return False
 
     for message in messages:
-      if not self.processMessage(message, channel, listener):
-        return False
+      self.pending.append((key.value, message))
 
     # Finished processing this status change.
     return True
