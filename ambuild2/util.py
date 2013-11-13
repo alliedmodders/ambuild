@@ -83,8 +83,8 @@ def StaticLibPrefix():
 
 def WaitForProcess(process):
   out, err = process.communicate()
-  process.stdoutText = out.decode()
-  process.stderrText = err.decode()
+  process.stdoutText = out.decode('utf8')
+  process.stderrText = err.decode('utf8')
   return process.returncode
 
 def CreateProcess(argv, executable = None):
