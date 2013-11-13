@@ -267,14 +267,22 @@ class Generator(base_gen.Generator):
                    util.ConsoleNormal)
       raise Exception('Expected folder, but path has a trailing slash')
 
+    path = os.path.normpath(path)
+
     path, name = os.path.split(path)
     path = nodetypes.combine(cwd_entry, path)
 
     # We should have caught a case like 'x/' earlier.
     assert len(name)
 
-    folder_entry = self.validateOutputFolder(path)
-    output_path = os.path.join(path, name)
+    # If we resolved that there is no prefix path, then take this to mean the
+    # root folder.
+    if path:
+      folder_entry = self.validateOutputFolder(path)
+      output_path = os.path.join(path, name)
+    else:
+      folder_entry = None
+      output_path = name
 
     entry = self.db.query_path(output_path)
     if not entry:
@@ -318,6 +326,7 @@ class Generator(base_gen.Generator):
     if util.IsString(source):
       if not os.path.isabs(source):
         source = os.path.join(context.currentSourcePath, source)
+      source = os.path.normpath(source)
 
       entry = self.db.query_path(source)
       if not entry:
