@@ -72,6 +72,19 @@ class Clang(CompatGCC):
   def __init__(self, command, version):
     super(Clang, self).__init__('clang', command, version)
 
+class SunPro(Vendor):
+  def __init__(self, command, version):
+    super(SunPro, self).__init__('sun', version, 'sun', command, '.o')
+    parts = version.split('.')
+    self.definePrefix = '-D'
+    self.pdbSuffix = None
+
+  def formatInclude(self, outputPath, includePath):
+    return ['-I', os.path.normpath(includePath)]
+
+  def objectArgs(self, sourceFile, objFile):
+    return ['-H', '-c', sourceFile, '-o', objFile]
+
 def TryVerifyCompiler(cx, env, mode, cmd):
   if util.IsWindows():
     cc = VerifyCompiler(cx, env, mode, cmd, 'msvc')
@@ -139,6 +152,10 @@ int main()
   printf("msvc %d\\n", _MSC_VER);
 #elif defined __TenDRA__
   printf("tendra 0\\n");
+#elif defined __SUNPRO_C
+  printf("sun %x\\n", __SUNPRO_C);
+#elif defined __SUNPRO_CC
+  printf("sun %x\\n", __SUNPRO_CC);
 #else
 #error "Unrecognized compiler!"
 #endif
@@ -160,8 +177,9 @@ int main()
   if os.path.exists(executable):
     os.unlink(executable)
 
-  if vendor == 'gcc' and mode == 'CXX':
-    args.extend(['-fno-exceptions', '-fno-rtti'])
+  # Until we can better detect vendors, don't do this.
+  # if vendor == 'gcc' and mode == 'CXX':
+  #   args.extend(['-fno-exceptions', '-fno-rtti'])
   args.extend([filename, '-o', executable])
   util.con_out(
     util.ConsoleHeader,
@@ -201,6 +219,8 @@ int main()
     v = Clang(cmd, version)
   elif vendor == 'msvc':
     v = MSVC(cmd, version)
+  elif vendor == 'sun':
+    v = SunPro(cmd, version)
   else:
     print('Unknown vendor {0}'.format(vendor))
     return False

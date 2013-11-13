@@ -174,6 +174,8 @@ class WorkerChild(ChildProcessListener):
         err, deps = util.ParseGCCDeps(err)
       elif cc_type == 'msvc':
         out, deps = util.ParseMSVCDeps(out)
+      elif cc_type == 'sun':
+        err, deps = util.ParseSunDeps(err)
       else:
         raise Exception('unknown compiler type')
         

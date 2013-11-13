@@ -229,6 +229,18 @@ def ParseMSVCDeps(out):
       new_text += line
   return new_text, deps
 
+def ParseSunDeps(text):
+  deps = set()
+  new_text = ''
+
+  for line in re.split('\n+', text):
+    name = line.lstrip()
+    if os.path.isfile(name):
+      deps.add(name)
+    else:
+      new_text += line + '\n'
+  return new_text.strip(), deps
+
 if hasattr(os, 'symlink'):
   def symlink(target, link):
     os.symlink(target, link)
