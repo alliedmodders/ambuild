@@ -101,6 +101,32 @@ elif util.IsLinux():
 
     return cmsg
 
+elif util.IsFreeBSD():
+  sLibC = ctypes.CDLL('libc.so.7', use_errno=True)
+  if not sLibC:
+    sLibC = ctypes.CDLL('libc.so.6', use_errno=True)
+  if not sLibC:
+    raise Exception('Could not find a suitable libc binary')
+
+  posix_spawn_file_actions_t = ctypes.c_void_p
+  pid_t = ctypes.c_int
+  msg_socklen_t = ctypes.c_uint
+  SOL_SOCKET = 0xffff
+  SCM_RIGHTS = 1
+  MSG_NOSIGNAL = 0x20000
+  MSG_CTRUNC = 0x20
+
+  def CMSG_NXTHDR(msg, cmsg):
+    cmsg_len = cmsg.contents.cmsg_len
+    cmsg_len = Align(cmsg_len, ctypes.sizeof(ctypes.c_size_t))
+
+    addr = ctypes.addressof(cmsg.contents) + cmsg_len
+    check = addr + Align(ctypes.sizeof(cmsghdr_base_t), ctypes.sizeof(ctypes.c_size_t))
+    if check > msg.msg_control + msg.msg_controllen:
+      return None
+
+    return ctypes.cast(addr, cmsghdr_base_t_p)
+
 posix_spawnp = sLibC.posix_spawnp
 posix_spawnp.argtypes = [
   ctypes.c_void_p, # pid_t *pid

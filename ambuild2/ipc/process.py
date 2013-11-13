@@ -290,8 +290,9 @@ class ParentWrapperListener(MessageListener):
     # Hack - if the pipe was closed, but we requested shutdown, the error can
     # be ignored. It's the user layer's responsibility to make sure all data
     # in the pipe has been received.
-    if self.child.closing == Error.NormalShutdown and error == Error.EOF:
-      error = Error.NormalShutdown
+    if self.child.closing == Error.NormalShutdown:
+      if error == Error.EOF or error == Error.Closed:
+        error = Error.NormalShutdown
 
     if not self.child.closing:
       self.child.closing = error

@@ -1,6 +1,6 @@
 AMBuild is a lightweight build system designed for performance and accuracy. There are two versions provided - the original version, released in 2009, and AMBuild 2, a modernized rewrite released in 2013. Both are geared at C/C++ projects which require programmatic flexibility in their builds, and precise control over C/C++ compiler flags.
 
-AMBuild requires Python 2.7 or higher, or Python 3.1 or higher.
+AMBuild requires Python 2.7 or higher, or Python 3.2 or higher.
 
 # AMBuild 2
 
