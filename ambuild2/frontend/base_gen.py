@@ -77,6 +77,10 @@ class Context(object):
   def target_platform(self):
     return self.generator.target_platform
 
+  @property
+  def host_platform(self):
+    return self.generator.host_platform
+
   def SetBuildFolder(self, folder):
     if folder == '/' or folder == '.' or folder == './':
       self.buildFolder = ''

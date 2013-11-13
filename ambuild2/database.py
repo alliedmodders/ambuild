@@ -336,7 +336,7 @@ class Database(object):
     return outgoing
 
   def query_outgoing(self, node):
-    if node.outgoing:
+    if node.outgoing is not None:
       return node.outgoing
 
     node.outgoing = set()
@@ -354,7 +354,7 @@ class Database(object):
     return node.outgoing
 
   def query_weak_inputs(self, node):
-    if node.weak_inputs:
+    if node.weak_inputs is not None:
       return node.weak_inputs
 
     query = "select incoming from weak_edges where outgoing = ?"
@@ -366,7 +366,7 @@ class Database(object):
     return node.weak_inputs
 
   def query_strong_inputs(self, node):
-    if node.strong_inputs:
+    if node.strong_inputs is not None:
       return node.strong_inputs
 
     query = "select incoming from edges where outgoing = ?"
@@ -377,8 +377,21 @@ class Database(object):
 
     return node.strong_inputs
 
+  def query_command_of(self, node):
+    assert node.type == nodetypes.Output
+    incoming = self.query_strong_inputs(node)
+
+    assert len(incoming) <= 1
+    if not len(incoming):
+      return None
+
+    cmd_entry = list(incoming)[0]
+    assert cmd_entry.isCommand()
+
+    return cmd_entry
+
   def query_dynamic_inputs(self, node):
-    if node.dynamic_inputs:
+    if node.dynamic_inputs is not None:
       return node.dynamic_inputs
 
     query = "select incoming from dynamic_edges where outgoing = ?"
@@ -467,10 +480,9 @@ class Database(object):
       node = self.import_node(id, row)
       aggregate(node)
 
-  def drop_entry(self, entry):
-    query = "delete from nodes where id = ?"
-    self.cn.execute(query, (entry.id,))
-
+  # Note that this does not update any caches. It should only be called
+  # around cleanup.
+  def drop_links(self, entry):
     query = "delete from edges where incoming = ? or outgoing = ?"
     self.cn.execute(query, (entry.id, entry.id))
 
@@ -480,83 +492,51 @@ class Database(object):
     query = "delete from weak_edges where incoming = ? or outgoing = ?"
     self.cn.execute(query, (entry.id, entry.id))
 
+  def drop_entry(self, entry):
+    self.drop_links(entry)
+
+    query = "delete from nodes where id = ?"
+    self.cn.execute(query, (entry.id,))
+
     del self.node_cache_[entry.id]
 
   def drop_folder(self, entry):
-    assert entry.type == nodetypes.Mkdir
+    assert entry.type == nodetypes.Mkdir or entry.type == nodetypes.Output
     assert not os.path.isabs(entry.path)
 
     if os.path.exists(entry.path):
       util.con_out(
-        util.ConsoleHeader,
-        'Removing old folder: ',
-        util.ConsoleBlue,
-        '{0}'.format(entry.path),
-        util.ConsoleNormal
-      )
+        util.ConsoleHeader, 'Removing old folder: ',
+        util.ConsoleBlue, '{0}'.format(entry.path),
+        util.ConsoleNormal)
 
     try:
       os.rmdir(entry.path)
     except OSError as exn:
       if exn.errno != errno.ENOENT:
-        util.con_err(
-          util.ConsoleRed,
-          'Could not remove folder: ',
-          util.ConsoleBlue,
-          '{0}'.format(entry.path),
-          util.ConsoleNormal,
-          '\n',
-          util.ConsoleRed,
-          '{0}'.format(exn),
-          util.ConsoleNormal
-        )
+        util.con_err(util.ConsoleRed, 'Could not remove folder: ',
+                     util.ConsoleBlue, '{0}'.format(entry.path),
+                     util.ConsoleNormal, '\n',
+                     util.ConsoleRed, '{0}'.format(exn),
+                     util.ConsoleNormal)
         raise
 
     cursor = self.cn.execute("select count(*) from nodes where folder = ?", (entry.id,))
     amount = cursor.fetchone()[0]
     if amount > 0:
-      util.con_err(
-        util.ConsoleRed,
-        'Database id ',
-        util.ConsoleBlue,
-        '{0} '.format(entry.id),
-        util.ConsoleRed,
-        'is about to be deleted, but is still in use as a folder!',
-        util.ConsoleNormal
-      )
+      util.con_err(util.ConsoleRed, 'Folder id ',
+                   util.ConsoleBlue, '{0} '.format(entry.id),
+                   util.ConsoleRed, 'is about to be deleted, but is still in use as a folder!',
+                   util.ConsoleNormal)
       raise Exception('folder still in use!')
 
-    self.drop_entry(entry)
+    # If the node transitioned to an entry, don't delete its node.
+    if entry.type == nodetypes.Mkdir:
+      self.drop_entry(entry)
 
   def drop_output(self, output):
     assert output.type == nodetypes.Output
-    assert not os.path.isabs(output.path)
-
-    if os.path.exists(output.path):
-      util.con_out(
-        util.ConsoleHeader,
-        'Removing old output: ',
-        util.ConsoleBlue,
-        '{0}'.format(output.path),
-        util.ConsoleNormal
-      )
-
-    try:
-      os.unlink(output.path)
-    except OSError as exn:
-      if exn.errno != errno.ENOENT:
-        util.con_err(
-          util.ConsoleRed,
-          'Could not remove file: ',
-          util.ConsoleBlue,
-          '{0}'.format(output.path),
-          util.ConsoleNormal,
-          '\n',
-          util.ConsoleRed,
-          '{0}'.format(exn),
-          util.ConsoleNormal
-        )
-        raise
+    util.rm_path(output.path)
     self.drop_entry(output)
 
   def drop_command(self, cmd_entry):
@@ -592,6 +572,18 @@ class Database(object):
 
   def drop_group(self, group):
     self.drop_entry(group)
+
+  def change_output_to_folder(self, entry):
+    assert entry.type == nodetypes.Output
+    self.drop_links(entry)
+    self.cn.execute("update nodes set type = 'mkd' where id = ?", (entry.id,))
+    entry.type = nodetypes.Mkdir
+
+  def change_folder_to_output(self, entry):
+    assert entry.type == nodetypes.Mkdir
+    self.drop_links(entry)
+    self.cn.execute("update nodes set type = 'out' where id = ?", (entry.id,))
+    entry.type = nodetypes.Output
 
   def printGraph(self):
     # Find all mkdir nodes.

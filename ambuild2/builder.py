@@ -92,7 +92,9 @@ class Builder(object):
   def update(self):
     for entry in self.graph.create:
       if entry.type == nodetypes.Mkdir:
-        sys.stdout.write('{0}\n'.format(entry.format()))
+        util.con_out(util.ConsoleBlue, '[create] ',
+                     util.ConsoleGreen, entry.format(),
+                     util.ConsoleNormal)
         # The path might already exist because we mkdir -p and don't bother
         # ordering.
         if not os.path.exists(entry.path):

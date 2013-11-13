@@ -212,6 +212,11 @@ int main()
   )
   return v
 
+class Dep(object):
+  def __init__(self, text, node):
+    self.text = text
+    self.node = node
+
 class Compiler(object):
   attrs = [
     'includes',         # C and C++ include paths
@@ -255,10 +260,9 @@ class Compiler(object):
   def Library(self, name):
     return Library(self, name)
 
-class Dep(object):
-  def __init__(self, text, node):
-    self.text = text
-    self.node = node
+  @staticmethod
+  def Dep(text, node):
+    return Dep(text, node)
 
 # Environment representing a C/C++ compiler invocation. Encapsulates most
 # arguments.
@@ -309,10 +313,10 @@ class BinaryBuilder(object):
   def __init__(self, compiler, name):
     super(BinaryBuilder, self).__init__()
     self.compiler = compiler.clone()
-    self.name = name
     self.sources = []
-    self.used_cxx = False
-    self.linker = None
+    self.name_ = name
+    self.used_cxx_ = False
+    self.linker_ = None
 
   def generate(self, generator, cx):
     return generator.addCxxTasks(cx, self)
@@ -325,7 +329,7 @@ class BinaryBuilder(object):
   # The folder we'll be in, relative to our build context.
   @property
   def localFolder(self):
-    return self.name
+    return self.name_
 
   # Compute the build folder.
   def getBuildFolder(self, builder):
@@ -341,13 +345,13 @@ class BinaryBuilder(object):
 
     self.objfiles = [self.generateItem(cx, item) for item in self.sources]
 
-    if not self.linker:
-      if self.used_cxx:
-        self.linker = self.compiler.cxx
+    if not self.linker_:
+      if self.used_cxx_:
+        self.linker_ = self.compiler.cxx
       else:
-        self.linker = self.compiler.cc
+        self.linker_ = self.compiler.cc
 
-    argv = self.linker.command.split(' ')
+    argv = self.linker_.command.split(' ')
     for objfile in self.objfiles:
       argv.append(objfile.outputFile)
 
@@ -355,8 +359,8 @@ class BinaryBuilder(object):
 
     self.outputFile = name
     self.argv = argv
-    if self.linker.pdbSuffix:
-      self.pdbFile = self.name
+    if self.linker_.pdbSuffix:
+      self.pdbFile = self.name_
     else:
       self.pdbFile = None
 
@@ -367,10 +371,14 @@ class BinaryBuilder(object):
       cenv = self.default_c_env
     else:
       cenv = self.default_cxx_env
-      self.used_cxx = True
+      self.used_cxx_ = True
 
     # Find or add node for the source input file.
-    sourceFile = os.path.join(cx.currentSourcePath, item)
+    if os.path.isabs(item):
+      sourceFile = item
+    else:
+      sourceFile = os.path.join(cx.currentSourcePath, item)
+    sourceFile = os.path.normpath(sourceFile)
     objName = NameForObjectFile(fparts[0]) + cenv.compiler.objSuffix
     argv = cenv.argv(sourceFile, objName)
     return ObjectFile(sourceFile, objName, argv)
@@ -380,16 +388,16 @@ class Program(BinaryBuilder):
     super(Program, self).__init__(compiler, name)
 
   def generateBinary(self, cx, argv):
-    name = self.name + util.ExecutableSuffix()
+    name = self.name_ + util.ExecutableSuffix()
 
-    if isinstance(self.linker, MSVC):
+    if isinstance(self.linker_, MSVC):
       argv.append('/link')
     argv.extend(LinkFlags(self.compiler))
-    if isinstance(self.linker, MSVC):
+    if isinstance(self.linker_, MSVC):
       argv.append('/OUT:' + name)
       argv.append('/DEBUG')
       argv.append('/nologo')
-      argv.append('/PDB:"' + self.name + '.pdb"')
+      argv.append('/PDB:"' + self.name_ + '.pdb"')
     else:
       argv.extend(['-o', name])
 
@@ -400,18 +408,18 @@ class Library(BinaryBuilder):
     super(Library, self).__init__(compiler, name)
 
   def generateBinary(self, cx, argv):
-    name = self.name + util.SharedLibSuffix()
+    name = self.name_ + util.SharedLibSuffix()
 
-    if isinstance(self.linker, MSVC):
+    if isinstance(self.linker_, MSVC):
       argv.append('/link')
     argv.extend(LinkFlags(self.compiler))
-    if isinstance(self.linker, MSVC):
+    if isinstance(self.linker_, MSVC):
       argv.append('/OUT:' + name)
       argv.append('/DEBUG')
       argv.append('/nologo')
       argv.append('/DLL')
-      argv.append('/PDB:"' + self.name + '.pdb"')
-    elif isinstance(self.linker, CompatGCC):
+      argv.append('/PDB:"' + self.name_ + '.pdb"')
+    elif isinstance(self.linker_, CompatGCC):
       if util.IsMac():
         argv.append('-dynamiclib')
       else:

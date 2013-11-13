@@ -291,3 +291,23 @@ else:
 
 class Expando(object):
   pass
+
+def rm_path(path):
+  assert not os.path.isabs(path)
+
+  if os.path.exists(path):
+    con_out(ConsoleHeader, 'Removing old output: ',
+            ConsoleBlue, '{0}'.format(path),
+            ConsoleNormal)
+
+  try:
+    os.unlink(path)
+  except OSError as exn:
+    if exn.errno != errno.ENOENT:
+      con_err(ConsoleRed, 'Could not remove file: ',
+              ConsoleBlue, '{0}'.format(path),
+              ConsoleNormal, '\n',
+              ConsoleRed, '{0}'.format(exn),
+              ConsoleNormal)
+      raise
+
