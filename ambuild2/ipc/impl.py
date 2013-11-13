@@ -25,7 +25,11 @@ elif util.IsLinux():
 elif util.IsBSD():
   from . import bsd as ipc_impl
 else:
-  raise Exception('Unknown platform: ' + util.Platform())
+  import select
+  if hasattr(select, 'poll'):
+    from . import generic_poll as ipc_impl
+  else:
+    raise Exception('Unknown platform: ' + util.Platform())
 
 ProcessManager = ipc_impl.ProcessManager
 MessagePump = ipc_impl.MessagePump

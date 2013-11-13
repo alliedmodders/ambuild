@@ -156,6 +156,42 @@ elif util.IsOpenBSD():
 
     return ctypes.cast(addr, cmsghdr_base_t_p)
 
+elif util.IsSolaris():
+  sLibC = ctypes.CDLL('libc.so', use_errno=True)
+
+  class posix_spawn_file_actions_t(ctypes.Structure):
+    _fields_ = [
+      ('__file_attrp', ctypes.c_void_p),
+    ]
+
+    def __init__(self):
+      super(posix_spawn_file_actions_t, self).__init__()
+
+  pid_t = ctypes.c_int
+  msg_socklen_t = ctypes.c_uint
+  SOL_SOCKET = 0xffff
+  SCM_RIGHTS = 0x1010
+  MSG_NOSIGNAL = 0
+  MSG_CTRUNC = 0x10
+
+  def CMSG_NXTHDR(msg, cmsg):
+    cmsg_len = cmsg.contents.cmsg_len
+
+    addr = ctypes.addressof(cmsg.contents)
+    check = Align(addr + cmsg_len + ctypes.sizeof(cmsghdr_base_t), ctypes.sizeof(ctypes.c_int))
+    if check > msg.msg_control + msg.msg_controllen:
+      return None
+
+    return ctypes.cast(Align(addr + cmsg_len, ctypes.sizeof(ctypes.c_int)), cmsghdr_base_t_p)
+
+if hasattr(ctypes, 'c_ssize_t'):
+  ssize_t = ctypes.c_ssize_t
+else:
+  if ctypes.sizeof(ctypes.c_size_t) == 8:
+    ssize_t = ctypes.c_longlong
+  else:
+    ssize_t = ctypes.c_int
+
 posix_spawnp = sLibC.posix_spawnp
 posix_spawnp.argtypes = [
   ctypes.c_void_p, # pid_t *pid
@@ -237,21 +273,27 @@ def cmsghdr_t(n):
   cmsg.cmsg_len = cmsg_len
   return cmsg
 
-sendmsg = sLibC.sendmsg
+if util.IsSolaris():
+  sendmsg = sLibC._so_sendmsg
+else:
+  sendmsg = sLibC.sendmsg
 sendmsg.argtypes = [
   ctypes.c_int,             # sockfd
   ctypes.POINTER(msghdr_t), # msg
   ctypes.c_int              # flags
 ]
-sendmsg.restype = ctypes.c_ssize_t
+sendmsg.restype = ssize_t
 
-recvmsg = sLibC.recvmsg
+if util.IsSolaris():
+  recvmsg = sLibC._so_recvmsg
+else:
+  recvmsg = sLibC.recvmsg
 recvmsg.argtypes = [
   ctypes.c_int,             # sockfd
   ctypes.POINTER(msghdr_t), # msg
   ctypes.c_int              # flags
 ]
-recvmsg.restype = ctypes.c_ssize_t
+recvmsg.restype = ssize_t
 
 class SocketChannel(Channel):
   def __init__(self, name, sock):

@@ -23,8 +23,7 @@ from . import process
 from . import posix_proc
 from . process import ProcessHost, Channel, Error, Special
 
-# Linux multiprocess support is implemented using epoll() on top of Python's
-# Pipe object, which itself uses Unix domain sockets.
+# Linux multiprocess support is implemented using epoll().
 
 class MessagePump(process.MessagePump):
   def __init__(self):
