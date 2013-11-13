@@ -162,13 +162,16 @@ class Entry(object):
     return (' '.join([arg for arg in self.blob]))
 
 def combine(a, b):
-  text_a = ''
-  if a:
+  if type(a) is Entry:
     text_a = a.path
-  if type(b) is not Entry:
+  else:
+    text_a = a
+  if type(b) is Entry:
+    text_b = b.path
+  else:
     if not len(b):
       return text_a
     text_b = b
-  else:
-    text_b = b.path
+  if not text_a:
+    return text_b
   return os.path.join(text_a, text_b)

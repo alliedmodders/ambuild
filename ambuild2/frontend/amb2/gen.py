@@ -314,26 +314,16 @@ class Generator(base_gen.Generator):
     self.db.change_folder_to_output(entry)
     return entry
 
-  # Note that parseInput() does not accept a context, and therefore, it will
-  # not accept output-relative path strings as 'source', since we can't build
-  # a relative path. This may change later, but it's nice to force use of the
-  # DAG.
-  def parseInput(self, source):
+  def parseInput(self, context, source):
     if util.IsString(source):
+      if not os.path.isabs(source):
+        source = os.path.join(context.currentSourcePath, source)
+
       entry = self.db.query_path(source)
       if not entry:
-        if not os.path.isabs(source):
-          util.con_err(util.ConsoleRed, 'Input file path "',
-                       util.ConsoleBlue, source,
-                       util.ConsoleRed, '" is not absolute. If it\'s an output,',
-                       'Use the appropriate output node instead.',
-                       util.ConsoleNormal)
-          raise Exception('Input paths must be absolute')
-
-        # Brand new node.
         return self.db.add_source(source)
 
-      # We'll have to validate the node.
+      # Otherwise, we have to valid the node.
       source = entry
 
     if source.type == nodetypes.Source or source.type == nodetypes.Output:
@@ -366,7 +356,7 @@ class Generator(base_gen.Generator):
     # Build the set of strong links.
     strong_links = set()
     for strong_input in inputs:
-      strong_input = self.parseInput(strong_input)
+      strong_input = self.parseInput(context, strong_input)
       strong_links.add(strong_input)
 
     cmd_entry = None
@@ -532,7 +522,7 @@ class Generator(base_gen.Generator):
       detected_folder = os.path.join(context.buildFolder, local_path)
       detected_folder = os.path.normpath(detected_folder)
 
-    source_entry = self.parseInput(source)
+    source_entry = self.parseInput(context, source)
 
     # This is similar to a "cp a b/", so we append to get "b/a" as the path.
     if detected_folder is not None:
@@ -543,7 +533,7 @@ class Generator(base_gen.Generator):
     else:
       output_folder = context.localFolder
 
-    output_path = os.path.join(output_folder, output_path)
+    output_path = nodetypes.combine(output_folder, output_path)
 
     # For copy operations, it's okay to use the path from the current folder.
     # However, when performing symlinks, the symlink must be relative to

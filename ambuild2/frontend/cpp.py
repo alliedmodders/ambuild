@@ -331,6 +331,11 @@ class BinaryBuilder(object):
   def localFolder(self):
     return self.name_
 
+  # Exposed only for frontends.
+  @property
+  def linker(self):
+    return self.linker_
+
   # Compute the build folder.
   def getBuildFolder(self, builder):
     return os.path.join(builder.buildFolder, self.localFolder)
