@@ -35,6 +35,10 @@ def child_main():
     if arg == '--pipe':
       pipe = sys.argv[index + 1]
 
+  # Cygwin seems to lose the initial \ in translation or something.
+  if pipe.startswith('\\.\\'):
+    pipe = '\\\\.\\' + pipe
+
   proxy = NamedPipeProxy(name, pipe)
   channel = NamedPipe.from_proxy(proxy)
 

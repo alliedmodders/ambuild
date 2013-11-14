@@ -27,6 +27,8 @@ def Platform():
     return 'netbsd'
   if IsSolaris():
     return 'solaris'
+  if IsCygwin():
+    return 'cygwin'
   return 'unknown'
 
 def IsLinux():
@@ -42,7 +44,10 @@ def IsOpenBSD():
   return sys.platform[0:7] == 'openbsd'
 
 def IsWindows():
-  return sys.platform == 'win32' or sys.platform == 'cygwin'
+  return sys.platform == 'win32'
+
+def IsCygwin():
+  return sys.platform == 'cygwin'
 
 def IsMac():
   return sys.platform == 'darwin' or sys.platform[0:6] == 'Darwin'

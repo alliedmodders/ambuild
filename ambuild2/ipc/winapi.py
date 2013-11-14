@@ -17,7 +17,6 @@
 import ctypes
 import os, sys
 import tempfile
-from ctypes import WinError
 from ambuild2 import util
 
 handle_t = ctypes.c_void_p
@@ -28,7 +27,55 @@ elif ctypes.sizeof(handle_t) == 8:
   INVALID_HANDLE_VALUE = 0xffffffffffffffff
 INVALID_HANDLE = handle_t(INVALID_HANDLE_VALUE)
 
-fnCreateNamedPipeA = ctypes.windll.kernel32.CreateNamedPipeA
+LANG_NEUTRAL = 0x00
+SUBLANG_DEFAULT = 0x01
+
+def MAKELANGID(primary, sub):
+  return (sub << 10) | primary
+
+if sys.platform != 'cygwin':
+  from ctypes import WinError
+  WINDLL = ctypes.windll
+
+  def sys_executable():
+    return sys.executable
+else:
+  import subprocess
+
+  WINDLL = ctypes.cdll
+
+  sys_executable_ = None
+  def sys_executable():
+    global sys_executable_
+    if not sys_executable_:
+      output = subprocess.check_output(['cygpath', '-w', sys.executable])
+      sys_executable_ = output.strip() + '.exe'
+    return sys_executable_
+
+  class WindowsError(Exception):
+    def __init__(self, errno, message):
+      self.winerror = errno
+      Exception.__init__(self, message)
+
+  def WinError():
+    error = GetLastError()
+    buffer = ctypes.create_string_buffer(4096)
+
+    rval = fnFormatMessage(
+      FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+      None,
+      error,
+      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+      ctypes.cast(buffer, ctypes.c_void_p),
+      ctypes.sizeof(buffer),
+      None
+    )
+    if rval == 0:
+      raise Exception('system error {0} while reporting system error {1}'.format(GetLastError(), error))
+
+    raise WindowsError(error, buffer.value)
+
+fnCreateNamedPipeA = WINDLL.kernel32.CreateNamedPipeA
 fnCreateNamedPipeA.argtypes = [
   ctypes.c_char_p,          # LPCTSTR lpName
   ctypes.c_int,             # DWORD dwOpenMode
@@ -41,7 +88,7 @@ fnCreateNamedPipeA.argtypes = [
 ]
 fnCreateNamedPipeA.restype = handle_t
 
-fnCreateFileA = ctypes.windll.kernel32.CreateFileA
+fnCreateFileA = WINDLL.kernel32.CreateFileA
 fnCreateFileA.argtypes = [
   ctypes.c_char_p,          # LPCTSTR lpFileName
   ctypes.c_int,             # DWORD dwDesiredAccess
@@ -53,7 +100,7 @@ fnCreateFileA.argtypes = [
 ]
 fnCreateFileA.restype = handle_t
 
-fnCloseHandle = ctypes.windll.kernel32.CloseHandle
+fnCloseHandle = WINDLL.kernel32.CloseHandle
 fnCloseHandle.argtypes = [ handle_t ]
 fnCloseHandle.restype = ctypes.c_int
 
@@ -85,7 +132,7 @@ class Overlapped(ctypes.Structure):
 # struct. We have to keep the POINTER type around and use from_address.
 LPOVERLAPPED = ctypes.POINTER(Overlapped)
 
-fnCreateIoCompletionPort = ctypes.windll.kernel32.CreateIoCompletionPort
+fnCreateIoCompletionPort = WINDLL.kernel32.CreateIoCompletionPort
 fnCreateIoCompletionPort.argtypes = [
   handle_t,                 # HANDLE FileHandle
   handle_t,                 # HANDLE ExistingCompletionPort
@@ -94,7 +141,7 @@ fnCreateIoCompletionPort.argtypes = [
 ]
 fnCreateIoCompletionPort.restype = handle_t
 
-fnGetQueuedCompletionStatus = ctypes.windll.kernel32.GetQueuedCompletionStatus
+fnGetQueuedCompletionStatus = WINDLL.kernel32.GetQueuedCompletionStatus
 fnGetQueuedCompletionStatus.argtypes = [
   handle_t,                         # HANDLE CompletionPort
   ctypes.POINTER(ctypes.c_int),     # LPDWORD
@@ -104,7 +151,7 @@ fnGetQueuedCompletionStatus.argtypes = [
 ]
 fnGetQueuedCompletionStatus.restype = ctypes.c_int
 
-fnCreateProcessA = ctypes.windll.kernel32.CreateProcessA
+fnCreateProcessA = WINDLL.kernel32.CreateProcessA
 fnCreateProcessA.argtypes = [
   ctypes.c_char_p,          # LPCTSTR lpApplicationName
   ctypes.c_char_p,          # LPTSTR lpCommandLine
@@ -119,7 +166,7 @@ fnCreateProcessA.argtypes = [
 ]
 fnCreateProcessA.restype = ctypes.c_int
 
-fnDuplicateHandle = ctypes.windll.kernel32.DuplicateHandle
+fnDuplicateHandle = WINDLL.kernel32.DuplicateHandle
 fnDuplicateHandle.argtypes = [
   handle_t,                 # hSourceProcessHandle
   handle_t,                 # hSourceHandle,
@@ -131,14 +178,14 @@ fnDuplicateHandle.argtypes = [
 ]
 fnDuplicateHandle.restype = ctypes.c_int
 
-fnGetCurrentProcess = ctypes.windll.kernel32.GetCurrentProcess
+fnGetCurrentProcess = WINDLL.kernel32.GetCurrentProcess
 fnGetCurrentProcess.restype = handle_t
 
-fnGetStdHandle = ctypes.windll.kernel32.GetStdHandle
+fnGetStdHandle = WINDLL.kernel32.GetStdHandle
 fnGetStdHandle.argtypes = [ ctypes.c_int ]
 fnGetStdHandle.restype = handle_t
 
-fnWriteFile = ctypes.windll.kernel32.WriteFile
+fnWriteFile = WINDLL.kernel32.WriteFile
 fnWriteFile.argtypes = [
   handle_t,                         # HANDLE hFile,
   ctypes.c_void_p,                  # LPCVOID lpBuffer
@@ -148,7 +195,7 @@ fnWriteFile.argtypes = [
 ]
 fnWriteFile.restype = ctypes.c_int
 
-fnReadFile = ctypes.windll.kernel32.ReadFile
+fnReadFile = WINDLL.kernel32.ReadFile
 fnReadFile.argtypes = [
   handle_t,                         # HANDLE hFile,
   ctypes.c_void_p,                  # LPVOID lpBuffer,
@@ -158,7 +205,7 @@ fnReadFile.argtypes = [
 ]
 fnReadFile.restype = ctypes.c_int
 
-fnCreateEvent = ctypes.windll.kernel32.CreateEventA
+fnCreateEvent = WINDLL.kernel32.CreateEventA
 fnCreateEvent.argtypes = [
   ctypes.c_void_p,          # LPSECURITY_ATTRIBUTES lpEventAttributes
   ctypes.c_int,             # BOOL bManualReset
@@ -167,18 +214,18 @@ fnCreateEvent.argtypes = [
 ]
 fnCreateEvent.restype = handle_t
 
-fnResetEvent = ctypes.windll.kernel32.ResetEvent
+fnResetEvent = WINDLL.kernel32.ResetEvent
 fnResetEvent.argtypes = [ handle_t ]
 fnResetEvent.restype = ctypes.c_int
 
-fnGetLastError = ctypes.windll.kernel32.GetLastError
+fnGetLastError = WINDLL.kernel32.GetLastError
 fnGetLastError.restype = ctypes.c_int
 
-fnWaitForSingleObject = ctypes.windll.kernel32.WaitForSingleObject
+fnWaitForSingleObject = WINDLL.kernel32.WaitForSingleObject
 fnWaitForSingleObject.argtypes = [ handle_t, ctypes.c_int ]
 fnWaitForSingleObject.restype = ctypes.c_int
 
-fnWaitForMultipleObjects = ctypes.windll.kernel32.WaitForMultipleObjects
+fnWaitForMultipleObjects = WINDLL.kernel32.WaitForMultipleObjects
 fnWaitForMultipleObjects.argptypes = [
   ctypes.c_int,                     # DWORD nCount
   ctypes.POINTER(handle_t),         # const HANDLE *lpHandles
@@ -187,36 +234,51 @@ fnWaitForMultipleObjects.argptypes = [
 ]
 fnWaitForMultipleObjects.restype = ctypes.c_int
 
-fnConnectNamedPipe = ctypes.windll.kernel32.ConnectNamedPipe
+fnConnectNamedPipe = WINDLL.kernel32.ConnectNamedPipe
 fnConnectNamedPipe.argtypes = [ handle_t, ctypes.POINTER(Overlapped) ]
 fnConnectNamedPipe.restype = ctypes.c_int
 
-fnGetExitCodeProcess = ctypes.windll.kernel32.GetExitCodeProcess
+fnGetExitCodeProcess = WINDLL.kernel32.GetExitCodeProcess
 fnGetExitCodeProcess.argtypes = [ handle_t, ctypes.POINTER(ctypes.c_int) ]
 fnGetExitCodeProcess.restype = ctypes.c_int
 
-PIPE_ACCESS_DUPLEX =            0x00000003
-PIPE_TYPE_BYTE =                0x00000000
-PIPE_TYPE_READMODE_BYTE =       0x00000000
-FILE_FLAG_FIRST_PIPE_INSTANCE = 0x00080000
-FILE_FLAG_OVERLAPPED =          0x40000000
-GENERIC_READ =                  0x80000000
-GENERIC_WRITE =                 0x40000000
-OPEN_EXISTING =                 3
-DUPLICATE_SAME_ACCESS =         0x00000002
-STARTF_USESTDHANDLES =          0x00000100
-STD_INPUT_HANDLE =              -10
-STD_OUTPUT_HANDLE =             -11
-STD_ERROR_HANDLE =              -12
-INFINITE =                      -1
-WAIT_ABANDONED =                0x00000080
-WAIT_OBJECT_0 =                 0x00000000
-WAIT_TIMEOUT =                  0x00000102
-WAIT_FAILED =                   -1
-STILL_ACTIVE =                  259
-ERROR_BROKEN_PIPE =             109
-ERROR_PIPE_CONNECTED =          535
-ERROR_IO_PENDING =              997
+fnFormatMessage = WINDLL.kernel32.FormatMessageA
+fnFormatMessage.argtypes = [
+  ctypes.c_int,                     # DWORD dwFlags
+  ctypes.c_void_p,                  # LPCVOID lpSource
+  ctypes.c_int,                     # DWORD dwMessageId
+  ctypes.c_int,                     # DWRD dwLanguageId
+  ctypes.c_void_p,                  # LPTSTR lpBuffer
+  ctypes.c_int,                     # DWORD nSize
+  ctypes.c_void_p                   # va_list *Arguments
+]
+fnFormatMessage.restype = ctypes.c_int
+
+PIPE_ACCESS_DUPLEX =              0x00000003
+PIPE_TYPE_BYTE =                  0x00000000
+PIPE_TYPE_READMODE_BYTE =         0x00000000
+FILE_FLAG_FIRST_PIPE_INSTANCE =   0x00080000
+FILE_FLAG_OVERLAPPED =            0x40000000
+GENERIC_READ =                    0x80000000
+GENERIC_WRITE =                   0x40000000
+OPEN_EXISTING =                   3
+DUPLICATE_SAME_ACCESS =           0x00000002
+STARTF_USESTDHANDLES =            0x00000100
+STD_INPUT_HANDLE =                -10
+STD_OUTPUT_HANDLE =               -11
+STD_ERROR_HANDLE =                -12
+INFINITE =                        -1
+WAIT_ABANDONED =                  0x00000080
+WAIT_OBJECT_0 =                   0x00000000
+WAIT_TIMEOUT =                    0x00000102
+WAIT_FAILED =                     -1
+STILL_ACTIVE =                    259
+FORMAT_MESSAGE_ALLOCATE_BUFFER =  0x00000100
+FORMAT_MESSAGE_IGNORE_INSERTS =   0x00000200
+FORMAT_MESSAGE_FROM_SYSTEM =      0x00001000
+ERROR_BROKEN_PIPE =               109
+ERROR_PIPE_CONNECTED =            535
+ERROR_IO_PENDING =                997
 
 pipe_counter_ = 0
 
@@ -450,8 +512,10 @@ class Process(object):
 
     proc_info = ProcessInformation()
 
+    executable = sys_executable()
+
     rval = fnCreateProcessA(
-      util.str2b(sys.executable),
+      util.str2b(executable),
       cmdline_buffer,
       None,
       None,

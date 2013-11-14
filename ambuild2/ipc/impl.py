@@ -18,7 +18,10 @@ import os, sys
 from . import process
 from ambuild2 import util
 
-if util.IsWindows():
+if util.IsWindows() or util.IsCygwin():
+  # Cygwin doesn't support SCM_RIGHTS (which, I guess, is actually unused)
+  # but more importantly posix_spawn(), so we just cheat and use WinAPI 
+  # directly, ignoring the sketchy Unix layer.
   from . import windows as ipc_impl
 elif util.IsLinux():
   from . import linux as ipc_impl
@@ -34,7 +37,7 @@ else:
 ProcessManager = ipc_impl.ProcessManager
 MessagePump = ipc_impl.MessagePump
 
-if util.IsWindows():
+if util.IsWindows() or util.IsCygwin():
   from . windows import NamedPipe as Channel
 else:
   from . posix_proc import SocketChannel as Channel
