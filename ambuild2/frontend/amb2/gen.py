@@ -551,7 +551,7 @@ class Generator(base_gen.Generator):
 
       output_folder = detected_folder
     else:
-      output_folder = context.localFolder
+      output_folder = context.buildFolder
 
     output_path = nodetypes.combine(output_folder, output_path)
 
