@@ -461,7 +461,7 @@ class Program(BinaryBuilder):
       argv.append('/nologo')
       argv.append('/PDB:"' + self.name_ + '.pdb"')
     else:
-      argv.extend(['-o', name])
+      argv.extend(['-o', self.outputFile])
 
     return argv
 
@@ -485,6 +485,6 @@ class Library(BinaryBuilder):
         argv.append('-dynamiclib')
       else:
         argv.append('-shared')
-      argv.extend(['-o', name])
+      argv.extend(['-o', self.outputFile])
 
     return argv
