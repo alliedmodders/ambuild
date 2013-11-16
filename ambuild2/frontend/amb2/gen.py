@@ -556,10 +556,12 @@ class Generator(base_gen.Generator):
     output_path = nodetypes.combine(output_folder, output_path)
 
     # For copy operations, it's okay to use the path from the current folder.
-    # However, when performing symlinks, the symlink must be relative to
-    # the link.
+    # However, when performing symlinks, we always want an absolute path.
     if cmd == nodetypes.Symlink:
-      source_path = os.path.relpath(source_entry.path, output_folder)
+      if source_entry.type == nodetypes.Source:
+        source_path = source_entry.path
+      else:
+        source_path = os.path.join(context.buildPath, source_entry.path)
     else:
       source_path = source_entry.path
 
