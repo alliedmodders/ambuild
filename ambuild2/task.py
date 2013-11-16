@@ -96,7 +96,12 @@ class WorkerChild(ChildProcessListener):
     new_timestamps = []
     if response['ok']:
       for output in message['task_outputs']:
-        new_timestamps.append((output, os.path.getmtime(output)))
+        try:
+          new_timestamps.append((output, os.path.getmtime(output)))
+        except:
+          response['ok'] = False
+          response['stderr'] += 'Expected output file, but not found: {0}'.format(output)
+          break
 
     # Send a message back to the master process to update the DAG and spew
     # stdout/stderr if needed.
