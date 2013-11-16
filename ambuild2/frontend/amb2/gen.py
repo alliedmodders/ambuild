@@ -607,6 +607,12 @@ class Generator(base_gen.Generator):
     )
 
   def addConfigureFile(self, context, path):
-    self.old_scripts_.discard(path)
-    self.db.add_or_update_script(path)
+    source = self.parseInput(context, path)
+    if source.type != nodetypes.Source:
+      util.con_err(util.ConsoleRed, 'Configure file dependencies must be source paths.',
+                   util.ConsoleNormal)
+      raise Exception('Configure file dependencies must be source paths')
+
+    self.old_scripts_.discard(source.path)
+    self.db.add_or_update_script(source.path)
 

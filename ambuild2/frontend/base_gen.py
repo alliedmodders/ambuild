@@ -122,6 +122,9 @@ class Context(object):
   def AddCommand(self, inputs, argv, outputs):
     return self.generator.addShellCommand(self, inputs, argv, outputs)
 
+  def AddConfigureFile(self, path):
+    return self.generator.addConfigureFile(self, path)
+
 class Generator(object):
   def __init__(self, sourcePath, buildPath, options, args):
     self.sourcePath = sourcePath
