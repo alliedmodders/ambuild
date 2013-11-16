@@ -211,13 +211,9 @@ class Generator(base_gen.Generator):
         # We let the same folder be generated twice, so use discard, not remove.
         self.old_folders_.discard(entry)
       else:
-        util.con_err(
-          util.ConsoleRed,
-          'Folder has the same node signature as: ',
-          util.ConsoleBlue,
-          entry.format(),
-          util.ConsoleNormal
-        )
+        util.con_err(util.ConsoleRed, 'Folder has the same node signature as: ',
+                     util.ConsoleBlue, entry.format(),
+                     util.ConsoleNormal)
         raise Exception('Output has been duplicated: {0}'.format(entry.path))
 
       parent = entry
@@ -481,7 +477,7 @@ class Generator(base_gen.Generator):
     self.parseCxxDeps(cx, binary, inputs, binary.compiler.linkflags)
     self.parseCxxDeps(cx, binary, inputs, binary.compiler.postlink)
 
-    for objfile in binary.objfiles:
+    for objfile in binary.objects:
       cxxData = {
         'argv': objfile.argv,
         'type': binary.linker.behavior
@@ -496,6 +492,21 @@ class Generator(base_gen.Generator):
         data = cxxData
       )
       inputs.append(cxxNode)
+    for rcfile in binary.resources:
+      rcData = {
+        'cl_argv': rcfile.cl_argv,
+        'rc_argv': rcfile.rc_argv,
+      }
+      rcCmd, (rcNode,) = self.addCommand(
+        context = cx,
+        weak_inputs = binary.compiler.sourcedeps,
+        inputs = [rcfile.sourceFile],
+        outputs = [rcfile.outputFile],
+        node_type = nodetypes.Rc,
+        folder = folder_node,
+        data = rcData
+      )
+      inputs.append(rcNode)
 
     outputs = [binary.outputFile]
     if binary.pdbFile:

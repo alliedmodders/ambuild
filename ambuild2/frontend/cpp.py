@@ -33,7 +33,8 @@ class MSVC(Vendor):
     self.definePrefix = '/D'
     self.pdbSuffix = '.pdb'
 
-  def formatInclude(self, outputPath, includePath):
+  @staticmethod
+  def IncludePath(outputPath, includePath):
     #Hack - try and get a relative path because CL, with either 
     #/Zi or /ZI, combined with subprocess, apparently tries and
     #looks for paths like c:\bleh\"c:\bleh" <-- wtf
@@ -43,8 +44,14 @@ class MSVC(Vendor):
     outputDrive = os.path.splitdrive(outputPath)[0]
     includeDrive = os.path.splitdrive(includePath)[0]
     if outputDrive == includeDrive:
-      return ['/I', os.path.relpath(includePath, outputPath)]
-    return ['/I', includePath]
+      return os.path.relpath(includePath, outputPath)
+    return includePath
+
+  def formatInclude(self, outputPath, includePath):
+    return ['/I', self.IncludePath(outputPath, includePath)]
+
+  def preprocessArgs(self, sourceFile):
+    return ['/showIncludes', '/nologo', '/E', '/c', sourceFile]
 
   def objectArgs(self, sourceFile, objFile):
     return ['/showIncludes', '/nologo', '/c', sourceFile, '/Fo' + objFile]
@@ -246,6 +253,8 @@ class Compiler(object):
     'defines',          # C and C++ #defines
     'cxxdefines',       # C++-only #defines
 
+    'rcdefines',        # Resource Compiler (RC) defines
+
     # Link flags. If any members are not strings, they will be interpreted as
     # Dep entries created from BinaryBuilder.
     'linkflags',
@@ -300,11 +309,8 @@ class CCommandEnv(object):
     if compiler == config.cxx:
       for include in config.cxxincludes:
         args += compiler.formatInclude(outputPath, include)
-    self.argv_ = args
+    self.argv = args
     self.compiler = compiler
-
-  def argv(self, sourceFile, objPath):
-    return self.argv_ + self.compiler.objectArgs(sourceFile, objPath)
 
 def NameForObjectFile(file):
   return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0]);
@@ -314,6 +320,13 @@ class ObjectFile(object):
     self.sourceFile = sourceFile
     self.outputFile = outputFile
     self.argv = argv
+
+class RCFile(object):
+  def __init__(self, sourceFile, outputFile, cl_argv, rc_argv):
+    self.sourceFile = sourceFile
+    self.outputFile = outputFile
+    self.cl_argv = cl_argv 
+    self.rc_argv = rc_argv
 
 def LinkFlags(compiler):
   argv = []
@@ -368,7 +381,50 @@ class BinaryBuilder(object):
     self.default_c_env = CCommandEnv(self.outputPath, self.compiler, self.compiler.cc)
     self.default_cxx_env = CCommandEnv(self.outputPath, self.compiler, self.compiler.cxx)
 
-    self.objfiles = [self.generateItem(cx, item) for item in self.sources]
+    self.objects = []
+    self.resources = []
+    for item in self.sources:
+      filename, extension = os.path.splitext(item)
+      if extension == '.rc':
+        cenv = self.default_c_env
+        suffix = '.res'
+      else:
+        if extension == '.c':
+          cenv = self.default_c_env
+        else:
+          cenv = self.default_cxx_env
+          self.used_cxx_ = True
+        suffix = cenv.compiler.objSuffix
+
+      if os.path.isabs(item):
+        sourceFile = item
+      else:
+        sourceFile = os.path.join(cx.currentSourcePath, item)
+      sourceFile = os.path.normpath(sourceFile)
+      objectFile = NameForObjectFile(filename) + suffix
+
+      if extension == '.rc':
+        # This is only relevant on Windows.
+        vendor = cenv.compiler
+        defines = self.compiler.defines + self.compiler.cxxdefines + self.compiler.rcdefines
+        cl_argv = vendor.command.split(' ')
+        cl_argv += [vendor.definePrefix + define for define in defines]
+        for include in (self.compiler.includes + self.compiler.cxxincludes):
+          cl_argv += vendor.formatInclude(objectFile, include)
+        cl_argv += vendor.preprocessArgs(sourceFile)
+
+        rc_argv = ['rc', '/nologo']
+        for define in defines:
+          rc_argv.extend(['/d', define])
+        for include in (self.compiler.includes + self.compiler.cxxincludes):
+          rc_argv.extend(['/i', MSVC.IncludePath(objectFile, include)])
+        rc_argv.append('/fo' + objectFile)
+        rc_argv.append(sourceFile)
+
+        self.resources.append(RCFile(sourceFile, objectFile, cl_argv, rc_argv))
+      else:
+        argv = cenv.argv + cenv.compiler.objectArgs(sourceFile, objectFile)
+        self.objects.append(ObjectFile(sourceFile, objectFile, argv))
 
     if not self.linker_:
       if self.used_cxx_:
@@ -377,69 +433,49 @@ class BinaryBuilder(object):
         self.linker_ = self.compiler.cc
 
     argv = self.linker_.command.split(' ')
-    for objfile in self.objfiles:
+    for objfile in self.objects:
       argv.append(objfile.outputFile)
+    for rcfile in self.resources:
+      argv.append(rcfile.outputFile)
 
-    name, argv = self.generateBinary(cx, argv)
+    argv = self.generateBinary(cx, argv)
 
-    self.outputFile = name
     self.argv = argv
     if self.linker_.pdbSuffix:
       self.pdbFile = self.name_ + self.linker_.pdbSuffix
     else:
       self.pdbFile = None
 
-  def generateItem(self, cx, item):
-    fparts = os.path.splitext(item)
-
-    if fparts[1] == 'c':
-      cenv = self.default_c_env
-    else:
-      cenv = self.default_cxx_env
-      self.used_cxx_ = True
-
-    # Find or add node for the source input file.
-    if os.path.isabs(item):
-      sourceFile = item
-    else:
-      sourceFile = os.path.join(cx.currentSourcePath, item)
-    sourceFile = os.path.normpath(sourceFile)
-    objName = NameForObjectFile(fparts[0]) + cenv.compiler.objSuffix
-    argv = cenv.argv(sourceFile, objName)
-    return ObjectFile(sourceFile, objName, argv)
-
 class Program(BinaryBuilder):
   def __init__(self, compiler, name):
     super(Program, self).__init__(compiler, name)
+    self.outputFile = name + util.ExecutableSuffix()
 
   def generateBinary(self, cx, argv):
-    name = self.name_ + util.ExecutableSuffix()
-
     if isinstance(self.linker_, MSVC):
       argv.append('/link')
     argv.extend(LinkFlags(self.compiler))
     if isinstance(self.linker_, MSVC):
-      argv.append('/OUT:' + name)
+      argv.append('/OUT:' + self.outputFile)
       argv.append('/DEBUG')
       argv.append('/nologo')
       argv.append('/PDB:"' + self.name_ + '.pdb"')
     else:
       argv.extend(['-o', name])
 
-    return name, argv
+    return argv
 
 class Library(BinaryBuilder):
   def __init__(self, compiler, name):
     super(Library, self).__init__(compiler, name)
+    self.outputFile = name + util.SharedLibSuffix()
 
   def generateBinary(self, cx, argv):
-    name = self.name_ + util.SharedLibSuffix()
-
     if isinstance(self.linker_, MSVC):
       argv.append('/link')
     argv.extend(LinkFlags(self.compiler))
     if isinstance(self.linker_, MSVC):
-      argv.append('/OUT:' + name)
+      argv.append('/OUT:' + self.outputFile)
       argv.append('/DEBUG')
       argv.append('/nologo')
       argv.append('/DLL')
@@ -451,4 +487,4 @@ class Library(BinaryBuilder):
         argv.append('-shared')
       argv.extend(['-o', name])
 
-    return name, argv
+    return argv

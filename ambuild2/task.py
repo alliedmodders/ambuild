@@ -56,6 +56,7 @@ class WorkerChild(ChildProcessListener):
       'cmd': lambda message: self.doCommand(message),
       'ln': lambda message: self.doSymlink(message),
       'cp': lambda message: self.doCopy(message),
+      'rc': lambda message: self.doResource(message),
     }
 
     self.channel.send({
@@ -167,6 +168,27 @@ class WorkerChild(ChildProcessListener):
     }
     return reply
 
+  # Adjusts any dependencies relative to the current folder, to be relative to
+  # the output folder instead.
+  def rewriteDeps(self, deps):
+    paths = []
+    for inc_path in deps:
+      if not os.path.isabs(inc_path):
+        inc_path = os.path.abspath(inc_path)
+
+      # Detect whether the include is within the build folder or not.
+      build_path = self.buildPath
+      if build_path[-1] != '/':
+        build_path += '/'
+      prefix = os.path.commonprefix([build_path, inc_path])
+      if prefix == build_path:
+        # The include is not a system include, i.e. it was generated, so
+        # rewrite the path to be relative to the build folder.
+        inc_path = os.path.relpath(inc_path, self.buildPath)
+
+      paths.append(inc_path)
+    return paths
+
   def doCompile(self, message):
     task_folder = message['task_folder']
     task_data = message['task_data']
@@ -183,25 +205,8 @@ class WorkerChild(ChildProcessListener):
         err, deps = util.ParseSunDeps(err)
       else:
         raise Exception('unknown compiler type')
-        
-      # Adjust any dependencies relative to the current folder, to be relative
-      # to the output folder instead.
-      paths = []
-      for inc_path in deps:
-        if not os.path.isabs(inc_path):
-          inc_path = os.path.abspath(inc_path)
 
-        # Detect whether the include is within the build folder or not.
-        build_path = self.buildPath
-        if build_path[-1] != '/':
-          build_path += '/'
-        prefix = os.path.commonprefix([build_path, inc_path])
-        if prefix == build_path:
-          # The include is not a system include, i.e. it was generated, so
-          # rewrite the path to be relative to the build folder.
-          inc_path = os.path.relpath(inc_path, self.buildPath)
-
-        paths.append(inc_path)
+      paths = self.rewriteDeps(deps)
 
     reply = {
       'ok': p.returncode == 0,
@@ -211,6 +216,31 @@ class WorkerChild(ChildProcessListener):
       'deps': paths,
     }
     return reply
+
+  def doResource(self, message):
+    task_folder = message['task_folder']
+    task_data = message['task_data']
+    cl_argv = task_data['cl_argv']
+    rc_argv = task_data['rc_argv']
+
+    with util.FolderChanger(task_folder):
+      # Includes go to stderr when we preprocess to stdout.
+      p, out, err = util.Execute(cl_argv)
+      ignore, deps = util.ParseMSVCDeps(err)
+      paths = self.rewriteDeps(deps)
+
+      if p.returncode == 0:
+        p, out, err = util.Execute(rc_argv)
+        
+    reply = {
+      'ok': p.returncode == 0,
+      'cmdline': (' '.join([arg for arg in cl_argv]) + ' '.join([arg for arg in rc_argv])),
+      'stdout': out,
+      'stderr': err,
+      'deps': paths,
+    }
+    return reply
+
 
 # The WorkerParent is in the same process as the TaskMasterChild.
 class WorkerParent(ParentProcessListener):

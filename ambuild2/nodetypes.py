@@ -58,6 +58,10 @@ Symlink = 'ln'
 # are used when using AMBuild2's automated C++ builders.
 Cxx = 'cxx'
 
+# RC nodes are similar to C++ nodes, but are specific for .rc files built with
+# rc.exe on Windows.
+Rc = 'rc'
+
 NodeNames = {
   Source: 'source',
   Command: 'command',
@@ -67,7 +71,8 @@ NodeNames = {
   Copy: 'copy',
   CopyFolder: 'copy -R',
   Symlink: 'symlink',
-  Cxx: 'c++'
+  Cxx: 'c++',
+  Rc: 'rc'
 }
 
 def IsFile(type):
@@ -157,6 +162,8 @@ class Entry(object):
       return 'cp "{0}" "{1}"'.format(self.blob[0], os.path.join(self.folder_name, self.blob[1]))
     if self.type == Cxx:
       return '[' + self.blob['type'] + ']' + ' -> ' + (' '.join([arg for arg in self.blob['argv']]))
+    if self.type == Rc:
+      return ' '.join([arg for arg in self.blob['cl_argv']]) + ' && ' + ' '.join([arg for arg in self.blob['rc_argv']])
     if self.type == Group:
       return 'group "{0}"'.format(self.path)
     return (' '.join([arg for arg in self.blob]))
