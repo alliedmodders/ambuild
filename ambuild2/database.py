@@ -422,6 +422,7 @@ class Database(object):
             'Could not unmark file as dirty; leaving dirty.',
             util.ConsoleNormal
           )
+          return
 
     self.cn.execute(query, (stamp, entry.id))
     entry.dirty = False

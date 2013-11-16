@@ -399,7 +399,7 @@ class Generator(base_gen.Generator):
       for outgoing in self.db.query_strong_outgoing(cmd_entry):
         if outgoing not in must_link:
           self.db.drop_strong_edge(cmd_entry, outgoing)
-          self.old_outputs.add(outgoing)
+          self.db.drop_output(outgoing)
         else:
           must_link.remove(outgoing)
 
@@ -459,12 +459,12 @@ class Generator(base_gen.Generator):
   def parseCxxDeps(self, context, binary, inputs, items):
     for val in items:
       if util.IsString(val):
-        if os.path.isabs(val):
-          inputs.append(val)
         continue
 
       if util.IsLambda(val.node):
         item = val.node(context, binary)
+      elif val.node is None:
+        item = val.text
       else:
         item = val.node
 
