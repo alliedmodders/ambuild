@@ -385,7 +385,7 @@ class BinaryBuilder(object):
     self.outputFile = name
     self.argv = argv
     if self.linker_.pdbSuffix:
-      self.pdbFile = self.name_
+      self.pdbFile = self.name_ + self.linker_.pdbSuffix
     else:
       self.pdbFile = None
 
