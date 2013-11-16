@@ -437,12 +437,12 @@ class Generator(base_gen.Generator):
   def parseCxxDeps(self, context, binary, inputs, items):
     for val in items:
       if util.IsString(val):
-        if os.path.isabs(val):
-          inputs.append(val)
         continue
 
       if util.IsLambda(val.node):
         item = val.node(context, binary)
+      elif val.node is None:
+        item = val.text
       else:
         item = val.node
 

@@ -255,8 +255,12 @@ class Compiler(object):
   def Library(self, name):
     return Library(self, name)
 
+  @staticmethod
+  def Dep(text, node=None):
+    return Dep(text, node)
+
 class Dep(object):
-  def __init__(self, text, node):
+  def __init__(self, text, node=None):
     self.text = text
     self.node = node
 
@@ -319,7 +323,7 @@ class BinaryBuilder(object):
 
   # Make an item that can be passed into linkflags/postlink but has an attached
   # dependency.
-  def Dep(self, text, node): 
+  def Dep(self, text, node=None): 
     return Dep(text, node)
 
   # The folder we'll be in, relative to our build context.
