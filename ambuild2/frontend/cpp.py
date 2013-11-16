@@ -281,7 +281,7 @@ class Compiler(object):
     return Library(self, name)
 
   @staticmethod
-  def Dep(text, node):
+  def Dep(text, node=None):
     return Dep(text, node)
 
 # Environment representing a C/C++ compiler invocation. Encapsulates most
@@ -343,7 +343,7 @@ class BinaryBuilder(object):
 
   # Make an item that can be passed into linkflags/postlink but has an attached
   # dependency.
-  def Dep(self, text, node): 
+  def Dep(self, text, node=None): 
     return Dep(text, node)
 
   # The folder we'll be in, relative to our build context.
