@@ -497,7 +497,7 @@ class Generator(base_gen.Generator):
         'cl_argv': rcfile.cl_argv,
         'rc_argv': rcfile.rc_argv,
       }
-      rcCmd, (rcNode,) = self.addCommand(
+      rcCmd, (preprocNode, rcNode) = self.addCommand(
         context = cx,
         weak_inputs = binary.compiler.sourcedeps,
         inputs = [rcfile.sourceFile],
