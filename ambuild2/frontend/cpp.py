@@ -322,8 +322,9 @@ class ObjectFile(object):
     self.argv = argv
 
 class RCFile(object):
-  def __init__(self, sourceFile, outputFile, cl_argv, rc_argv):
+  def __init__(self, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
     self.sourceFile = sourceFile
+    self.preprocFile = preprocFile
     self.outputFile = outputFile
     self.cl_argv = cl_argv 
     self.rc_argv = rc_argv
@@ -384,24 +385,24 @@ class BinaryBuilder(object):
     self.objects = []
     self.resources = []
     for item in self.sources:
+      if os.path.isabs(item):
+        sourceFile = item
+      else:
+        sourceFile = os.path.join(cx.currentSourcePath, item)
+      sourceFile = os.path.normpath(sourceFile)
+      encname = NameForObjectFile(filename)
+
       filename, extension = os.path.splitext(item)
       if extension == '.rc':
         cenv = self.default_c_env
-        suffix = '.res'
+        objectFile = encname + '.res'
       else:
         if extension == '.c':
           cenv = self.default_c_env
         else:
           cenv = self.default_cxx_env
           self.used_cxx_ = True
-        suffix = cenv.compiler.objSuffix
-
-      if os.path.isabs(item):
-        sourceFile = item
-      else:
-        sourceFile = os.path.join(cx.currentSourcePath, item)
-      sourceFile = os.path.normpath(sourceFile)
-      objectFile = NameForObjectFile(filename) + suffix
+        objectFile = encname + cenv.compiler.objSuffix
 
       if extension == '.rc':
         # This is only relevant on Windows.
@@ -412,6 +413,7 @@ class BinaryBuilder(object):
         for include in (self.compiler.includes + self.compiler.cxxincludes):
           cl_argv += vendor.formatInclude(objectFile, include)
         cl_argv += vendor.preprocessArgs(sourceFile)
+        cl_argv += ['/Fo' + encname + '.i']
 
         rc_argv = ['rc', '/nologo']
         for define in defines:
@@ -421,7 +423,7 @@ class BinaryBuilder(object):
         rc_argv.append('/fo' + objectFile)
         rc_argv.append(sourceFile)
 
-        self.resources.append(RCFile(sourceFile, objectFile, cl_argv, rc_argv))
+        self.resources.append(RCFile(sourceFile, encname + '.i', objectFile, cl_argv, rc_argv))
       else:
         argv = cenv.argv + cenv.compiler.objectArgs(sourceFile, objectFile)
         self.objects.append(ObjectFile(sourceFile, objectFile, argv))

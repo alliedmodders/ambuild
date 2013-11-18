@@ -501,7 +501,7 @@ class Generator(base_gen.Generator):
         context = cx,
         weak_inputs = binary.compiler.sourcedeps,
         inputs = [rcfile.sourceFile],
-        outputs = [rcfile.outputFile],
+        outputs = [rcfile.preprocFile, rcfile.outputFile],
         node_type = nodetypes.Rc,
         folder = folder_node,
         data = rcData
