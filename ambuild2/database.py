@@ -253,7 +253,7 @@ class Database(object):
       from_entry.outgoing.add(to_entry)
 
   def drop_dynamic_edge(self, from_entry, to_entry):
-    query = "delete from dynamic_edges edges where outgoing = ? and incoming = ?"
+    query = "delete from dynamic_edges where outgoing = ? and incoming = ?"
     self.cn.execute(query, (to_entry.id, from_entry.id))
     if to_entry.dynamic_inputs:
       to_entry.dynamic_inputs.remove(from_entry)
@@ -261,7 +261,7 @@ class Database(object):
       from_entry.outgoing.remove(to_entry)
 
   def drop_weak_edge(self, from_entry, to_entry):
-    query = "delete from weak_edges edges where outgoing = ? and incoming = ?"
+    query = "delete from weak_edges where outgoing = ? and incoming = ?"
     self.cn.execute(query, (to_entry.id, from_entry.id))
     if to_entry.weak_inputs:
       to_entry.weak_inputs.remove(from_entry)
