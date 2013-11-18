@@ -163,7 +163,13 @@ class Generator(object):
     rvalue = None
     with open(os.path.join(self.sourcePath, file)) as fp:
       chars = fp.read()
+
+      # Python 2.6 can't compile() with Windows line endings?!?!!?
+      chars = chars.replace('\r\n', '\n')
+      chars = chars.replace('\r', '\n')
+
       code = compile(chars, file, 'exec')
+
     exec(code, new_vars)
     if 'rvalue' in new_vars:
       rvalue = new_vars['rvalue']
