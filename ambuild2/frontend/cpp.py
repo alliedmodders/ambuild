@@ -51,7 +51,7 @@ class MSVC(Vendor):
     return ['/I', self.IncludePath(outputPath, includePath)]
 
   def preprocessArgs(self, sourceFile):
-    return ['/showIncludes', '/nologo', '/E', '/c', sourceFile]
+    return ['/showIncludes', '/nologo', '/P', '/c', sourceFile]
 
   def objectArgs(self, sourceFile, objFile):
     return ['/showIncludes', '/nologo', '/c', sourceFile, '/Fo' + objFile]
@@ -414,7 +414,6 @@ class BinaryBuilder(object):
         for include in (self.compiler.includes + self.compiler.cxxincludes):
           cl_argv += vendor.formatInclude(objectFile, include)
         cl_argv += vendor.preprocessArgs(sourceFile)
-        cl_argv += ['/Fo' + encname + '.i']
 
         rc_argv = ['rc', '/nologo']
         for define in defines:

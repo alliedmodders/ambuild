@@ -225,14 +225,12 @@ class WorkerChild(ChildProcessListener):
 
     with util.FolderChanger(task_folder):
       # Includes go to stderr when we preprocess to stdout.
-      p, ignore, err = util.Execute(cl_argv)
-      err, deps = util.ParseMSVCDeps(err)
+      p, out, err = util.Execute(cl_argv)
+      out, deps = util.ParseMSVCDeps(err)
       paths = self.rewriteDeps(deps)
 
       if p.returncode == 0:
         p, out, err = util.Execute(rc_argv)
-      else:
-        out = ''
         
     reply = {
       'ok': p.returncode == 0,
