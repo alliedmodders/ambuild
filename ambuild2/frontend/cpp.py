@@ -390,9 +390,10 @@ class BinaryBuilder(object):
       else:
         sourceFile = os.path.join(cx.currentSourcePath, item)
       sourceFile = os.path.normpath(sourceFile)
-      encname = NameForObjectFile(filename)
 
       filename, extension = os.path.splitext(item)
+      encname = NameForObjectFile(filename)
+
       if extension == '.rc':
         cenv = self.default_c_env
         objectFile = encname + '.res'
