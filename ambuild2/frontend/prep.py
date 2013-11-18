@@ -54,7 +54,7 @@ class Preparer(object):
     if options.list_gen:
       print('Available build system generators:')
       print('  {0:24} - AMBuild 2 (default)'.format('ambuild2'))
-      print('  {0:24} - Visual Studio project files'.format('vcxproj'))
+      #print('  {0:24} - Visual Studio project files'.format('vcxproj'))
       sys.exit(0)
 
     source_abspath = os.path.normpath(os.path.abspath(self.sourcePath))
