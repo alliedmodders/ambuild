@@ -231,6 +231,8 @@ class WorkerChild(ChildProcessListener):
 
       if p.returncode == 0:
         p, out, err = util.Execute(rc_argv)
+      else:
+        out = ''
         
     reply = {
       'ok': p.returncode == 0,
