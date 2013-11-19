@@ -547,7 +547,7 @@ class Process(object):
     argv = [
       sys.executable,
       '-c',
-      'import sys; sys.path[0:0] = ["/home/dvander/alliedmodders/ambuild"]; from ambuild2.ipc.posix_proc import child_main; child_main("{0}")'.format(channel.name)
+      'import sys; from ambuild2.ipc.posix_proc import child_main; child_main("{0}")'.format(channel.name)
     ]
 
     c_argv = (ctypes.c_char_p * (len(argv) + 1))()
