@@ -438,13 +438,7 @@ class BinaryBuilder(object):
         self.linker_ = self.compiler.cc
 
     files = [out.outputFile for out in self.objects + self.resources]
-    argv = self.generateBinary(cx, files)
-
-    self.argv = argv
-    if self.linker_.pdbSuffix:
-      self.pdbFile = self.name_ + self.linker_.pdbSuffix
-    else:
-      self.pdbFile = None
+    self.argv, self.pdbFile = self.generateBinary(cx, files)
 
 class Program(BinaryBuilder):
   def __init__(self, compiler, name):
@@ -466,7 +460,11 @@ class Program(BinaryBuilder):
     else:
       argv.extend(['-o', self.outputFile])
 
-    return argv
+    pdbFile = None
+    if self.linker_.pdbSuffix:
+      pdbFile = self.name_ + self.linker_.pdbSuffix
+
+    return argv, pdbFile
 
 class Library(BinaryBuilder):
   def __init__(self, compiler, name):
@@ -493,7 +491,11 @@ class Library(BinaryBuilder):
         argv.append('-shared')
       argv.extend(['-o', self.outputFile])
 
-    return argv
+    pdbFile = None
+    if self.linker_.pdbSuffix:
+      pdbFile = self.name_ + self.linker_.pdbSuffix
+
+    return argv, pdbFile
 
 class StaticLibrary(BinaryBuilder):
   def __init__(self, compiler, name):
@@ -506,4 +508,4 @@ class StaticLibrary(BinaryBuilder):
     else:
       argv = ['ar', 'rcs', self.outputFile]
     argv += files
-    return argv
+    return argv, None
