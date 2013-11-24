@@ -289,6 +289,9 @@ class Compiler(object):
   def Library(self, name):
     return Library(self, name)
 
+  def StaticLibrary(self, name):
+    return StaticLibrary(self, name)
+
   @staticmethod
   def Dep(text, node=None):
     return Dep(text, node)
@@ -434,13 +437,8 @@ class BinaryBuilder(object):
       else:
         self.linker_ = self.compiler.cc
 
-    argv = self.linker_.command.split(' ')
-    for objfile in self.objects:
-      argv.append(objfile.outputFile)
-    for rcfile in self.resources:
-      argv.append(rcfile.outputFile)
-
-    argv = self.generateBinary(cx, argv)
+    files = [out.outputFile for out in self.objects + self.resources]
+    argv = self.generateBinary(cx, files)
 
     self.argv = argv
     if self.linker_.pdbSuffix:
@@ -453,7 +451,10 @@ class Program(BinaryBuilder):
     super(Program, self).__init__(compiler, name)
     self.outputFile = name + util.ExecutableSuffix()
 
-  def generateBinary(self, cx, argv):
+  def generateBinary(self, cx, files):
+    argv = self.linker_.command.split(' ')
+    argv += files
+
     if isinstance(self.linker_, MSVC):
       argv.append('/link')
     argv.extend(LinkFlags(self.compiler))
@@ -472,7 +473,10 @@ class Library(BinaryBuilder):
     super(Library, self).__init__(compiler, name)
     self.outputFile = name + util.SharedLibSuffix()
 
-  def generateBinary(self, cx, argv):
+  def generateBinary(self, cx, files):
+    argv = self.linker_.command.split(' ')
+    argv += files
+
     if isinstance(self.linker_, MSVC):
       argv.append('/link')
     argv.extend(LinkFlags(self.compiler))
@@ -489,4 +493,17 @@ class Library(BinaryBuilder):
         argv.append('-shared')
       argv.extend(['-o', self.outputFile])
 
+    return argv
+
+class StaticLibrary(BinaryBuilder):
+  def __init__(self, compiler, name):
+    super(StaticLibrary, self).__init__(compiler, name)
+    self.outputFile = util.StaticLibPrefix() + name + util.StaticLibSuffix()
+
+  def generateBinary(self, cx, files):
+    if isinstance(self.linker_, MSVC):
+      argv = ['lib.exe', '/OUT:' + self.outputFile]
+    else:
+      argv = ['ar', 'rcs', self.outputFile]
+    argv += files
     return argv
