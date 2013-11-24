@@ -178,8 +178,8 @@ class WorkerChild(ChildProcessListener):
 
       # Detect whether the include is within the build folder or not.
       build_path = self.buildPath
-      if build_path[-1] != '/':
-        build_path += '/'
+      if build_path[-1] != os.path.sep:
+        build_path += os.path.sep
       prefix = os.path.commonprefix([build_path, inc_path])
       if prefix == build_path:
         # The include is not a system include, i.e. it was generated, so
