@@ -35,10 +35,10 @@ class MSVC(Vendor):
 
   @staticmethod
   def IncludePath(outputPath, includePath):
-    #Hack - try and get a relative path because CL, with either 
-    #/Zi or /ZI, combined with subprocess, apparently tries and
-    #looks for paths like c:\bleh\"c:\bleh" <-- wtf
-    #.. this according to Process Monitor
+    # Hack - try and get a relative path because CL, with either 
+    # /Zi or /ZI, combined with subprocess, apparently tries and
+    # looks for paths like c:\bleh\"c:\bleh" <-- wtf
+    # .. this according to Process Monitor
     outputPath = os.path.normcase(outputPath)
     includePath = os.path.normcase(includePath)
     outputDrive = os.path.splitdrive(outputPath)[0]
@@ -104,7 +104,7 @@ CompilerSearch = {
     'mac': ['cc', 'clang', 'gcc', 'icc'],
     'windows': ['cl'],
     'default': ['cc', 'gcc', 'clang', 'icc']
-    },
+  },
   'CXX': {
     'mac': ['c++', 'clang++', 'g++', 'icc'],
     'windows': ['cl'],
@@ -332,20 +332,6 @@ class RCFile(object):
     self.cl_argv = cl_argv 
     self.rc_argv = rc_argv
 
-def LinkFlags(compiler):
-  argv = []
-  for item in compiler.linkflags:
-    if type(item) is not Dep:
-      argv.append(item)
-    else:
-      argv.append(item.text)
-  for item in compiler.postlink:
-    if type(item) is not Dep:
-      argv.append(item)
-    else:
-      argv.append(item.text)
-  return argv
-
 class BinaryBuilder(object):
   def __init__(self, compiler, name):
     super(BinaryBuilder, self).__init__()
@@ -376,6 +362,24 @@ class BinaryBuilder(object):
   # Compute the build folder.
   def getBuildFolder(self, builder):
     return os.path.join(builder.buildFolder, self.localFolder)
+
+  def linkFlag(self, cx, item):
+    if type(item) is Dep:
+      return item.text
+
+    if hasattr(item, 'path'):
+      if os.path.isabs(item.path):
+        return item.path
+
+      local_path = os.path.join(cx.buildFolder, self.localFolder)
+      return os.path.relpath(item.path, local_path)
+
+    return item
+
+  def linkFlags(self, cx):
+    argv = [self.linkFlag(cx, item) for item in self.compiler.linkflags]
+    argv += [self.linkFlag(cx, item) for item in self.compiler.postlink]
+    return argv
 
   def finish(self, cx):
     # Because we want to compute relative include folders for MSVC (see its
@@ -451,7 +455,7 @@ class Program(BinaryBuilder):
 
     if isinstance(self.linker_, MSVC):
       argv.append('/link')
-    argv.extend(LinkFlags(self.compiler))
+    argv.extend(self.linkFlags(cx))
     if isinstance(self.linker_, MSVC):
       argv.append('/OUT:' + self.outputFile)
       argv.append('/DEBUG')
@@ -477,7 +481,7 @@ class Library(BinaryBuilder):
 
     if isinstance(self.linker_, MSVC):
       argv.append('/link')
-    argv.extend(LinkFlags(self.compiler))
+    argv.extend(self.linkFlags(cx))
     if isinstance(self.linker_, MSVC):
       argv.append('/OUT:' + self.outputFile)
       argv.append('/DEBUG')

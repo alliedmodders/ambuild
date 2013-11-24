@@ -457,7 +457,9 @@ class Generator(base_gen.Generator):
       if util.IsString(val):
         continue
 
-      if util.IsLambda(val.node):
+      if type(val) is nodetypes.Entry:
+        item = val
+      elif util.IsLambda(val.node):
         item = val.node(context, binary)
       elif val.node is None:
         item = val.text
