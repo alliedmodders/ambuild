@@ -225,13 +225,15 @@ def ParseGCCDeps(text):
 def ParseMSVCDeps(out):
   deps = []
   new_text = ''
+  out = out.replace('\r\n', '\n')
+  out = out.replace('\r', '\n')
   for line in out.split('\n'):
     m = re.match('Note: including file:\s+(.+)$', line)
     if m != None:
       file = m.groups()[0].strip()
       deps.append(file)
     else:
-      new_text += line
+      new_text += line + '\n'
   return new_text, deps
 
 def ParseSunDeps(text):
