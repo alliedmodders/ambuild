@@ -48,10 +48,13 @@ class Context(object):
     path, name = os.path.split(script)
     if parent:
       self.currentSourcePath = os.path.join(parent.currentSourcePath, path)
+      self.currentSourceFolder = os.path.join(parent.currentSourceFolder, path)
       self.buildFolder = os.path.join(parent.buildFolder, path)
     else:
       self.currentSourcePath = generator.sourcePath
+      self.currentSourceFolder = ''
       self.buildFolder = ''
+    self.buildScript = os.path.join(self.currentSourceFolder, name)
     self.localFolder_ = self.buildFolder
 
   # Root source folder.
@@ -154,21 +157,23 @@ class Generator(object):
     cx = Context(self, self.contextStack_[-1], file)
     self.pushContext(cx)
 
-    self.addConfigureFile(cx, os.path.join(self.sourcePath, file))
+    full_path = os.path.join(self.sourcePath, cx.buildScript)
+
+    self.addConfigureFile(cx, full_path)
 
     new_vars = copy.copy(vars)
     new_vars['builder'] = cx
 
     # Run it.
     rvalue = None
-    with open(os.path.join(self.sourcePath, file)) as fp:
+    with open(full_path) as fp:
       chars = fp.read()
 
       # Python 2.6 can't compile() with Windows line endings?!?!!?
       chars = chars.replace('\r\n', '\n')
       chars = chars.replace('\r', '\n')
 
-      code = compile(chars, file, 'exec')
+      code = compile(chars, full_path, 'exec')
 
     exec(code, new_vars)
     if 'rvalue' in new_vars:
