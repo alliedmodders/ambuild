@@ -510,13 +510,20 @@ class Generator(base_gen.Generator):
       )
       inputs.append(rcNode)
 
-    output_file, debug_file = binary.link(
+    outputs = [binary.outputFile]
+    if binary.pdbFile:
+      outputs.append(binary.pdbFile)
+  
+    linkCmd, binNodes = self.addCommand(
       context = cx,
+      node_type = nodetypes.Command,
       folder = folder_node,
-      inputs = inputs
+      data = binary.argv,
+      inputs = inputs,
+      outputs = outputs
     )
 
-    return CppNodes(output_file, debug_file)
+    return CppNodes(binNodes[0], binNodes[1:])
 
   def addFileOp(self, cmd, context, source, output_path):
     # Try to detect if our output_path is actually a folder, via trailing
