@@ -9,6 +9,8 @@ scripts = [
 
 if sys.platform == 'win32':
   scripts.append('scripts/ambuild.bat')
+elif sys.platform == 'darwin':
+  scripts.append('scripts/ambuild_dsymutil_wrapper.sh')
 
 setup(
   name = 'AMBuild',
