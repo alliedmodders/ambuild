@@ -595,7 +595,14 @@ class Generator(base_gen.Generator):
   def addFolder(self, context, folder):
     return self.generateFolder(context.localFolder, folder)
 
-  def addShellCommand(self, context, inputs, argv, outputs, folder=-1, dep_type=None):
+  def addShellCommand(self,
+                      context,
+                      inputs,
+                      argv,
+                      outputs,
+                      folder=-1,
+                      dep_type=None,
+                      weak_inputs=[]):
     if folder is -1:
       folder = context.localFolder
 
@@ -620,7 +627,8 @@ class Generator(base_gen.Generator):
       folder = folder,
       data = data,
       inputs = inputs,
-      outputs = outputs
+      outputs = outputs,
+      weak_inputs = weak_inputs
     )
 
   def addConfigureFile(self, context, path):
