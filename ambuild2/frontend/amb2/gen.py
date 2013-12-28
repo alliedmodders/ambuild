@@ -595,30 +595,15 @@ class Generator(base_gen.Generator):
   def addFolder(self, context, folder):
     return self.generateFolder(context.localFolder, folder)
 
-  def addShellCommand(self, context, inputs, argv, outputs, folder=-1, dep_type=None):
+  def addShellCommand(self, context, inputs, argv, outputs, folder=-1):
     if folder is -1:
       folder = context.localFolder
 
-    if dep_type is None:
-      node_type = nodetypes.Command
-      data = argv
-    else:
-      node_type = nodetypes.Cxx
-      if dep_type not in ['gcc', 'msvc', 'sun']:
-        util.con_err(util.ConsoleRed, 'Invalid dependency spew type: ',
-                     util.ConsoleBlue, dep_type,
-                     util.ConsoleNormal)
-        raise Exception('Invalid dependency spew type')
-      data = {
-        'type': dep_type,
-        'argv': argv,
-      }
-
     return self.addCommand(
       context = context,
-      node_type = node_type,
+      node_type = nodetypes.Command,
       folder = folder,
-      data = data,
+      data = argv,
       inputs = inputs,
       outputs = outputs
     )
