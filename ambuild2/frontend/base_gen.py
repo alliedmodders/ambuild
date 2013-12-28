@@ -122,15 +122,8 @@ class Context(object):
   def AddCopy(self, source, output_path):
     return self.generator.addCopy(self, source, output_path)
 
-  def AddCommand(self, inputs, argv, outputs, dep_type=None, weak_inputs=[]):
-    return self.generator.addShellCommand(
-      self,
-      inputs,
-      argv,
-      outputs,
-      dep_type = dep_type,
-      weak_inputs = weak_inputs
-    )
+  def AddCommand(self, inputs, argv, outputs, dep_type=None):
+    return self.generator.addShellCommand(self, inputs, argv, outputs, dep_type=dep_type)
 
   def AddConfigureFile(self, path):
     return self.generator.addConfigureFile(self, path)
@@ -243,7 +236,7 @@ all:
   def addCopy(self, context, source, output_path):
     raise Exception('Must be implemented!')
 
-  def addShellCommand(self, context, inputs, argv, outputs, dep_type=None, weak_inputs=[]):
+  def addShellCommand(self, context, inputs, argv, outputs, dep_type=None):
     raise Exception('Must be implemented!')
 
   def addConfigureFile(self, context, path):
