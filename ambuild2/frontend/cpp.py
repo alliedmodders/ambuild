@@ -26,12 +26,13 @@ class Vendor(object):
     self.behavior = behavior
     self.command = command
     self.objSuffix = objSuffix
+    self.debuginfo_argv = []
 
 class MSVC(Vendor):
   def __init__(self, command, version):
     super(MSVC, self).__init__('msvc', version, 'msvc', command, '.obj')
     self.definePrefix = '/D'
-    self.pdbSuffix = '.pdb'
+    self.debuginfo_argv = ['/Zi']
 
   @staticmethod
   def IncludePath(outputPath, includePath):
@@ -63,7 +64,6 @@ class CompatGCC(Vendor):
     self.majorVersion = int(parts[0])
     self.minorVersion = int(parts[1])
     self.definePrefix = '-D'
-    self.pdbSuffix = None
 
   def formatInclude(self, outputPath, includePath):
     return ['-I', os.path.normpath(includePath)]
@@ -74,17 +74,18 @@ class CompatGCC(Vendor):
 class GCC(CompatGCC):
   def __init__(self, command, version):
     super(GCC, self).__init__('gcc', command, version)
+    self.debuginfo_argv = ['-g3', '-ggdb3']
 
 class Clang(CompatGCC):
   def __init__(self, command, version):
     super(Clang, self).__init__('clang', command, version)
+    self.debuginfo_argv = ['-g3']
 
 class SunPro(Vendor):
   def __init__(self, command, version):
     super(SunPro, self).__init__('sun', version, 'sun', command, '.o')
-    parts = version.split('.')
     self.definePrefix = '-D'
-    self.pdbSuffix = None
+    self.debuginfo_argv = ['-g3']
 
   def formatInclude(self, outputPath, includePath):
     return ['-I', os.path.normpath(includePath)]
@@ -272,6 +273,7 @@ class Compiler(object):
   def __init__(self, cc, cxx):
     self.cc = cc
     self.cxx = cxx
+    self.debuginfo = True
     for attr in Compiler.attrs:
       setattr(self, attr, [])
 
@@ -279,6 +281,7 @@ class Compiler(object):
     cc = Compiler(self.cc, self.cxx)
     cc.cc = self.cc
     cc.cxx = self.cxx
+    cc.debuginfo = self.debuginfo
     for attr in Compiler.attrs:
       setattr(cc, attr, copy.copy(getattr(self, attr)))
     return cc
@@ -302,6 +305,8 @@ class CCommandEnv(object):
   def __init__(self, outputPath, config, compiler):
     args = compiler.command.split(' ')
     args += config.cflags
+    if config.debuginfo:
+      args += compiler.debuginfo_argv
     if compiler == config.cxx:
       args += config.cxxflags
     args += [compiler.definePrefix + define for define in config.defines]
@@ -442,7 +447,40 @@ class BinaryBuilder(object):
         self.linker_ = self.compiler.cc
 
     files = [out.outputFile for out in self.objects + self.resources]
-    self.argv, self.pdbFile = self.generateBinary(cx, files)
+    self.argv = self.generateBinary(cx, files)
+    self.linker_outputs = [self.outputFile]
+    self.debug_entry = None
+
+    if self.compiler.debuginfo and not isinstance(self, StaticLibrary):
+      if isinstance(self.linker_, MSVC):
+        self.linker_outputs += [self.name_ + '.pdb']
+      elif cx.target_platform is 'mac':
+        bundle_folder = os.path.join(self.localFolder, self.outputFile + '.dSYM')
+        bundle_entry = cx.AddFolder(bundle_folder)
+        bundle_layout = [
+          'Contents',
+          'Contents/Resources',
+          'Contents/Resources/DWARF',
+        ]
+        for folder in bundle_layout:
+          cx.AddFolder(os.path.join(bundle_folder, folder))
+        self.linker_outputs += [
+          self.outputFile + '.dSYM/Contents/Info.plist',
+          self.outputFile + '.dSYM/Contents/Resources/DWARF/' + self.outputFile
+        ]
+        self.debug_entry = bundle_entry
+        self.argv = ['ambuild_dsymutil_wrapper.sh', self.outputFile] + self.argv
+
+  def link(self, context, folder, inputs):
+    ignore, outputs = context.AddCommand(
+      inputs = inputs,
+      argv = self.argv,
+      outputs = self.linker_outputs,
+      folder = folder
+    )
+    if not self.debug_entry and self.compiler.debuginfo:
+      self.debug_entry = outputs[-1]
+    return outputs[0], self.debug_entry
 
 class Program(BinaryBuilder):
   def __init__(self, compiler, name):
@@ -455,20 +493,19 @@ class Program(BinaryBuilder):
 
     if isinstance(self.linker_, MSVC):
       argv.append('/link')
-    argv.extend(self.linkFlags(cx))
-    if isinstance(self.linker_, MSVC):
-      argv.append('/OUT:' + self.outputFile)
-      argv.append('/DEBUG')
+      argv.extend(self.linkFlags(cx))
       argv.append('/nologo')
-      argv.append('/PDB:"' + self.name_ + '.pdb"')
+      argv += [
+        '/OUT:' + self.outputFile,
+        '/nologo',
+      ]
+      if self.compiler.debuginfo:
+        argv += ['/DEBUG', '/PDB:"' + self.name_ + '.pdb"']
     else:
+      argv.extend(self.linkFlags(cx))
       argv.extend(['-o', self.outputFile])
 
-    pdbFile = None
-    if self.linker_.pdbSuffix:
-      pdbFile = self.name_ + self.linker_.pdbSuffix
-
-    return argv, pdbFile
+    return argv
 
 class Library(BinaryBuilder):
   def __init__(self, compiler, name):
@@ -481,25 +518,24 @@ class Library(BinaryBuilder):
 
     if isinstance(self.linker_, MSVC):
       argv.append('/link')
-    argv.extend(self.linkFlags(cx))
-    if isinstance(self.linker_, MSVC):
-      argv.append('/OUT:' + self.outputFile)
-      argv.append('/DEBUG')
-      argv.append('/nologo')
-      argv.append('/DLL')
-      argv.append('/PDB:"' + self.name_ + '.pdb"')
+      argv.extend(self.linkFlags(cx))
+      argv += [
+        '/OUT:' + self.outputFile,
+        '/DEBUG',
+        '/nologo',
+        '/DLL',
+      ]
+      if self.compiler.debuginfo:
+        argv += ['/DEBUG', '/PDB:"' + self.name_ + '.pdb"']
     elif isinstance(self.linker_, CompatGCC):
+      argv.extend(self.linkFlags(cx))
       if util.IsMac():
         argv.append('-dynamiclib')
       else:
         argv.append('-shared')
       argv.extend(['-o', self.outputFile])
 
-    pdbFile = None
-    if self.linker_.pdbSuffix:
-      pdbFile = self.name_ + self.linker_.pdbSuffix
-
-    return argv, pdbFile
+    return argv
 
 class StaticLibrary(BinaryBuilder):
   def __init__(self, compiler, name):
@@ -512,4 +548,4 @@ class StaticLibrary(BinaryBuilder):
     else:
       argv = ['ar', 'rcs', self.outputFile]
     argv += files
-    return argv, None
+    return argv
