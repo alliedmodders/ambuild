@@ -451,25 +451,33 @@ class BinaryBuilder(object):
     self.linker_outputs = [self.outputFile]
     self.debug_entry = None
 
-    if self.compiler.debuginfo and not isinstance(self, StaticLibrary):
-      if isinstance(self.linker_, MSVC):
-        self.linker_outputs += [self.name_ + '.pdb']
-      elif cx.target_platform is 'mac':
-        bundle_folder = os.path.join(self.localFolder, self.outputFile + '.dSYM')
-        bundle_entry = cx.AddFolder(bundle_folder)
-        bundle_layout = [
-          'Contents',
-          'Contents/Resources',
-          'Contents/Resources/DWARF',
-        ]
-        for folder in bundle_layout:
-          cx.AddFolder(os.path.join(bundle_folder, folder))
-        self.linker_outputs += [
-          self.outputFile + '.dSYM/Contents/Info.plist',
-          self.outputFile + '.dSYM/Contents/Resources/DWARF/' + self.outputFile
-        ]
-        self.debug_entry = bundle_entry
-        self.argv = ['ambuild_dsymutil_wrapper.sh', self.outputFile] + self.argv
+    if self.compiler.debuginfo:
+      self.perform_symbol_steps(cx)
+
+  def perform_symbol_steps(self, cx):
+    if isinstance(self.linker_, MSVC):
+      self.linker_outputs += [self.name_ + '.pdb']
+    elif cx.target_platform is 'mac':
+      bundle_folder = os.path.join(self.localFolder, self.outputFile + '.dSYM')
+      bundle_entry = cx.AddFolder(bundle_folder)
+      bundle_layout = [
+        'Contents',
+        'Contents/Resources',
+        'Contents/Resources/DWARF',
+      ]
+      for folder in bundle_layout:
+        cx.AddFolder(os.path.join(bundle_folder, folder))
+      self.linker_outputs += [
+        self.outputFile + '.dSYM/Contents/Info.plist',
+        self.outputFile + '.dSYM/Contents/Resources/DWARF/' + self.outputFile
+      ]
+      self.debug_entry = bundle_entry
+      self.argv = ['ambuild_dsymutil_wrapper.sh', self.outputFile] + self.argv
+    elif cx.target_platform is 'linux':
+      self.linker_outputs += [
+        self.outputFile + '.dbg'
+      ]
+      self.argv = ['ambuild_objcopy_wrapper.sh', self.outputFile] + self.argv
 
   def link(self, context, folder, inputs):
     ignore, outputs = context.AddCommand(
@@ -549,3 +557,6 @@ class StaticLibrary(BinaryBuilder):
       argv = ['ar', 'rcs', self.outputFile]
     argv += files
     return argv
+
+  def perform_symbol_steps(self, cx):
+    pass
