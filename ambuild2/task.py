@@ -433,6 +433,7 @@ class TaskMasterParent(ParentProcessListener):
       'results': lambda child, message: self.processResults(message),
       'done': lambda child, message: self.receiveDone(message),
     }
+    self.errors_ = []
 
     # Figure out how many tasks to create.
     if cx.options.jobs == 0:
@@ -461,7 +462,7 @@ class TaskMasterParent(ParentProcessListener):
   def receiveDone(self, message):
     self.cx.procman.shutdown()
 
-  def processResults(self, message):
+  def spewResult(self, message):
     if message['ok']:
       color = util.ConsoleGreen
     else:
@@ -484,9 +485,13 @@ class TaskMasterParent(ParentProcessListener):
       if message['stderr'][-1] != '\n':
         sys.stderr.write('\n')
 
+  def processResults(self, message):
     if not message['ok']:
+      self.errors_.append(message)
       self.terminateBuild()
       return
+
+    self.spewResult(message)
 
     task_id = message['task_id']
     updates = message['updates']
@@ -535,4 +540,6 @@ class TaskMasterParent(ParentProcessListener):
 
   def run(self):
     self.cx.messagePump.pump()
+    for message in self.errors_:
+      self.spewResult(message)
     return not self.build_failed
