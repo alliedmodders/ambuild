@@ -24,6 +24,70 @@ import traceback
 
 GroupPrefix = '//group/./'
 
+def CreateDatabase(path):
+  cn = sqlite3.connect(path)
+  queries = [
+    "create table if not exists nodes(            \
+      id integer primary key autoincrement,       \
+      type varchar(4) not null,                   \
+      stamp real not null default 0.0,            \
+      dirty int not null default 0,               \
+      path text,                                  \
+      folder int,                                 \
+      data blob                                   \
+    )",
+
+    # The edge table stores links that are specified by the build scripts;
+    # this table is essentially immutable (except for reconfigures).
+    "create table if not exists edges(          \
+      outgoing int not null,                    \
+      incoming int not null,                    \
+      unique (outgoing, incoming)               \
+    )",
+
+    # The weak edge table stores links that are specified by build scripts,
+    # but only to enforce ordering. They do not propagate damage or updates.
+    "create table if not exists weak_edges(     \
+      outgoing int not null,                    \
+      incoming int not null,                    \
+      unique (outgoing, incoming)               \
+    )",
+
+    # The dynamic edge table stores edges that are discovered as a result of
+    # executing a command; for example, a |cp *| or C++ #includes.
+    "create table if not exists dynamic_edges(  \
+      outgoing int not null,                    \
+      incoming int not null,                    \
+      unique (outgoing, incoming)               \
+    )",
+
+    # List of nodes which trigger a reconfigure.
+    "create table if not exists reconfigure(    \
+      stamp real not null default 0.0,          \
+      path text unique                          \
+    )",
+
+    # Extra key/values we might randomly want.
+    "create table if not exists vars(           \
+      key varchar(255) primary key not null,    \
+      val varchar(255)                          \
+    )",
+
+    "create index if not exists outgoing_edge on edges(outgoing)",
+    "create index if not exists incoming_edge on edges(incoming)",
+    "create index if not exists weak_outgoing_edge on weak_edges(outgoing)",
+    "create index if not exists weak_incoming_edge on weak_edges(incoming)",
+    "create index if not exists dyn_outgoing_edge on dynamic_edges(outgoing)",
+    "create index if not exists dyn_incoming_edge on dynamic_edges(incoming)",
+  ]
+  for query in queries:
+    cn.execute(query)
+  cn.commit()
+
+  db = Database(path)
+  db.connect()
+  return db
+
 class Database(object):
   def __init__(self, path):
     self.path = path
@@ -35,6 +99,7 @@ class Database(object):
     assert not self.cn
     self.cn = sqlite3.connect(self.path)
     self.cn.execute("PRAGMA journal_mode = WAL;")
+    self.check_upgrade()
 
   def close(self):
     if self.cn:
@@ -55,58 +120,72 @@ class Database(object):
     self.node_cache_ = {}
     self.path_cache_ = {}
 
-  def create_tables(self):
-    queries = [
-      "create table if not exists nodes(            \
-        id integer primary key autoincrement,       \
-        type varchar(4) not null,                   \
-        stamp real not null default 0.0,            \
-        dirty int not null default 0,               \
-        generated int not null default 0,           \
-        path text,                                  \
-        folder int,                                 \
-        data blob                                   \
-      )",
+  def check_upgrade(self):
+    try:
+      query = "select val from vars where key = 'db_version'"
+      cursor = self.cn.execute(query)
+      row = cursor.fetchone()
+      if not row:
+        raise Exception('Database seems to be misconfigured - cannot read version')
+      version = int(row[0])
+    except:
+      version = 1
 
-      # The edge table stores links that are specified by the build scripts;
-      # this table is essentially immutable (except for reconfigures).
-      "create table if not exists edges(          \
-        outgoing int not null,                    \
-        incoming int not null,                    \
-        unique (outgoing, incoming)               \
-      )",
+    latest_version = 2
+    if version == latest_version:
+      return
+    if version > latest_version:
+      raise Exception('Your database version is too new!')
 
-      # The weak edge table stores links that are specified by build scripts,
-      # but only to enforce ordering. They do not propagate damage or updates.
-      "create table if not exists weak_edges(     \
-        outgoing int not null,                    \
-        incoming int not null,                    \
-        unique (outgoing, incoming)               \
-      )",
+    util.con_out(
+      util.ConsoleHeader,
+      'Note: upgrading database from version {0} to {1}'.format(version, latest_version),
+      util.ConsoleNormal
+    )
 
-      # The dynamic edge table stores edges that are discovered as a result of
-      # executing a command; for example, a |cp *| or C++ #includes.
-      "create table if not exists dynamic_edges(  \
-        outgoing int not null,                    \
-        incoming int not null,                    \
-        unique (outgoing, incoming)               \
-      )",
+    if version == 1:
+      queries = [
+        "create table if not exists vars(           \
+          key varchar(255) primary key not null,    \
+          val varchar(255)                          \
+        )",
 
-      # List of nodes which trigger a reconfigure.
-      "create table if not exists reconfigure(    \
-        stamp real not null default 0.0,          \
-        path text unique                          \
-      )",
+        "drop table if exists nodestmp",
+        "drop table if exists nodesold",
 
-      "create index if not exists outgoing_edge on edges(outgoing)",
-      "create index if not exists incoming_edge on edges(incoming)",
-      "create index if not exists weak_outgoing_edge on weak_edges(outgoing)",
-      "create index if not exists weak_incoming_edge on weak_edges(incoming)",
-      "create index if not exists dyn_outgoing_edge on dynamic_edges(outgoing)",
-      "create index if not exists dyn_incoming_edge on dynamic_edges(incoming)",
-    ]
-    for query in queries:
-      self.cn.execute(query)
+        "create table nodestmp(                       \
+          id integer primary key autoincrement,       \
+          type varchar(4) not null,                   \
+          stamp real not null default 0.0,            \
+          dirty int not null default 0,               \
+          path text,                                  \
+          folder int,                                 \
+          data blob                                   \
+        )",
+      ]
+      for query in queries:
+        self.cn.execute(query)
+
+      # Migrate all rows in nodes to nodestmp.
+      query = """
+        select id, type, stamp, dirty, path, folder, data
+          from nodes
+          order by id asc
+      """
+      ins_query = """
+        insert into nodestmp
+          (id, type, stamp, dirty, path, folder, data)
+          values
+          (?,  ?,    ?,     ?,     ?,    ?,      ?)
+      """
+      for row in self.cn.execute(query):
+        self.cn.execute(ins_query, row)
+
+      self.cn.execute("alter table nodes rename to nodesold")
+      self.cn.execute("alter table nodestmp rename to nodes")
+      self.cn.execute("drop table nodesold")
+
+    self.cn.execute("insert or replace into vars (key, val) values ('db_version', ?)", (latest_version,))
     self.cn.commit()
 
   def add_folder(self, parent, path):
@@ -114,15 +193,14 @@ class Database(object):
     assert not os.path.isabs(path)
     assert os.path.normpath(path) == path
 
-    # We don't use the generated bit for folders right now.
-    return self.add_file(nodetypes.Mkdir, path, False, parent)
+    return self.add_file(nodetypes.Mkdir, path, parent)
 
   def add_output(self, folder_entry, path):
     assert path not in self.path_cache_
     assert not os.path.isabs(path)
     assert not folder_entry or os.path.split(path)[0] == folder_entry.path
 
-    return self.add_file(nodetypes.Output, path, False, folder_entry)
+    return self.add_file(nodetypes.Output, path, folder_entry)
 
   def find_or_add_source(self, path):
     node = self.query_path(path)
@@ -132,22 +210,22 @@ class Database(object):
 
     return self.add_source(path)
 
-  def add_source(self, path, generated=False):
+  def add_source(self, path):
     assert path not in self.path_cache_
     assert os.path.isabs(path)
 
-    return self.add_file(nodetypes.Source, path, generated)
+    return self.add_file(nodetypes.Source, path)
 
-  def add_file(self, type, path, generated, folder_entry = None):
+  def add_file(self, type, path, folder_entry = None):
     if folder_entry:
       folder_id = folder_entry.id
     else:
       folder_id = None
 
-    query = "insert into nodes (type, generated, path, folder) values (?, ?, ?, ?)"
+    query = "insert into nodes (type, path, folder) values (?, ?, ?)"
 
-    cursor = self.cn.execute(query, (type, int(generated), path, folder_id))
-    row = (type, 0, 1, 1, path, folder_entry, None)
+    cursor = self.cn.execute(query, (type, path, folder_id))
+    row = (type, 0, 1, path, folder_entry, None)
     return self.import_node(
       id=cursor.lastrowid,
       row=row
@@ -224,8 +302,7 @@ class Database(object):
       blob=data,
       folder=folder,
       stamp=0,
-      dirty=True,
-      generated=False
+      dirty=True
     )
     self.node_cache_[entry.id] = entry
     return entry
@@ -278,7 +355,7 @@ class Database(object):
     if id in self.node_cache_:
       return self.node_cache_[id]
 
-    query = "select type, stamp, dirty, generated, path, folder, data from nodes where id = ?"
+    query = "select type, stamp, dirty, path, folder, data from nodes where id = ?"
     cursor = self.cn.execute(query, (id,))
     return self.import_node(id, cursor.fetchone())
 
@@ -287,7 +364,7 @@ class Database(object):
       return self.path_cache_[path]
 
     query = """
-      select type, stamp, dirty, generated, path, folder, data, id
+      select type, stamp, dirty, path, folder, data, id
       from nodes
       where path = ?
     """
@@ -296,30 +373,29 @@ class Database(object):
     if not row:
       return None
 
-    return self.import_node(row[7], row)
+    return self.import_node(row[6], row)
 
   def import_node(self, id, row):
     assert id not in self.node_cache_
 
-    if not row[5]:
+    if not row[4]:
       folder = None
-    elif type(row[5]) is nodetypes.Entry:
-      folder = row[5]
+    elif type(row[4]) is nodetypes.Entry:
+      folder = row[4]
     else:
-      folder = self.query_node(row[5])
-    if not row[6]:
+      folder = self.query_node(row[4])
+    if not row[5]:
       blob = None
     else:
-      blob = util.Unpickle(row[6])
+      blob = util.Unpickle(row[5])
 
     node = Entry(id=id,
                  type=row[0],
-                 path=row[4],
+                 path=row[3],
                  blob=blob,
                  folder=folder,
                  stamp=row[1],
-                 dirty=row[2],
-                 generated=bool(row[3]))
+                 dirty=row[2])
     self.node_cache_[id] = node
     if node.path:
       assert node.path not in self.path_cache_
@@ -431,25 +507,25 @@ class Database(object):
   # Query all mkdir nodes.
   def query_mkdir(self, aggregate):
     query = """
-      select type, stamp, dirty, generated, path, folder, data, id
+      select type, stamp, dirty, path, folder, data, id
       from nodes
       where type == 'mkd'
     """
     for row in self.cn.execute(query):
-      id = row[7]
+      id = row[6]
       node = self.import_node(id, row)
       aggregate(node)
 
   # Intended to be called before any nodes are imported.
   def query_known_dirty(self, aggregate):
     query = """
-      select type, stamp, dirty, generated, path, folder, data, id
+      select type, stamp, dirty, path, folder, data, id
       from nodes
       where dirty = 1
       and type != 'mkd'
     """
     for row in self.cn.execute(query):
-      id = row[7]
+      id = row[6]
       node = self.import_node(id, row)
       aggregate(node)
 
@@ -457,19 +533,19 @@ class Database(object):
   # be called after query_dirty, and returns a mutually exclusive list.
   def query_maybe_dirty(self, aggregate):
     query = """
-      select type, stamp, dirty, generated, path, folder, data, id
+      select type, stamp, dirty, path, folder, data, id
       from nodes
       where dirty = 0
       and (type == 'src' or type == 'out' or type == 'cpa')
     """
     for row in self.cn.execute(query):
-      id = row[7]
+      id = row[6]
       node = self.import_node(id, row)
       aggregate(node)
 
   def query_commands(self, aggregate):
     query = """
-      select type, stamp, dirty, generated, path, folder, data, id
+      select type, stamp, dirty, path, folder, data, id
       from nodes
       where (type != 'src' and
              type != 'out' and
@@ -477,7 +553,7 @@ class Database(object):
              type != 'mkd')
     """
     for row in self.cn.execute(query):
-      id = row[7]
+      id = row[6]
       node = self.import_node(id, row)
       aggregate(node)
 
@@ -559,12 +635,12 @@ class Database(object):
 
   def query_groups(self, aggregate):
     query = """
-      select type, stamp, dirty, generated, path, folder, data, id
+      select type, stamp, dirty, path, folder, data, id
       from nodes
       where type == 'grp'
     """
     for row in self.cn.execute(query):
-      id = row[7]
+      id = row[6]
       entry = self.import_node(id, row)
       aggregate(entry)
 

@@ -44,9 +44,8 @@ class Generator(base_gen.Generator):
     if not os.path.isdir(self.cacheFolder):
       os.mkdir(self.cacheFolder)
     if not self.db:
-      self.db = database.Database(os.path.join(self.cacheFolder, 'graph'))
-      self.db.connect()
-    self.db.create_tables()
+      db_path = os.path.join(self.cacheFolder, 'graph')
+      self.db = database.CreateDatabase(db_path)
 
     self.db.query_scripts(lambda id,path,stamp: self.old_scripts_.add(path))
     self.db.query_mkdir(lambda entry: self.old_folders_.add(entry))
