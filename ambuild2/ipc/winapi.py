@@ -254,6 +254,11 @@ fnFormatMessage.argtypes = [
 ]
 fnFormatMessage.restype = ctypes.c_int
 
+fnSetConsoleTextAttribute = WINDLL.kernel32.SetConsoleTextAttribute
+fnSetConsoleTextAttribute.argtypes = [ handle_t, ctypes.c_short ]
+fnSetConsoleTextAttribute.restype = ctypes.c_int
+
+
 PIPE_ACCESS_DUPLEX =              0x00000003
 PIPE_TYPE_BYTE =                  0x00000000
 PIPE_TYPE_READMODE_BYTE =         0x00000000
@@ -450,6 +455,11 @@ def GetStdHandle(n):
   if rval == INVALID_HANDLE_VALUE:
     raise WinError()
   return handle_t(rval)
+
+def SetConsoleTextAttribute(handle, color):
+  rval = fnSetConsoleTextAttribute(handle, color)
+  if not rval:
+    raise WinError()
 
 def GetLastError():
   return fnGetLastError()

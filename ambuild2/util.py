@@ -263,11 +263,31 @@ elif IsWindows():
     return p.returncode, out, err
 
 if IsUnixy():
-  ConsoleGreen = '\033[92m'
-  ConsoleRed = '\033[91m'
-  ConsoleNormal = '\033[0m'
-  ConsoleBlue = '\033[94m'
-  ConsoleHeader = '\033[95m'
+  ConsoleGreen = lambda fp: fp.write('\033[92m')
+  ConsoleRed = lambda fp: fp.write('\033[91m')
+  ConsoleNormal = lambda fp: fp.write('\033[0m')
+  ConsoleBlue = lambda fp: fp.write('\033[94m')
+  ConsoleHeader = lambda fp: fp.write('\033[95m')
+elif IsWindows():
+  def SwitchColor(fp, color):
+    from ambuild2.ipc import winapi
+
+    std = None
+    if fp == sys.stdout:
+      std = winapi.STD_OUTPUT_HANDLE
+    elif fp == sys.stdin:
+      std = winapi.STD_ERROR_HANDLE
+    if std is None:
+      return
+
+    handle = winapi.GetStdHandle(std)
+    winapi.SetConsoleTextAttribute(handle, color)
+
+  ConsoleGreen = lambda fp: SwitchColor(fp, 0xA)
+  ConsoleRed = lambda fp: SwitchColor(fp, 0xC)
+  ConsoleNormal = lambda fp: SwitchColor(fp, 0x7)
+  ConsoleBlue = lambda fp: SwitchColor(fp, 0x9)
+  ConsoleHeader = lambda fp: SwitchColor(fp, 0xD)
 else:
   ConsoleGreen = ''
   ConsoleRed = ''
@@ -276,7 +296,7 @@ else:
   ConsoleHeader = ''
 
 def IsColor(text):
-  return text.startswith('\033[')
+  return IsLambda(text)
 
 sConsoleColorsEnabled = True
 def DisableConsoleColors():
@@ -285,9 +305,12 @@ def DisableConsoleColors():
 
 def con_print(fp, args):
   for arg in args:
-    if not sConsoleColorsEnabled and IsColor(arg):
-      continue
-    fp.write(arg)
+    if IsColor(arg):
+      if not sConsoleColorsEnabled:
+        continue
+      arg(fp)
+    else:
+      fp.write(arg)
   fp.write('\n')
 
 def con_out(*args):
