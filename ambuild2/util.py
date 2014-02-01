@@ -1,7 +1,7 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et: 
 import errno
 import subprocess
-import re, os, sys
+import re, os, sys, locale
 import multiprocessing
 try:
   import __builtin__ as builtins
@@ -353,3 +353,7 @@ def rm_path(path):
               ConsoleNormal)
       raise
 
+def WriteEncodedText(fd, text):
+  if not hasattr(fd, 'encoding') or fd.encoding == None:
+    text = text.encode(locale.getpreferredencoding(), 'replace')
+  fd.write(text)

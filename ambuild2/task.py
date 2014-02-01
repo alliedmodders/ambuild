@@ -477,11 +477,11 @@ class TaskMasterParent(ParentProcessListener):
       util.ConsoleNormal
     )
     if len(message['stdout']):
-      sys.stdout.write(message['stdout'])
+      util.WriteEncodedText(sys.stdout, message['stdout'])
       if message['stdout'][-1] != '\n':
         sys.stdout.write('\n')
     if len(message['stderr']):
-      sys.stderr.write(message['stderr'])
+      util.WriteEncodedText(sys.stderr, message['stderr'])
       if message['stderr'][-1] != '\n':
         sys.stderr.write('\n')
 
