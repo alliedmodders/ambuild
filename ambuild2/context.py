@@ -29,6 +29,12 @@ class Context(object):
     self.args = args
     self.cacheFolder = os.path.join(buildPath, '.ambuild2')
     self.dbpath = os.path.join(self.cacheFolder, 'graph')
+
+    # This doesn't completely work yet because it's not communicated to child
+    # processes. We'll have to send a message down or up to fix this.
+    if self.options.no_color:
+      util.DisableConsoleColors()
+
     with open(os.path.join(self.cacheFolder, 'vars'), 'rb') as fp:
       try:
         self.vars = util.pickle.load(fp)
@@ -101,11 +107,6 @@ class Context(object):
     return True
 
   def Build(self):
-    # This doesn't completely work yet because it's not communicated to child
-    # processes. We'll have to send a message down or up to fix this.
-    if self.options.no_color:
-      util.DisableConsoleColors()
-
     if not self.reconfigure():
       return False
 
