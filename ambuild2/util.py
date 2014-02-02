@@ -306,18 +306,29 @@ def DisableConsoleColors():
 def con_print(fp, args):
   for arg in args:
     if IsColor(arg):
-      if not sConsoleColorsEnabled:
-        continue
       arg(fp)
     else:
       fp.write(arg)
   fp.write('\n')
 
+def con_print_simple(fp, args):
+  for arg in args:
+    if IsColor(arg):
+      continue
+    fp.write(arg)
+  fp.write('\n')
+
 def con_out(*args):
-  con_print(sys.stdout, args)
+  if sys.stdout.isatty():
+    con_print(sys.stdout, args)
+  else:
+    con_print_simple(sys.stdout, args)
 
 def con_err(*args):
-  con_print(sys.stderr, args)
+  if sys.stderr.isatty():
+    con_print(sys.stderr, args)
+  else:
+    con_print_simple(sys.stderr, args)
 
 LambdaType = type(lambda: None)
 
