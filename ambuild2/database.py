@@ -289,7 +289,7 @@ class Database(object):
                    util.ConsoleNormal)
       entry.type = type
       entry.folder = folder
-      entry.blob = blob
+      entry.blob = data
       util.con_err(util.ConsoleRed, 'New: ',
                    util.ConsoleBlue, entry.format(),
                    util.ConsoleNormal)
