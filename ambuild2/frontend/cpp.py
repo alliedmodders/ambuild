@@ -459,8 +459,9 @@ class BinaryBuilder(object):
     self.linker_outputs = [self.outputFile]
     self.debug_entry = None
 
-    if self.linker_.behavior == 'msvc' and '/INCREMENTAL:NO' not in self.argv:
-      self.linker_outputs += [self.name_ + '.ilk']
+    if self.linker_.behavior == 'msvc' and not isinstance(self, StaticLibrary):
+      if '/INCREMENTAL:NO' not in self.argv:
+        self.linker_outputs += [self.name_ + '.ilk']
 
     if self.compiler.debuginfo:
       self.perform_symbol_steps(cx)
