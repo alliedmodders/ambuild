@@ -74,6 +74,7 @@ class Generator(base_gen.Generator):
     for group in self.old_groups_:
       self.db.drop_group(group)
 
+    self.db.query_dead_sources(lambda e: self.db.drop_source(e))
     self.db.query_dead_shared_outputs(lambda e: self.db.drop_output(e))
 
     class Node:
@@ -127,6 +128,7 @@ class Generator(base_gen.Generator):
   def postGenerate(self):
     self.cleanup()
     self.db.commit()
+    self.db.vacuum()
     if self.is_bootstrap:
       self.saveVars()
       self.db.close()
@@ -708,12 +710,10 @@ class Generator(base_gen.Generator):
     )
 
   def addConfigureFile(self, context, path):
-    source = self.parseInput(context, path)
-    if source.type != nodetypes.Source:
-      util.con_err(util.ConsoleRed, 'Configure file dependencies must be source paths.',
-                   util.ConsoleNormal)
-      raise Exception('Configure file dependencies must be source paths')
+    if not os.path.isabs(path):
+      path = os.path.join(context.currentSourcePath, path)
+    path = os.path.normpath(path)
 
-    self.old_scripts_.discard(source.path)
-    self.db.add_or_update_script(source.path)
+    self.old_scripts_.discard(path)
+    self.db.add_or_update_script(path)
 

@@ -674,6 +674,10 @@ class Database(object):
     if entry.type == nodetypes.Mkdir:
       self.drop_entry(entry)
 
+  def drop_source(self, output):
+    assert output.type == nodetypes.Source
+    self.drop_entry(output)
+
   def drop_output(self, output):
     assert output.type == nodetypes.Output or output.type == nodetypes.SharedOutput
     util.rm_path(output.path)
@@ -708,6 +712,19 @@ class Database(object):
       entry = self.import_node(id, row)
       aggregate(entry)
 
+  def query_dead_sources(self, aggregate):
+    query = """
+      select id from nodes
+        where type == '{0}'
+        and id not in (select incoming from edges)
+        and id not in (select incoming from dynamic_edges)
+        and id not in (select incoming from weak_edges)
+    """.format(nodetypes.Source)
+
+    for row in self.cn.execute(query):
+      entry = self.query_node(row[0])
+      aggregate(entry)
+
   def query_dead_shared_outputs(self, aggregate):
     query = """
       select id from nodes
@@ -736,6 +753,9 @@ class Database(object):
     self.drop_links(entry)
     self.cn.execute("update nodes set type = ? where id = ?", (kind, entry.id))
     entry.type = kind
+
+  def vacuum(self):
+    self.cn.execute("vacuum")
 
   def printGraph(self):
     # Find all mkdir nodes.

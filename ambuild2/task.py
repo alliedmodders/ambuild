@@ -539,7 +539,10 @@ class TaskMasterParent(ParentProcessListener):
       })
 
   def run(self):
-    self.cx.messagePump.pump()
+    try:
+      self.cx.messagePump.pump()
+    except KeyboardInterrupt:
+      self.terminateBuild()
     for message in self.errors_:
       self.spewResult(message)
     return not self.build_failed
