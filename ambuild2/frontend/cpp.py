@@ -396,7 +396,7 @@ class BinaryBuilder(object):
     self.default_cxx_env = CCommandEnv(self.outputPath, self.compiler, self.compiler.cxx)
 
     shared_cc_outputs = []
-    if self.compiler.debuginfo:
+    if self.compiler.debuginfo and self.compiler.cc.behavior == 'msvc':
       cl_version = int(self.compiler.cc.version) - 600
       shared_pdb = 'vc{0}.pdb'.format(int(cl_version / 10))
       shared_cc_outputs += [shared_pdb]
