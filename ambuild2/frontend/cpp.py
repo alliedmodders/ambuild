@@ -459,9 +459,12 @@ class BinaryBuilder(object):
     self.linker_outputs = [self.outputFile]
     self.debug_entry = None
 
-    if self.linker_.behavior == 'msvc' and not isinstance(self, StaticLibrary):
-      if '/INCREMENTAL:NO' not in self.argv:
-        self.linker_outputs += [self.name_ + '.ilk']
+    if self.linker_.behavior == 'msvc':
+      if isinstance(self, Library):
+        # In theory, .dlls should have exports, so MSVC will generate these
+        # files. If this turns out not to be true, we may have to get fancier.
+        self.linker_outputs += [self.name_ + '.lib']
+        self.linker_outputs += [self.name_ + '.exp']
 
     if self.compiler.debuginfo:
       self.perform_symbol_steps(cx)
@@ -493,11 +496,19 @@ class BinaryBuilder(object):
       self.argv = ['ambuild_objcopy_wrapper.sh', self.outputFile] + self.argv
 
   def link(self, context, folder, inputs):
+    # The existence of .ilk files on Windows does not seem reliable, so we
+    # treat it as "shared" which does not participate in the DAG (yet).
+    shared_outputs = []
+    if self.linker_.behavior == 'msvc':
+      if not isinstance(self, StaticLibrary) and '/INCREMENTAL:NO' not in self.argv:
+        shared_outputs += [self.name_ + '.ilk']
+
     ignore, outputs = context.AddCommand(
       inputs = inputs,
       argv = self.argv,
       outputs = self.linker_outputs,
-      folder = folder
+      folder = folder,
+      shared_outputs = shared_outputs
     )
     if not self.debug_entry and self.compiler.debuginfo:
       self.debug_entry = outputs[-1]
