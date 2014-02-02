@@ -1,0 +1,12 @@
+# vim: set ts=8 sts=2 tw=99 et ft=python: 
+import os, sys
+
+builder.DetectCompilers()
+
+program = builder.compiler.Library("hello")
+program.sources = [
+  'main.cpp'
+]
+
+# Comment below to test successful folder removal.
+builder.Add(program)

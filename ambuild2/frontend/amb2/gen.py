@@ -571,7 +571,8 @@ class Generator(base_gen.Generator):
         outputs = [objfile.outputFile],
         node_type = nodetypes.Cxx,
         folder = folder_node,
-        data = cxxData
+        data = cxxData,
+        shared_outputs = objfile.sharedOutputs
       )
       inputs.append(cxxNode)
     for rcfile in binary.resources:

@@ -324,10 +324,11 @@ def NameForObjectFile(file):
   return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0]);
 
 class ObjectFile(object):
-  def __init__(self, sourceFile, outputFile, argv):
+  def __init__(self, sourceFile, outputFile, argv, sharedOutputs):
     self.sourceFile = sourceFile
     self.outputFile = outputFile
     self.argv = argv
+    self.sharedOutputs = sharedOutputs
 
 class RCFile(object):
   def __init__(self, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
@@ -394,6 +395,12 @@ class BinaryBuilder(object):
     self.default_c_env = CCommandEnv(self.outputPath, self.compiler, self.compiler.cc)
     self.default_cxx_env = CCommandEnv(self.outputPath, self.compiler, self.compiler.cxx)
 
+    shared_cc_outputs = []
+    if self.compiler.debuginfo:
+      cl_version = int(self.compiler.cc.version) - 600
+      shared_pdb = 'vc{0}.pdb'.format(int(cl_version / 10))
+      shared_cc_outputs += [shared_pdb]
+
     self.objects = []
     self.resources = []
     for item in self.sources:
@@ -438,7 +445,8 @@ class BinaryBuilder(object):
         self.resources.append(RCFile(sourceFile, encname + '.i', objectFile, cl_argv, rc_argv))
       else:
         argv = cenv.argv + cenv.compiler.objectArgs(sourceFile, objectFile)
-        self.objects.append(ObjectFile(sourceFile, objectFile, argv))
+        obj = ObjectFile(sourceFile, objectFile, argv, shared_cc_outputs)
+        self.objects.append(obj)
 
     if not self.linker_:
       if self.used_cxx_:
@@ -451,11 +459,15 @@ class BinaryBuilder(object):
     self.linker_outputs = [self.outputFile]
     self.debug_entry = None
 
+    if self.linker_.behavior == 'msvc' and '/INCREMENTAL:NO' not in self.argv:
+      self.linker_outputs += [self.name_ + '.ilk']
+
     if self.compiler.debuginfo:
       self.perform_symbol_steps(cx)
 
   def perform_symbol_steps(self, cx):
     if isinstance(self.linker_, MSVC):
+      # Note, pdb is last since we read the pdb as outputs[-1].
       self.linker_outputs += [self.name_ + '.pdb']
     elif cx.target_platform is 'mac':
       bundle_folder = os.path.join(self.localFolder, self.outputFile + '.dSYM')
