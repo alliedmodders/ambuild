@@ -34,6 +34,8 @@ class Preparer(object):
                             help="List available build system generators, then exit.")
     self.options.add_option("--make-scripts", action="store_true", dest="make_scripts", default=False,
                             help="Generate extra command-line files for building (build.py, Makefile).")
+    self.options.add_option("--no-color", action="store_true", dest="no_color", default=False,
+                            help="Disable color output in the terminal.")
 
   @staticmethod
   def default_build_folder(prep):
@@ -54,8 +56,10 @@ class Preparer(object):
     if options.list_gen:
       print('Available build system generators:')
       print('  {0:24} - AMBuild 2 (default)'.format('ambuild2'))
-      #print('  {0:24} - Visual Studio project files'.format('vcxproj'))
       sys.exit(0)
+
+    if options.no_color:
+      util.DisableConsoleColors()
 
     source_abspath = os.path.normpath(os.path.abspath(self.sourcePath))
     build_abspath = os.path.normpath(os.path.abspath(self.buildPath))
