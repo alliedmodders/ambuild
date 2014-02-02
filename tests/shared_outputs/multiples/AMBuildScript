@@ -1,0 +1,34 @@
+# vim: set ts=8 sts=2 tw=99 et ft=python: 
+import os, sys
+
+argv = [
+  sys.executable,
+  os.path.join(builder.sourcePath, 'generate_header.py'),
+  'output.h'
+]
+
+shared_outputs = [
+  os.path.join(builder.buildFolder, 'output.h')
+]
+
+# Comment anything below to test reconfiguring.
+builder.AddCommand(
+  inputs = [],
+  argv = argv,
+  outputs = [],
+  shared_outputs = shared_outputs
+)
+
+builder.AddCommand(
+  inputs = [],
+  argv = argv,
+  outputs = [],
+  shared_outputs = shared_outputs
+)
+
+builder.AddCommand(
+  inputs = [],
+  argv = argv,
+  outputs = [],
+  shared_outputs = shared_outputs
+)

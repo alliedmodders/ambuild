@@ -1,0 +1,70 @@
+# vim: set ts=8 sts=2 tw=99 et ft=python: 
+import os, sys
+
+argv = [
+  sys.executable,
+  os.path.join(builder.sourcePath, 'generate_header.py'),
+  'output.h'
+]
+
+shared_outputs = [
+  os.path.join(builder.buildFolder, 'output.h')
+]
+
+def Test1():
+  builder.AddCommand(
+    inputs = [],
+    argv = argv,
+    outputs = [],
+    shared_outputs = shared_outputs
+  )
+
+def Test2():
+  # Change the output to a normal output.
+  builder.AddCommand(
+    inputs = [],
+    argv = argv,
+    outputs = shared_outputs
+  )
+
+def Test3():
+  # Change back to a shared output.
+  Test1()
+
+def Test4():
+  # Change to a folder.
+  builder.AddFolder('output.h')
+
+def Test5():
+  # Change back to a shared output.
+  Test1()
+
+def TestFail1():
+  Test2()
+  Test1()
+
+def TestFail2():
+  Test1()
+  Test2()
+
+def TestFail3():
+  Test1()
+  Test4()
+
+def TestFail4():
+  Test4()
+  Test1()
+
+# Uncomment 1, run, recomment, uncomment 2 to test. Repeat. Each time using
+# refactoring mode should fail.
+Test1()
+#Test2()
+#Test3()
+#Test4()
+#Test5()
+
+# These tests should all fail.
+#TestFail1()
+#TestFail2()
+#TestFail3()
+#TestFail4()

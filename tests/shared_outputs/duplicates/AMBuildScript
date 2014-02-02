@@ -1,0 +1,40 @@
+# vim: set ts=8 sts=2 tw=99 et ft=python: 
+import os, sys
+
+argv = [
+  sys.executable,
+  os.path.join(builder.sourcePath, 'generate_header.py'),
+  'output.h'
+]
+
+shared_outputs = [
+  os.path.join(builder.buildFolder, 'output.h')
+]
+
+def FailTest1():
+  builder.AddCommand(
+    inputs = [],
+    argv = argv,
+    outputs = [],
+    shared_outputs = shared_outputs + shared_outputs
+  )
+
+def FailTest2():
+  builder.AddCommand(
+    inputs = [],
+    argv = argv,
+    outputs = shared_outputs + shared_outputs
+  )
+
+def FailTest3():
+  builder.AddCommand(
+    inputs = [],
+    argv = argv,
+    outputs = shared_outputs,
+    shared_outputs = shared_outputs
+  )
+
+# All of these should fail.
+FailTest1()
+#FailTest2()
+#FailTest3()

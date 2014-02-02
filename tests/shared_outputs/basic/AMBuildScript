@@ -1,0 +1,25 @@
+# vim: set ts=8 sts=2 tw=99 et ft=python: 
+import os, sys
+
+argv = [
+  sys.executable,
+  os.path.join(builder.sourcePath, 'generate_header.py'),
+  'output.h'
+]
+
+shared_outputs = [
+# Comment for reconfigure test #1.
+  os.path.join(builder.buildFolder, 'output.h')
+]
+
+# Comment all below for reconfigure test #2.
+work_folder = builder.AddFolder('work')
+
+builder.AddCommand(
+  inputs = [],
+  argv = argv,
+  outputs = [],
+  folder = work_folder,
+  shared_outputs = shared_outputs
+)
+

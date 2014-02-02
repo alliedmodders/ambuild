@@ -29,6 +29,11 @@ Command = 'cmd'
 # but they have special handling within AMBuild.
 Output = 'out'
 
+# An output node that is modified or created by multiple commands. It cannot
+# be used as an input. Shared outputs are linked separately from normal
+# outputs.
+SharedOutput = 'sho'
+
 # An aggregate node that reduces incoming edges to other nodes.
 Group = 'grp'
 
@@ -66,6 +71,7 @@ NodeNames = {
   Source: 'source',
   Command: 'command',
   Output: 'output',
+  SharedOutput: 'output',
   Group: 'group',
   Mkdir: 'mkdir',
   Copy: 'copy',
@@ -147,7 +153,7 @@ class Entry(object):
     return self.folder.path
 
   def format(self):
-    if self.type == Source or self.type == Output:
+    if self.type == Source or self.type == Output or self.type == SharedOutput:
       return self.path
     text = ''
     if self.type == Mkdir:

@@ -73,12 +73,23 @@ def CreateDatabase(path):
       val varchar(255)                          \
     )",
 
+    "insert into vars (key, val) values ('db_version', '3')",
+
     "create index if not exists outgoing_edge on edges(outgoing)",
     "create index if not exists incoming_edge on edges(incoming)",
     "create index if not exists weak_outgoing_edge on weak_edges(outgoing)",
     "create index if not exists weak_incoming_edge on weak_edges(incoming)",
     "create index if not exists dyn_outgoing_edge on dynamic_edges(outgoing)",
     "create index if not exists dyn_incoming_edge on dynamic_edges(incoming)",
+
+    # The shared output table.
+    "create table if not exists shared_outputs( \
+      outgoing int not null,                    \
+      incoming int not null,                    \
+      unique (outgoing, incoming)               \
+    )",
+    "create index if not exists sho_outgoing_edge on shared_outputs(outgoing)",
+    "create index if not exists sho_incoming_edge on shared_outputs(incoming)",
   ]
   for query in queries:
     cn.execute(query)
@@ -131,7 +142,7 @@ class Database(object):
     except:
       version = 1
 
-    latest_version = 2
+    latest_version = 3
     if version == latest_version:
       return
     if version > latest_version:
@@ -144,49 +155,71 @@ class Database(object):
     )
 
     if version == 1:
-      queries = [
-        "create table if not exists vars(           \
-          key varchar(255) primary key not null,    \
-          val varchar(255)                          \
-        )",
+      version = self.upgrade_to_v2()
 
-        "drop table if exists nodestmp",
-        "drop table if exists nodesold",
+    if version == 2:
+      version = self.upgrade_to_v3()
 
-        "create table nodestmp(                       \
-          id integer primary key autoincrement,       \
-          type varchar(4) not null,                   \
-          stamp real not null default 0.0,            \
-          dirty int not null default 0,               \
-          path text,                                  \
-          folder int,                                 \
-          data blob                                   \
-        )",
-      ]
-      for query in queries:
-        self.cn.execute(query)
+  def upgrade_to_v2(self):
+    queries = [
+      "create table if not exists vars(           \
+        key varchar(255) primary key not null,    \
+        val varchar(255)                          \
+      )",
 
-      # Migrate all rows in nodes to nodestmp.
-      query = """
-        select id, type, stamp, dirty, path, folder, data
-          from nodes
-          order by id asc
-      """
-      ins_query = """
-        insert into nodestmp
-          (id, type, stamp, dirty, path, folder, data)
-          values
-          (?,  ?,    ?,     ?,     ?,    ?,      ?)
-      """
-      for row in self.cn.execute(query):
-        self.cn.execute(ins_query, row)
+      "drop table if exists nodestmp",
+      "drop table if exists nodesold",
 
-      self.cn.execute("alter table nodes rename to nodesold")
-      self.cn.execute("alter table nodestmp rename to nodes")
-      self.cn.execute("drop table nodesold")
+      "create table nodestmp(                       \
+        id integer primary key autoincrement,       \
+        type varchar(4) not null,                   \
+        stamp real not null default 0.0,            \
+        dirty int not null default 0,               \
+        path text,                                  \
+        folder int,                                 \
+        data blob                                   \
+      )",
+    ]
+    for query in queries:
+      self.cn.execute(query)
 
-    self.cn.execute("insert or replace into vars (key, val) values ('db_version', ?)", (latest_version,))
+    # Migrate all rows in nodes to nodestmp.
+    query = """
+      select id, type, stamp, dirty, path, folder, data
+        from nodes
+        order by id asc
+    """
+    ins_query = """
+      insert into nodestmp
+        (id, type, stamp, dirty, path, folder, data)
+        values
+        (?,  ?,    ?,     ?,     ?,    ?,      ?)
+    """
+    for row in self.cn.execute(query):
+      self.cn.execute(ins_query, row)
+
+    self.cn.execute("alter table nodes rename to nodesold")
+    self.cn.execute("alter table nodestmp rename to nodes")
+    self.cn.execute("drop table nodesold")
+    self.cn.execute("insert or replace into vars (key, val) values ('db_version', ?)", (2,))
     self.cn.commit()
+    return 2
+
+  def upgrade_to_v3(self):
+    queries = [
+      "create table if not exists shared_outputs( \
+        outgoing int not null,                    \
+        incoming int not null,                    \
+        unique (outgoing, incoming)               \
+      )",
+      "create index if not exists sho_outgoing_edge on shared_outputs(outgoing)",
+      "create index if not exists sho_incoming_edge on shared_outputs(incoming)",
+    ]
+    for query in queries:
+      self.cn.execute(query)
+    self.cn.execute("insert or replace into vars (key, val) values ('db_version', ?)", (3,))
+    self.cn.commit()
+    return 3
 
   def add_folder(self, parent, path):
     assert path not in self.path_cache_
@@ -195,12 +228,13 @@ class Database(object):
 
     return self.add_file(nodetypes.Mkdir, path, parent)
 
-  def add_output(self, folder_entry, path):
+  def add_output(self, folder_entry, path, kind = nodetypes.Output):
     assert path not in self.path_cache_
     assert not os.path.isabs(path)
     assert not folder_entry or os.path.split(path)[0] == folder_entry.path
+    assert kind == nodetypes.Output or kind == nodetypes.SharedOutput
 
-    return self.add_file(nodetypes.Output, path, folder_entry)
+    return self.add_file(kind, path, folder_entry)
 
   def find_or_add_source(self, path):
     node = self.query_path(path)
@@ -310,46 +344,56 @@ class Database(object):
   def add_weak_edge(self, from_entry, to_entry):
     query = "insert into weak_edges (outgoing, incoming) values (?, ?)"
     self.cn.execute(query, (to_entry.id, from_entry.id))
-    if to_entry.weak_inputs:
+    if to_entry.weak_inputs is not None:
       to_entry.weak_inputs.add(from_entry)
 
   def add_strong_edge(self, from_entry, to_entry):
     query = "insert into edges (outgoing, incoming) values (?, ?)"
     self.cn.execute(query, (to_entry.id, from_entry.id))
-    if to_entry.strong_inputs:
+    if to_entry.strong_inputs is not None:
       to_entry.strong_inputs.add(from_entry)
-    if from_entry.outgoing:
+    if from_entry.outgoing is not None:
       from_entry.outgoing.add(to_entry)
 
   def add_dynamic_edge(self, from_entry, to_entry):
     query = "insert into dynamic_edges (outgoing, incoming) values (?, ?)"
     self.cn.execute(query, (to_entry.id, from_entry.id))
-    if to_entry.dynamic_inputs:
+    if to_entry.dynamic_inputs is not None:
       to_entry.dynamic_inputs.add(from_entry)
-    if from_entry.outgoing:
+    if from_entry.outgoing is not None:
       from_entry.outgoing.add(to_entry)
+
+  def add_shared_output_edge(self, from_entry, to_entry):
+    # These don't factor into the DAG in any meaningful way, so we don't
+    # cache the results or put them into edge lists.
+    query = "insert into shared_outputs (outgoing, incoming) values (?, ?)"
+    self.cn.execute(query, (to_entry.id, from_entry.id))
 
   def drop_dynamic_edge(self, from_entry, to_entry):
     query = "delete from dynamic_edges where outgoing = ? and incoming = ?"
     self.cn.execute(query, (to_entry.id, from_entry.id))
-    if to_entry.dynamic_inputs:
+    if to_entry.dynamic_inputs is not None:
       to_entry.dynamic_inputs.remove(from_entry)
-    if from_entry.outgoing:
+    if from_entry.outgoing is not None:
       from_entry.outgoing.remove(to_entry)
 
   def drop_weak_edge(self, from_entry, to_entry):
     query = "delete from weak_edges where outgoing = ? and incoming = ?"
     self.cn.execute(query, (to_entry.id, from_entry.id))
-    if to_entry.weak_inputs:
+    if to_entry.weak_inputs is not None:
       to_entry.weak_inputs.remove(from_entry)
 
   def drop_strong_edge(self, from_entry, to_entry):
     query = "delete from edges where outgoing = ? and incoming = ?"
     self.cn.execute(query, (to_entry.id, from_entry.id))
-    if to_entry.strong_inputs:
+    if to_entry.strong_inputs is not None:
       to_entry.strong_inputs.remove(from_entry)
-    if from_entry.outgoing:
+    if from_entry.outgoing is not None:
       from_entry.outgoing.remove(to_entry)
+
+  def drop_shared_output_edge(self, from_entry, to_entry):
+    query = "delete from shared_outputs where outgoing = ? and incoming = ?"
+    self.cn.execute(query, (to_entry.id, from_entry.id))
 
   def query_node(self, id):
     if id in self.node_cache_:
@@ -411,6 +455,16 @@ class Database(object):
       outgoing.add(entry)
     return outgoing
 
+  # Find the list of shared outputs this command generates.
+  def query_shared_outputs(self, node):
+    # Not cached.
+    outgoing = set()
+    query = "select outgoing from shared_outputs where incoming = ?"
+    for outgoing_id, in self.cn.execute(query, (node.id,)):
+      entry = self.query_node(outgoing_id)
+      outgoing.add(entry)
+    return outgoing
+
   def query_outgoing(self, node):
     if node.outgoing is not None:
       return node.outgoing
@@ -465,6 +519,13 @@ class Database(object):
     assert cmd_entry.isCommand()
 
     return cmd_entry
+
+  def query_shared_commands_of(self, node):
+    query = "select incoming from shared_outputs where outgoing = ?"
+    commands = []
+    for row in self.cn.execute(query, (node.id,)):
+      commands.append(self.query_node(row[0]))
+    return commands
 
   def query_dynamic_inputs(self, node):
     if node.dynamic_inputs is not None:
@@ -543,12 +604,14 @@ class Database(object):
       node = self.import_node(id, row)
       aggregate(node)
 
+  # Find the list of commands that generate this shared output.
   def query_commands(self, aggregate):
     query = """
       select type, stamp, dirty, path, folder, data, id
       from nodes
       where (type != 'src' and
              type != 'out' and
+             type != 'sho' and
              type != 'grp' and
              type != 'mkd')
     """
@@ -578,7 +641,7 @@ class Database(object):
     del self.node_cache_[entry.id]
 
   def drop_folder(self, entry):
-    assert entry.type == nodetypes.Mkdir or entry.type == nodetypes.Output
+    assert entry.type in [nodetypes.Mkdir, nodetypes.Output, nodetypes.SharedOutput]
     assert not os.path.isabs(entry.path)
 
     if os.path.exists(entry.path):
@@ -612,7 +675,7 @@ class Database(object):
       self.drop_entry(entry)
 
   def drop_output(self, output):
-    assert output.type == nodetypes.Output
+    assert output.type == nodetypes.Output or output.type == nodetypes.SharedOutput
     util.rm_path(output.path)
     self.drop_entry(output)
 
@@ -621,6 +684,7 @@ class Database(object):
       # Commands should never have dynamic outgoing edges, FWIW.
       assert output.type == nodetypes.Output
       self.drop_output(output)
+    self.cn.execute("delete from shared_outputs where incoming = ?", (cmd_entry.id,))
     self.drop_entry(cmd_entry)
 
   def add_or_update_script(self, path):
@@ -644,23 +708,34 @@ class Database(object):
       entry = self.import_node(id, row)
       aggregate(entry)
 
+  def query_dead_shared_outputs(self, aggregate):
+    query = """
+      select id from nodes
+        where type == '{0}'
+        and id not in (select outgoing from shared_outputs)
+    """.format(nodetypes.SharedOutput)
+
+    for row in self.cn.execute(query):
+      entry = self.query_node(row[0])
+      aggregate(entry)
+
   def drop_script(self, path):
     self.cn.execute("delete from reconfigure where path = ?", (path,))
 
   def drop_group(self, group):
     self.drop_entry(group)
 
-  def change_output_to_folder(self, entry):
-    assert entry.type == nodetypes.Output
+  def change_to_folder(self, entry):
+    assert entry.type == nodetypes.Output or entry.type == nodetypes.SharedOutput
     self.drop_links(entry)
     self.cn.execute("update nodes set type = 'mkd' where id = ?", (entry.id,))
     entry.type = nodetypes.Mkdir
 
-  def change_folder_to_output(self, entry):
-    assert entry.type == nodetypes.Mkdir
+  def change_to_output(self, entry, kind):
+    assert entry.type in [nodetypes.Mkdir, nodetypes.Output, nodetypes.SharedOutput]
     self.drop_links(entry)
-    self.cn.execute("update nodes set type = 'out' where id = ?", (entry.id,))
-    entry.type = nodetypes.Output
+    self.cn.execute("update nodes set type = ? where id = ?", (kind, entry.id))
+    entry.type = kind
 
   def printGraph(self):
     # Find all mkdir nodes.
