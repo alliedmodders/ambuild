@@ -1,0 +1,6 @@
+# vim: set ts=8 sts=2 tw=99 et ft=python: 
+import os, sys
+
+# This should print the same thing as when configure.py'd, no matter where
+# we build from, when AMBuildScript changes.
+print(builder.originalCwd)

@@ -84,6 +84,10 @@ class Context(object):
   def host_platform(self):
     return self.generator.host_platform
 
+  @property
+  def originalCwd(self):
+    return self.generator.originalCwd
+
   def SetBuildFolder(self, folder):
     if folder == '/' or folder == '.' or folder == './':
       self.buildFolder = ''
@@ -139,9 +143,10 @@ class Context(object):
     return self.generator.addConfigureFile(self, path)
 
 class Generator(object):
-  def __init__(self, sourcePath, buildPath, options, args):
+  def __init__(self, sourcePath, buildPath, originalCwd, options, args):
     self.sourcePath = sourcePath
     self.buildPath = os.path.normpath(buildPath)
+    self.originalCwd = originalCwd
     self.options = options
     self.args = args
     self.compiler = None

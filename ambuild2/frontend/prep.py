@@ -97,10 +97,7 @@ class Preparer(object):
 
     if options.generator == 'ambuild2':
       from ambuild2.frontend.amb2 import gen
-      builder = gen.Generator(self.sourcePath, self.buildPath, options, args)
-    elif options.generator == 'vcxproj':
-      from ambuild2.frontend import vcxproj_gen
-      builder = vcxproj_gen.Generator(self.sourcePath, self.buildPath, options, args)
+      builder = gen.Generator(self.sourcePath, self.buildPath, os.getcwd(), options, args)
     else:
       sys.stderr.write('Unrecognized build generator: ' + options.generator + '\n')
       sys.exit(1)

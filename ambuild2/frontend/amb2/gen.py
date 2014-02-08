@@ -27,8 +27,8 @@ class CppNodes(object):
     self.debug = debug_outputs
 
 class Generator(base_gen.Generator):
-  def __init__(self, sourcePath, buildPath, options, args, db=None, refactoring=False):
-    super(Generator, self).__init__(sourcePath, buildPath, options, args)
+  def __init__(self, sourcePath, buildPath, originalCwd, options, args, db=None, refactoring=False):
+    super(Generator, self).__init__(sourcePath, buildPath, originalCwd, options, args)
     self.cacheFolder = os.path.join(self.buildPath, '.ambuild2')
     self.old_scripts_ = set()
     self.old_folders_ = set()
@@ -39,6 +39,28 @@ class Generator(base_gen.Generator):
     self.db = db
     self.is_bootstrap = not self.db
     self.refactoring = refactoring
+
+  @classmethod
+  def FromVars(cls, vars, db, refactoring):
+    # Backwards compatibility: for an automatic reconfigure on an older build,
+    # just assume the source path is the cwd. If the AMBuildScript suddenly
+    # has decided to depend on originalCwd, then the user may have to manually
+    # run configure.py again, until we remove configure.py entirely.
+    if 'originalCwd' in vars:
+      originalCwd = vars['originalCwd']
+    else:
+      originalCwd = vars['sourcePath']
+
+    gen = cls(
+      sourcePath = vars['sourcePath'],
+      buildPath = vars['buildPath'],
+      originalCwd = originalCwd,
+      options = vars['options'],
+      args = vars['args'],
+      db = db,
+      refactoring = refactoring
+    )
+    return gen
 
   def preGenerate(self):
     if not os.path.isdir(self.cacheFolder):
@@ -137,6 +159,7 @@ class Generator(base_gen.Generator):
     vars = {
       'sourcePath': self.sourcePath,
       'buildPath': self.buildPath,
+      'originalCwd': self.originalCwd,
       'options': self.options,
       'args': self.args
     }

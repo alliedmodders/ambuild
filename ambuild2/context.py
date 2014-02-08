@@ -80,14 +80,7 @@ class Context(object):
     )
 
     from ambuild2.frontend.amb2.gen import Generator
-    gen = Generator(
-      self.vars['sourcePath'],
-      self.vars['buildPath'],
-      self.vars['options'],
-      self.vars['args'],
-      self.db,
-      self.options.refactor
-    )
+    gen = Generator.FromVars(self.vars, self.db, self.options.refactor)
     try:
       gen.generate()
     except:
