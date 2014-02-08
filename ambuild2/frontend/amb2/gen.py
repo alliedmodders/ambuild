@@ -567,7 +567,7 @@ class Generator(base_gen.Generator):
       elif util.IsLambda(val.node):
         item = val.node(context, binary)
       elif val.node is None:
-        item = val.text
+        item = self.parseInput(context, val.text).path
       else:
         item = val.node
 

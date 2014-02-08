@@ -371,6 +371,10 @@ class BinaryBuilder(object):
 
   def linkFlag(self, cx, item):
     if type(item) is Dep:
+      # If the dep is a file dependency (no node attached), and has a relative
+      # path, make it absolute so the linker knows where to look.
+      if item.node is None and not os.path.isabs(item.text):
+        return os.path.join(cx.currentSourcePath, item.text)
       return item.text
 
     if hasattr(item, 'path'):
