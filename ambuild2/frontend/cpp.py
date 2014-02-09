@@ -33,6 +33,8 @@ class MSVC(Vendor):
     super(MSVC, self).__init__('msvc', version, 'msvc', command, '.obj')
     self.definePrefix = '/D'
     self.debuginfo_argv = ['/Zi']
+    if self.version >= 1800:
+      self.debuginfo_argv += ['/FS']
 
   @staticmethod
   def IncludePath(outputPath, includePath):
