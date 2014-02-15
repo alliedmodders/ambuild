@@ -88,8 +88,8 @@ def StaticLibPrefix():
 
 def WaitForProcess(process):
   out, err = process.communicate()
-  process.stdoutText = DecodeConsoleText(out)
-  process.stderrText = DecodeConsoleText(err)
+  process.stdoutText = DecodeConsoleText(sys.stdout, process.stdout, out)
+  process.stderrText = DecodeConsoleText(sys.stderr, process.stderr, err)
   return process.returncode
 
 def CreateProcess(argv, executable = None):
@@ -364,11 +364,23 @@ def rm_path(path):
               ConsoleNormal)
       raise
 
-def DecodeConsoleText(text):
+def try_decode_with_pipe(pipe, text):
   try:
-    return text.decode(locale.getpreferredencoding(), 'replace')
+    if hasattr(pipe, 'encoding') and pipe.encoding:
+      return text.decode(pipe.encoding, 'replace')
   except:
-    return text.decode('utf8')
+    return None
+
+def DecodeConsoleText(origin, pipe, text):
+  result = try_decode_with_pipe(pipe, text)
+  if result is None:
+    result = try_decode_with_pipe(origin, text)
+    if result is None:
+      try:
+        result = text.decode(locale.getpreferredencoding(), 'replace')
+      except:
+        result = text
+  return result.encode('utf8')
 
 def WriteEncodedText(fd, text):
   if not hasattr(fd, 'encoding') or fd.encoding == None:
