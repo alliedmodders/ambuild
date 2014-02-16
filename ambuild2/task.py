@@ -44,10 +44,11 @@ class Task(object):
     return (' '.join([arg for arg in self.data]))
 
 class WorkerChild(ChildProcessListener):
-  def __init__(self, pump, channel, buildPath):
+  def __init__(self, pump, channel, vars):
     super(WorkerChild, self).__init__(pump, channel)
-    self.buildPath = buildPath
+    self.buildPath = vars['buildPath']
     self.pid = os.getpid()
+    self.vars = vars
     self.messageMap = {
       'task': lambda channel, message: self.receiveTask(channel, message)
     }
@@ -200,7 +201,7 @@ class WorkerChild(ChildProcessListener):
       if cc_type == 'gcc':
         err, deps = util.ParseGCCDeps(err)
       elif cc_type == 'msvc':
-        out, deps = util.ParseMSVCDeps(out)
+        out, deps = util.ParseMSVCDeps(self.vars, out)
       elif cc_type == 'sun':
         err, deps = util.ParseSunDeps(err)
       else:
@@ -226,7 +227,7 @@ class WorkerChild(ChildProcessListener):
     with util.FolderChanger(task_folder):
       # Includes go to stderr when we preprocess to stdout.
       p, out, err = util.Execute(cl_argv)
-      out, deps = util.ParseMSVCDeps(err)
+      out, deps = util.ParseMSVCDeps(self.vars, err)
       paths = self.rewriteDeps(deps)
 
       if p.returncode == 0:
@@ -263,7 +264,7 @@ class WorkerParent(ParentProcessListener):
 
 # The TaskMasterChild is in the same process as the WorkerParent.
 class TaskMasterChild(ChildProcessListener):
-  def __init__(self, pump, channel, task_graph, buildPath, num_processes):
+  def __init__(self, pump, channel, task_graph, vars, num_processes):
     super(TaskMasterChild, self).__init__(pump, channel)
     self.task_graph = task_graph
     self.outstanding = {}
@@ -279,7 +280,7 @@ class TaskMasterChild(ChildProcessListener):
       self.procman.spawn(
         WorkerParent(self),
         WorkerChild,
-        args=(buildPath,)
+        args=(vars,)
       )
 
     self.channel.send({
@@ -456,7 +457,7 @@ class TaskMasterParent(ParentProcessListener):
     self.taskMaster = cx.procman.spawn(
       self,
       TaskMasterChild,
-      args=(task_graph, cx.buildPath, num_processes)
+      args=(task_graph, cx.vars, num_processes)
     )
 
   def receiveDone(self, message):

@@ -17,7 +17,6 @@
 import os
 from ambuild2 import util
 from ambuild2 import nodetypes
-from ambuild2.frontend.cpp import DetectCompiler
 from ambuild2.frontend import base_gen
 from ambuild2 import database
 
@@ -163,6 +162,18 @@ class Generator(base_gen.Generator):
       'options': self.options,
       'args': self.args
     }
+
+    # Save any extra compiler info that must be communicated to the backend.
+    if self.compiler is not None:
+      compilers = [
+        ('cc', self.compiler.cc),
+        ('cxx', self.compiler.cxx),
+      ]
+      for prefix, comp in compilers:
+        for prop_name in comp.extra_props:
+          key = '{0}_{1}'.format(prefix, prop_name)
+          vars[key] = comp.extra_props[prop_name]
+
     with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
       util.DiskPickle(vars, fp)
 

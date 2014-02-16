@@ -88,8 +88,8 @@ def StaticLibPrefix():
 
 def WaitForProcess(process):
   out, err = process.communicate()
-  process.stdoutText = DecodeConsoleText(sys.stdout, process.stdout, out)
-  process.stderrText = DecodeConsoleText(sys.stderr, process.stderr, err)
+  process.stdoutText = DecodeConsoleText(sys.stdout, out)
+  process.stderrText = DecodeConsoleText(sys.stderr, err)
   return process.returncode
 
 def CreateProcess(argv, executable = None):
@@ -152,8 +152,8 @@ def Execute(argv, shell=False):
       shell=shell
   )
   stdout, stderr = p.communicate()
-  out = stdout.decode('utf8')
-  err = stderr.decode('utf8')
+  out = DecodeConsoleText(sys.stdout, stdout)
+  err = DecodeConsoleText(sys.stderr, stderr)
   return p, out, err
 
 def typeof(x):
@@ -222,15 +222,22 @@ def ParseGCCDeps(text):
       new_text += line + '\n'
   return new_text, deps
 
-def ParseMSVCDeps(out):
+def ParseMSVCDeps(vars, out):
+  if 'cc_inclusion_pattern' in vars:
+    pattern = vars['cc_inclusion_pattern']
+  elif 'cxx_inclusion_pattern' in vars:
+    pattern = vars['cxx_inclusion_pattern']
+  else:
+    pattern = 'Note: including file:\s+(.+)$'
+
   deps = []
   new_text = ''
   out = out.replace('\r\n', '\n')
   out = out.replace('\r', '\n')
   for line in out.split('\n'):
-    m = re.match('Note: including file:\s+(.+)$', line)
+    m = re.search(pattern, line)
     if m != None:
-      file = m.groups()[0].strip()
+      file = m.group(1).strip()
       deps.append(file)
     else:
       new_text += line + '\n'
@@ -364,23 +371,19 @@ def rm_path(path):
               ConsoleNormal)
       raise
 
-def try_decode_with_pipe(pipe, text):
+def DecodeConsoleText(origin, text):
   try:
-    if hasattr(pipe, 'encoding') and pipe.encoding:
-      return text.decode(pipe.encoding, 'replace')
+    if origin.encoding:
+      return text.decode(origin.encoding, 'replace')
   except:
-    return None
+    pass
 
-def DecodeConsoleText(origin, pipe, text):
-  result = try_decode_with_pipe(pipe, text)
-  if result is None:
-    result = try_decode_with_pipe(origin, text)
-    if result is None:
-      try:
-        result = text.decode(locale.getpreferredencoding(), 'replace')
-      except:
-        result = text
-  return result.encode('utf8')
+  try:
+    return text.decode(locale.getpreferredencoding(), 'replace')
+  except:
+    pass
+
+  return text.decode('utf8', 'replace')
 
 def WriteEncodedText(fd, text):
   if not hasattr(fd, 'encoding') or fd.encoding == None:

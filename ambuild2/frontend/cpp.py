@@ -27,6 +27,7 @@ class Vendor(object):
     self.command = command
     self.objSuffix = objSuffix
     self.debuginfo_argv = []
+    self.extra_props = {}
 
 class MSVC(Vendor):
   def __init__(self, command, version):
@@ -115,6 +116,18 @@ CompilerSearch = {
   }
 }
 
+def DetectMicrosoftInclusionPattern(text):
+  for line in [raw.strip() for raw in text.split('\n')]:
+    m = re.match(r'(.*)\s+([A-Za-z]:\\.*stdio\.h)$', line)
+    if m is None:
+      continue
+
+    phrase = m.group(1)
+    return re.escape(phrase) + r'\s+([A-Za-z]:\\.*)$'
+
+  raise Exception('Could not find compiler inclusion pattern')
+
+
 def DetectCompiler(cx, env, var):
   if var in env:
     trys = [env[var]]
@@ -191,6 +204,12 @@ int main()
   # if vendor == 'gcc' and mode == 'CXX':
   #   args.extend(['-fno-exceptions', '-fno-rtti'])
   args.extend([filename, '-o', executable])
+
+  # For MSVC, we need to detect the inclusion pattern for foreign-language
+  # systems.
+  if vendor == 'msvc':
+    args += ['-nologo', '-showIncludes']
+
   util.con_out(
     util.ConsoleHeader,
     'Checking {0} compiler (vendor test {1})... '.format(mode, vendor),
@@ -205,6 +224,10 @@ int main()
   if util.WaitForProcess(p) != 0:
     print('failed with return code {0}'.format(p.returncode))
     return False
+
+  inclusion_pattern = None
+  if vendor == 'msvc':
+    inclusion_pattern = DetectMicrosoftInclusionPattern(p.stdoutText)
 
   exe = util.MakePath('.', executable)
   p = util.CreateProcess([executable], executable = exe)
@@ -234,6 +257,9 @@ int main()
   else:
     print('Unknown vendor {0}'.format(vendor))
     return False
+
+  if inclusion_pattern is not None:
+    v.extra_props['inclusion_pattern'] = inclusion_pattern
 
   util.con_out(
     util.ConsoleHeader,
