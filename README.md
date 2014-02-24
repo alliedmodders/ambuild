@@ -1,14 +1,14 @@
-AMBuild is a lightweight build system designed for performance and accuracy. There are two versions provided - the original version, released in 2009, and AMBuild 2, a modernized rewrite released in 2013. Both are geared at C/C++ projects which require programmatic flexibility in their builds, and precise control over C/C++ compiler flags.
-
-For more information, see: https://wiki.alliedmods.net/AMBuild
+AMBuild is a lightweight build system designed for performance and accuracy. It is geared toward C/C++ projects which require programmatic flexibility in their builds and precise control over C/C++ compiler flags.
 
 AMBuild requires Python 2.6 or higher, or Python 3.1 or higher.
 
+For more information, see: https://wiki.alliedmods.net/AMBuild
+
 # AMBuild 2
 
-AMBuild 2 is a highly efficient build system designed to replace "Alpha"-generation build systems[1], such as SCons or Make. It is not a replacement for IDE project files, nor is it a front-end tool for generating other build system files, such as CMake. AMBuild is designed with three features in mind:
+AMBuild 2 is a highly efficient build system designed to replace "Alpha"-generation tools[1], such as SCons or Make. It is not a replacement for IDE project files, nor is it a front-end tool for generating other build system files, such as CMake. AMBuild is designed with three features in mind:
 
-* Accuracy. AMBuild guarantees that you never need to clean a build. Incremental builds should never fail or produce unexpected results.
+* Accuracy. AMBuild guarantees that you never need to "clean" a build. Incremental builds should always produce the same exact result as a clean build; anything less is asking for trouble, and rebuilds are a waste of developer time.
 * Speed. Many build systems need to traverse the entire dependency graph. AMBuild only needs to find which files have changed. In addition, AMBuild will parallelize any independent tasks.
 * Programmability. Build scripts are written in Python, affording a great deal of flexibility for describing the build process.
 
