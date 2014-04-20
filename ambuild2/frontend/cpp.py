@@ -18,7 +18,7 @@ from __future__ import print_function
 import subprocess
 import re, os, copy
 from ambuild2 import util
-from version import Version
+from ambuild2.frontend.version import Version
 
 EnvVars = ['CFLAGS', 'CXXFLAGS', 'CC', 'CXX']
 
