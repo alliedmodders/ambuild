@@ -6,7 +6,7 @@ For more information, see: https://wiki.alliedmods.net/AMBuild
 
 # AMBuild 2
 
-AMBuild 2 is a highly efficient build system designed to replace "Alpha"-generation tools[1], such as SCons or Make. It is not a replacement for IDE project files, nor is it a front-end tool for generating other build system files, such as CMake. AMBuild is designed with three features in mind:
+AMBuild 2 is a highly efficient build system designed to replace ["Alpha"-generation tools][1], such as SCons or Make. It is not a replacement for IDE project files, nor is it a front-end tool for generating other build system files, such as CMake. AMBuild is designed with three features in mind:
 
 * Accuracy. AMBuild guarantees that you never need to "clean" a build. Incremental builds should always produce the same exact result as a clean build; anything less is asking for trouble, and rebuilds are a waste of developer time.
 * Speed. Many build systems need to traverse the entire dependency graph. AMBuild only needs to find which files have changed. In addition, AMBuild will parallelize any independent tasks.
@@ -23,5 +23,4 @@ AMBuild 1 was intended as a replacement for build systems such as SCons or Make.
 
 AMBuild 1 is installed alongside AMBuild 2 for backward compatibility, however it resides in an older namespace and has a completely separate API.
 
-# References
-[1] "Build System Rules and Algorithms" by Mike Shal, http://gittup.org/tup/build\_system\_rules\_and\_algorithms.pdf
+[1]: <http://gittup.org/tup/build_system_rules_and_algorithms.pdf> "Build System Rules and Algorithms by Mike Shal"
