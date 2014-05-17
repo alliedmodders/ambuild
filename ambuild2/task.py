@@ -137,8 +137,17 @@ class WorkerChild(ChildProcessListener):
     task_folder = message['task_folder']
     source_path, output_path = message['task_data']
 
+    symlinksProbablyNotSupported = False
     with util.FolderChanger(task_folder):
-      rcode, stdout, stderr = util.symlink(source_path, output_path)
+      try:
+        rcode, stdout, stderr = util.symlink(source_path, output_path)
+      except OSError as exn:
+        if exn.errno != errno.EPERM:
+          raise
+        symlinksProbablyNotSupported = True
+
+    if symlinksProbablyNotSupported:
+      return self.doCopy(message)
 
     reply = {
       'ok': rcode == 0,
