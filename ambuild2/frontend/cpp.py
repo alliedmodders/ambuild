@@ -96,12 +96,12 @@ class SunPro(Vendor):
   def objectArgs(self, sourceFile, objFile):
     return ['-H', '-c', sourceFile, '-o', objFile]
 
-def TryVerifyCompiler(cx, env, mode, cmd):
+def TryVerifyCompiler(env, mode, cmd):
   if util.IsWindows():
-    cc = VerifyCompiler(cx, env, mode, cmd, 'msvc')
+    cc = VerifyCompiler(env, mode, cmd, 'msvc')
     if cc:
       return cc
-  return VerifyCompiler(cx, env, mode, cmd, 'gcc')
+  return VerifyCompiler(env, mode, cmd, 'gcc')
 
 CompilerSearch = {
   'CC': {
@@ -127,8 +127,26 @@ def DetectMicrosoftInclusionPattern(text):
 
   raise Exception('Could not find compiler inclusion pattern')
 
+def DetectCompilers(env):
+  cc = DetectCompiler(env, 'CC')
+  cxx = DetectCompiler(env, 'CXX')
 
-def DetectCompiler(cx, env, var):
+  # Ensure that the two compilers have the same vendor.
+  if type(cc) is not type(cxx):
+    message = 'C and C++ compiler vendors are not the same (CC={0}, CXX={1})'
+    message = message.format(cc.name, cxx.name)
+
+    util.con_err(
+      util.ConsoleRed, 'Error: ',
+      util.ConsoleBlue, message,
+      util.ConsoleNormal
+    )
+
+    raise Exception(message)
+
+  return Compiler(cc, cxx)
+
+def DetectCompiler(env, var):
   if var in env:
     trys = [env[var]]
   else:
@@ -137,12 +155,12 @@ def DetectCompiler(cx, env, var):
     else:
       trys = CompilerSearch[var]['default']
   for i in trys:
-    cc = TryVerifyCompiler(cx, env, var, i)
+    cc = TryVerifyCompiler(env, var, i)
     if cc:
       return cc
   raise Exception('Unable to find a suitable ' + var + ' compiler')
 
-def VerifyCompiler(cx, env, mode, cmd, vendor):
+def VerifyCompiler(env, mode, cmd, vendor):
   args = cmd.split(' ')
   if 'CXXFLAGS' in env:
     args.extend(env['CXXFLAGS'])

@@ -225,20 +225,20 @@ all:
       self.generateBuildFiles()
     return True
 
-  def DetectCompilers(self):
+  def detectCompilers(self):
     if self.compiler:
       return self.compiler
 
-    with util.FolderChanger('.ambuild2'):
-      cc = cpp.DetectCompiler(self, os.environ, 'CC')
-      cxx = cpp.DetectCompiler(self, os.environ, 'CXX')
-    self.compiler = cpp.Compiler(cc, cxx)
+    self.compiler = cpp.DetectCompilers(os.environ)
     if self.options.symbol_files:
       self.compiler.debuginfo = 'separate'
     return self.compiler
 
   def getLocalFolder(self, context):
     return context.localFolder_
+
+  def DetectCompilers(self):
+    raise Exception('Must be implemented!')
 
   def addSymlink(self, context, source, output_path):
     if util.host_platform == 'windows':
