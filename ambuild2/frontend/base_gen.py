@@ -233,6 +233,8 @@ all:
       cc = cpp.DetectCompiler(self, os.environ, 'CC')
       cxx = cpp.DetectCompiler(self, os.environ, 'CXX')
     self.compiler = cpp.Compiler(cc, cxx)
+    if self.options.symbol_files:
+      self.compiler.debuginfo = 'separate'
     return self.compiler
 
   def getLocalFolder(self, context):

@@ -301,7 +301,7 @@ class Compiler(object):
   def __init__(self, cc, cxx):
     self.cc = cc
     self.cxx = cxx
-    self.debuginfo = True
+    self.debuginfo = 'bundled'
     for attr in Compiler.attrs:
       setattr(self, attr, [])
 
@@ -498,7 +498,7 @@ class BinaryBuilder(object):
         self.linker_outputs += [self.name_ + '.lib']
         self.linker_outputs += [self.name_ + '.exp']
 
-    if self.compiler.debuginfo:
+    if self.compiler.debuginfo == 'separate':
       self.perform_symbol_steps(cx)
 
   def perform_symbol_steps(self, cx):
@@ -543,7 +543,10 @@ class BinaryBuilder(object):
       shared_outputs = shared_outputs
     )
     if not self.debug_entry and self.compiler.debuginfo:
-      self.debug_entry = outputs[-1]
+      if self.linker_.behavior != 'msvc' and self.compiler.debuginfo == 'bundled':
+        self.debug_entry = outputs[0]
+      else:
+        self.debug_entry = outputs[-1]
     return outputs[0], self.debug_entry
 
 class Program(BinaryBuilder):

@@ -36,6 +36,8 @@ class Preparer(object):
                             help="Generate extra command-line files for building (build.py, Makefile).")
     self.options.add_option("--no-color", action="store_true", dest="no_color", default=False,
                             help="Disable color output in the terminal.")
+    self.options.add_option("--symbol-files", action="store_true", dest="symbol_files", default=False,
+                            help="Split debugging symbols from binaries into separate symbol files.")
 
   @staticmethod
   def default_build_folder(prep):
