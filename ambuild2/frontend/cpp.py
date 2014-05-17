@@ -18,6 +18,7 @@ from __future__ import print_function
 import subprocess
 import re, os, copy
 from ambuild2 import util
+from version import Version
 
 class Vendor(object):
   def __init__(self, name, version, behavior, command, objSuffix):
@@ -28,6 +29,7 @@ class Vendor(object):
     self.objSuffix = objSuffix
     self.debuginfo_argv = []
     self.extra_props = {}
+    self.versionObject = Version(self.version)
 
 class MSVC(Vendor):
   def __init__(self, command, version):
@@ -36,6 +38,9 @@ class MSVC(Vendor):
     self.debuginfo_argv = ['/Zi']
     if int(self.version) >= 1800:
       self.debuginfo_argv += ['/FS']
+
+  def like(self, name):
+    return name == 'msvc'
 
   @staticmethod
   def IncludePath(outputPath, includePath):
@@ -79,10 +84,16 @@ class GCC(CompatGCC):
     super(GCC, self).__init__('gcc', command, version)
     self.debuginfo_argv = ['-g3', '-ggdb3']
 
+  def like(self, name):
+    return name == 'gcc'
+
 class Clang(CompatGCC):
   def __init__(self, command, version):
     super(Clang, self).__init__('clang', command, version)
     self.debuginfo_argv = ['-g3']
+
+  def like(self, name):
+    return name == 'gcc' or name == 'clang'
 
 class SunPro(Vendor):
   def __init__(self, command, version):
@@ -95,6 +106,9 @@ class SunPro(Vendor):
 
   def objectArgs(self, sourceFile, objFile):
     return ['-H', '-c', sourceFile, '-o', objFile]
+
+  def like(self, name):
+    return name == 'sun'
 
 def TryVerifyCompiler(env, mode, cmd):
   if util.IsWindows():
@@ -135,6 +149,14 @@ def DetectCompilers(env, options):
   if type(cc) is not type(cxx):
     message = 'C and C++ compiler vendors are not the same: CC={0}, CXX={1}'
     message = message.format(cc.name, cxx.name)
+
+    util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
+    raise Exception(message)
+
+  # Ensure that the two compilers have the same version.
+  if cc.version != cxx.version:
+    message = 'C and C++ compilers have different versions: CC={0}-{1}, CXX={2}-{3}'
+    message = message.format(cc.name, cc.version, cxx.name, cxx.version)
 
     util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
     raise Exception(message)
@@ -312,6 +334,7 @@ class Compiler(object):
   ]
 
   def __init__(self, cc, cxx, options = None):
+    # Accesssing these attributes through the API is deprecated.
     self.cc = cc
     self.cxx = cxx
 
@@ -332,6 +355,10 @@ class Compiler(object):
       setattr(cc, attr, copy.copy(getattr(self, attr)))
     return cc
 
+  @staticmethod
+  def Dep(text, node=None):
+    return Dep(text, node)
+
   def Program(self, name):
     return Program(self, name)
 
@@ -341,9 +368,27 @@ class Compiler(object):
   def StaticLibrary(self, name):
     return StaticLibrary(self, name)
 
-  @staticmethod
-  def Dep(text, node=None):
-    return Dep(text, node)
+  # These functions use |cxx|, because we expect the vendors to be the same
+  # across |cc| and |cxx|.
+
+  # Returns whether this compiler acts like another compiler. Available names
+  # are: msvc, gcc, icc, sun, clang
+  def like(self, name):
+    return self.cxx.like(name)
+
+  # Returns the vendor name (msvc, gcc, icc, sun, clang)
+  @property
+  def vendor(self):
+    return self.cxx.name
+
+  # Returns the version of the compiler. The return value is an object that
+  # can be compared against other versions, for example:
+  #
+  #  compiler.version >= '4.8.3'
+  #
+  @property
+  def version(self):
+    return self.cxx.versionObject
 
 # Environment representing a C/C++ compiler invocation. Encapsulates most
 # arguments.
