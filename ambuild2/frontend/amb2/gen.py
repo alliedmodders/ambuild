@@ -38,6 +38,8 @@ class Generator(base_gen.Generator):
     self.db = db
     self.is_bootstrap = not self.db
     self.refactoring = refactoring
+    self.symlink_support = False
+    self.had_symlink_fallback = False
 
   @classmethod
   def FromVars(cls, vars, db, refactoring):
@@ -71,6 +73,8 @@ class Generator(base_gen.Generator):
       else:
         self.db = database.Database(db_path)
         self.db.connect()
+
+    self.symlink_support = util.DetectSymlinkSupport()
 
     self.db.query_scripts(lambda id,path,stamp: self.old_scripts_.add(path))
     self.db.query_mkdir(lambda entry: self.old_folders_.add(entry))
@@ -153,6 +157,11 @@ class Generator(base_gen.Generator):
     if self.is_bootstrap:
       self.saveVars()
       self.db.close()
+
+    if self.had_symlink_fallback:
+      util.con_out(util.ConsoleHeader,
+                   'Note: filesystem does not support symlinks. Files will be copied instead.',
+                   util.ConsoleNormal)
 
   def saveVars(self):
     vars = {
@@ -700,6 +709,11 @@ class Generator(base_gen.Generator):
       # Windows pre-Vista does not support symlinks. Windows Vista+ supports
       # symlinks via mklink, but it's Administrator-only by default.
       return self.addFileOp(nodetypes.Copy, context, source, output_path)
+
+    if not self.symlink_support:
+      self.had_symlink_fallback = True
+      return self.addFileOp(nodetypes.Copy, context, source, output_path)
+
     return self.addFileOp(nodetypes.Symlink, context, source, output_path)
 
   def addFolder(self, context, folder):

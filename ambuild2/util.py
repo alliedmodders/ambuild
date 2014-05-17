@@ -3,6 +3,9 @@ import errno
 import subprocess
 import re, os, sys, locale
 import multiprocessing
+import uuid
+from tempfile import NamedTemporaryFile
+
 try:
   import __builtin__ as builtins
 except:
@@ -268,6 +271,25 @@ elif IsWindows():
     ]
     p, out, err = Execute(argv, shell=True)
     return p.returncode, out, err
+
+# Detect whether the filesystem supports symlinks. This is a conservative
+# test. It can fail if, for example, the current working directly is not
+# writable. This creates local temporary files; it's intended to be called
+# inside temporary folders or cache folders.
+def DetectSymlinkSupport():
+  if not hasattr(os, 'symlink'):
+    return False
+
+  with NamedTemporaryFile() as fp:
+    try:
+      random_name = str(uuid.uuid4())
+      os.symlink(fp.name, random_name)
+      os.unlink(random_name)
+    except:
+      return False
+
+  return True
+
 
 if IsUnixy():
   ConsoleGreen = lambda fp: fp.write('\033[92m')
