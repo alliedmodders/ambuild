@@ -19,6 +19,7 @@ from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.frontend import base_gen
 from ambuild2 import database
+from ambuild2.frontend import cpp
 
 class CppNodes(object):
   def __init__(self, output, debug_outputs):
@@ -38,6 +39,7 @@ class Generator(base_gen.Generator):
     self.db = db
     self.is_bootstrap = not self.db
     self.refactoring = refactoring
+    self.compiler = None
     self.symlink_support = False
     self.had_symlink_fallback = False
 
@@ -185,6 +187,13 @@ class Generator(base_gen.Generator):
 
     with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
       util.DiskPickle(vars, fp)
+
+  def detectCompilers(self):
+    if not self.compiler:
+      with util.FolderChanger(self.cacheFolder):
+        self.compiler = cpp.DetectCompilers(os.environ, self.options)
+
+    return self.compiler
 
   def getLocalFolder(self, context):
     if type(context.localFolder_) is nodetypes.Entry or context.localFolder_ is None:

@@ -17,7 +17,6 @@
 import os
 import sys, copy
 from ambuild2 import util
-from ambuild2.frontend import cpp
 
 # AMBuild 2 scripts are parsed recursively. Each script is supplied with a
 # "builder" object, which maps to a Context object. Each script gets its own
@@ -97,7 +96,7 @@ class Context(object):
 
   def DetectCompilers(self):
     if not self.compiler:
-      self.compiler = self.generator.DetectCompilers()
+      self.compiler = self.generator.detectCompilers()
     return self.compiler
 
   def RunScript(self, file, vars={}):
@@ -149,7 +148,6 @@ class Generator(object):
     self.originalCwd = originalCwd
     self.options = options
     self.args = args
-    self.compiler = None
     self.contextStack_ = [None]
     self.configure_failed = False
 
@@ -224,18 +222,6 @@ all:
     if self.options.make_scripts:
       self.generateBuildFiles()
     return True
-
-  def DetectCompilers(self):
-    if self.compiler:
-      return self.compiler
-
-    with util.FolderChanger('.ambuild2'):
-      cc = cpp.DetectCompiler(self, os.environ, 'CC')
-      cxx = cpp.DetectCompiler(self, os.environ, 'CXX')
-    self.compiler = cpp.Compiler(cc, cxx)
-    if self.options.symbol_files:
-      self.compiler.debuginfo = 'separate'
-    return self.compiler
 
   def getLocalFolder(self, context):
     return context.localFolder_
