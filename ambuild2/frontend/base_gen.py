@@ -241,10 +241,6 @@ all:
     return context.localFolder_
 
   def addSymlink(self, context, source, output_path):
-    if util.host_platform == 'windows':
-      # Windows pre-Vista does not support symlinks. Windows Vista+ supports
-      # symlinks via mklink, but it's Administrator-only by default.
-      return self.addCopy(context, source, output_path)
     raise Exception('Must be implemented!')
 
   def addFolder(self, context, folder):
