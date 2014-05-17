@@ -133,15 +133,10 @@ def DetectCompilers(env):
 
   # Ensure that the two compilers have the same vendor.
   if type(cc) is not type(cxx):
-    message = 'C and C++ compiler vendors are not the same (CC={0}, CXX={1})'
+    message = 'C and C++ compiler vendors are not the same: CC={0}, CXX={1}'
     message = message.format(cc.name, cxx.name)
 
-    util.con_err(
-      util.ConsoleRed, 'Error: ',
-      util.ConsoleBlue, message,
-      util.ConsoleNormal
-    )
-
+    util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
     raise Exception(message)
 
   return Compiler(cc, cxx)
