@@ -127,7 +127,7 @@ def DetectMicrosoftInclusionPattern(text):
 
   raise Exception('Could not find compiler inclusion pattern')
 
-def DetectCompilers(env):
+def DetectCompilers(env, options):
   cc = DetectCompiler(env, 'CC')
   cxx = DetectCompiler(env, 'CXX')
 
@@ -139,7 +139,7 @@ def DetectCompilers(env):
     util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
     raise Exception(message)
 
-  return Compiler(cc, cxx)
+  return Compiler(cc, cxx, options)
 
 def DetectCompiler(env, var):
   if var in env:
@@ -311,10 +311,15 @@ class Compiler(object):
     'sourcedeps',
   ]
 
-  def __init__(self, cc, cxx):
+  def __init__(self, cc, cxx, options = None):
     self.cc = cc
     self.cxx = cxx
-    self.debuginfo = 'bundled'
+
+    if getattr(options, 'symbol_files', False):
+      self.debuginfo = 'separate'
+    else:
+      self.debuginfo = 'bundled'
+
     for attr in Compiler.attrs:
       setattr(self, attr, [])
 
