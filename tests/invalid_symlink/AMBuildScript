@@ -1,0 +1,11 @@
+# vim: set ts=8 sts=2 tw=99 et ft=python: 
+import os, sys
+
+builder.DetectCompilers()
+
+program = builder.compiler.Program("hello")
+program.sources = [
+  'main.cpp'
+]
+out = builder.Add(program)
+builder.AddSymlink(out.binary, 'hello.bin')
