@@ -273,7 +273,9 @@ elif IsWindows():
     return p.returncode, out, err
 
 # Detect whether the filesystem supports symlinks. This is a conservative
-# test. It can fail if, for example, 
+# test. It can fail if, for example, the current working directly is not
+# writable. This creates local temporary files; it's intended to be called
+# inside temporary folders or cache folders.
 def DetectSymlinkSupport():
   if not hasattr(os, 'symlink'):
     return False
