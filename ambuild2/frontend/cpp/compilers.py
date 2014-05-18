@@ -56,7 +56,7 @@ class Compiler(object):
   def inherit(self, other):
     self.debuginfo = other.debuginfo
     for attr in self.attrs:
-      setattr(self, attr, copy.copy(getattr(self, attr)))
+      setattr(self, attr, copy.copy(getattr(other, attr)))
 
 class CxxCompiler(Compiler):
   def __init__(self, cc, cxx, options = None):
@@ -73,7 +73,7 @@ class CxxCompiler(Compiler):
 
   @staticmethod
   def Dep(text, node=None):
-    return Dep(text, node)
+    return builders.Dep(text, node)
 
   def Program(self, name):
     return builders.Program(self, name)

@@ -17,7 +17,7 @@
 from __future__ import print_function
 import os, re
 from ambuild2 import util
-from ambuild2.frontend.cpp import vendors
+from ambuild2.frontend.cpp import vendors, compilers
 
 def TryVerifyCompiler(env, mode, cmd):
   if util.IsWindows():
@@ -70,7 +70,7 @@ def DetectCxx(env, options):
     util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
     raise Exception(message)
 
-  return cxx.CxxCompiler(cc, cxx, options)
+  return compilers.CxxCompiler(cc, cxx, options)
 
 def DetectCxxCompiler(env, var):
   if var in env:
