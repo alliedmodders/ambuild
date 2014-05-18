@@ -19,7 +19,7 @@ from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.frontend import base_gen
 from ambuild2 import database
-from ambuild2.frontend import cpp
+from ambuild2.frontend.cpp import detect
 
 class CppNodes(object):
   def __init__(self, output, debug_outputs):
@@ -179,7 +179,7 @@ class Generator(base_gen.Generator):
 
     if self.compiler is not None:
       # Save env vars that will be needed to reconfigure.
-      for key in cpp.EnvVars:
+      for key in self.compiler.EnvVars:
         if key in os.environ:
           env[key] = os.environ[key]
 
@@ -201,7 +201,7 @@ class Generator(base_gen.Generator):
   def detectCompilers(self):
     if not self.compiler:
       with util.FolderChanger(self.cacheFolder):
-        self.compiler = cpp.DetectCompilers(os.environ, self.options)
+        self.compiler = detect.DetectCxx(os.environ, self.options)
 
     return self.compiler
 
