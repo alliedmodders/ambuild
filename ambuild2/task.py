@@ -477,14 +477,19 @@ class TaskMasterParent(ParentProcessListener):
       message['cmdline'],
       util.ConsoleNormal
     )
+    self.stdout.flush()
+
     if len(message['stdout']):
       util.WriteEncodedText(sys.stdout, message['stdout'])
       if message['stdout'][-1] != '\n':
         sys.stdout.write('\n')
+      self.stdout.flush()
+          
     if len(message['stderr']):
       util.WriteEncodedText(sys.stderr, message['stderr'])
       if message['stderr'][-1] != '\n':
         sys.stderr.write('\n')
+      self.stderr.flush()
 
   def processResults(self, message):
     if not message['ok']:
