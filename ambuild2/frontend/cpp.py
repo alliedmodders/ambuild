@@ -392,6 +392,11 @@ class Compiler(object):
   def version(self):
     return self.cxx.versionObject
 
+  # Returns a list containing the program name and arguments used to invoke the compiler.
+  @property
+  def argv(self):
+    return self.cxx.command.split(' ')
+
 # Environment representing a C/C++ compiler invocation. Encapsulates most
 # arguments.
 class CCommandEnv(object):
