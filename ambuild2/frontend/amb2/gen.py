@@ -174,8 +174,16 @@ class Generator(base_gen.Generator):
       'args': self.args
     }
 
-    # Save any extra compiler info that must be communicated to the backend.
+    # Save any environment variables that are relevant to the build.
+    env = {}
+
     if self.compiler is not None:
+      # Save env vars that will be needed to reconfigure.
+      for key in cpp.EnvVars:
+        if key in os.environ:
+          env[key] = os.environ[key]
+
+      # Save any extra compiler info that must be communicated to the backend.
       compilers = [
         ('cc', self.compiler.cc),
         ('cxx', self.compiler.cxx),
@@ -184,6 +192,8 @@ class Generator(base_gen.Generator):
         for prop_name in comp.extra_props:
           key = '{0}_{1}'.format(prefix, prop_name)
           vars[key] = comp.extra_props[prop_name]
+
+    vars['env'] = env
 
     with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
       util.DiskPickle(vars, fp)

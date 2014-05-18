@@ -20,6 +20,8 @@ import re, os, copy
 from ambuild2 import util
 from version import Version
 
+EnvVars = ['CFLAGS', 'CXXFLAGS', 'CC', 'CXX']
+
 class Vendor(object):
   def __init__(self, name, version, behavior, command, objSuffix):
     self.name = name

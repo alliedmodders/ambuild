@@ -48,6 +48,9 @@ class Context(object):
           sys.stderr.write('The build configured here looks corrupt; you will have to delete your objdir.\n')
         raise
         sys.exit(1)
+
+    self.restore_environment()
+
     self.db = database.Database(self.dbpath)
     self.messagePump = MessagePump()
     self.procman = ProcessManager(self.messagePump)
@@ -59,6 +62,16 @@ class Context(object):
   def __exit__(self, type, value, traceback):
     self.procman.shutdown()
     self.db.close()
+
+  # Restore important environment properties that were present when this
+  # build was configured.
+  def restore_environment(self):
+    if 'env' not in self.vars:
+      return
+
+    env = self.vars['env']
+    for key in env:
+      os.environ[key] = env[key]
 
   def reconfigure(self):
     # See if we need to reconfigure.
