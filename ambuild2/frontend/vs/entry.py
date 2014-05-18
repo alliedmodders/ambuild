@@ -15,28 +15,15 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 
-class Version(object):
-  def __init__(self, string):
-    if type(string) is int:
-      self.string = str(string)
-      self.components = [string]
-    else:
-      self.string = string
-      self.components = Version.split(string)
+class Entry(object):
+  def __init__(self, path):
+    super(Entry, self).__init__()
+    self.path = path
 
-  def __str__(self):
-    return self.string
+class FolderEntry(Entry):
+  def __init__(self, path):
+    super(FolderEntry, self).__init__(path)
 
-  @staticmethod
-  def split(string):
-    return [int(part) for part in string.split('.')]
-
-  def __cmp__(self, other):
-    if hasattr(other, 'components'):
-      components = other.components
-    elif type(other) is int:
-      components = [other]
-    else:
-      components = Version.split(str(other))
-
-    return cmp(self.components, components)
+  @property
+  def kind(self):
+    return 'folder'

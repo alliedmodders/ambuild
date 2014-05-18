@@ -87,6 +87,10 @@ class Context(object):
   def originalCwd(self):
     return self.generator.originalCwd
 
+  @property
+  def backend(self):
+    return self.generator.backend
+
   def SetBuildFolder(self, folder):
     if folder == '/' or folder == '.' or folder == './':
       self.buildFolder = ''
@@ -225,6 +229,10 @@ all:
 
   def getLocalFolder(self, context):
     return context.localFolder_
+
+  @property
+  def backend(self):
+    raise Exception('Must be implemented!')
 
   def addSymlink(self, context, source, output_path):
     raise Exception('Must be implemented!')

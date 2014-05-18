@@ -310,7 +310,7 @@ class Dep(object):
     self.text = text
     self.node = node
 
-class Compiler(object):
+class BaseCompiler(object):
   attrs = [
     'includes',         # C and C++ include paths
     'cxxincludes',      # C++-only include paths
@@ -335,11 +335,7 @@ class Compiler(object):
     'sourcedeps',
   ]
 
-  def __init__(self, cc, cxx, options = None):
-    # Accesssing these attributes through the API is deprecated.
-    self.cc = cc
-    self.cxx = cxx
-
+  def __init__(self, options = None):
     if getattr(options, 'symbol_files', False):
       self.debuginfo = 'separate'
     else:
@@ -348,18 +344,27 @@ class Compiler(object):
     for attr in Compiler.attrs:
       setattr(self, attr, [])
 
-  def clone(self):
-    cc = Compiler(self.cc, self.cxx)
-    cc.cc = self.cc
-    cc.cxx = self.cxx
-    cc.debuginfo = self.debuginfo
+  def inherit(self, other):
+    self.debuginfo = other.debuginfo
     for attr in Compiler.attrs:
-      setattr(cc, attr, copy.copy(getattr(self, attr)))
-    return cc
+      setattr(self, attr, copy.copy(getattr(other, attr)))
 
   @staticmethod
   def Dep(text, node=None):
     return Dep(text, node)
+
+class Compiler(BaseCompiler):
+  def __init__(self, cc, cxx, options = None):
+    super(Compiler, self).__init__(options)
+
+    # Accesssing these attributes through the API is deprecated.
+    self.cc = cc
+    self.cxx = cxx
+
+  def clone(self):
+    cc = Compiler(self.cc, self.cxx)
+    cc.inherit(self)
+    return cc
 
   def Program(self, name):
     return Program(self, name)

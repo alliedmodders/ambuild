@@ -26,7 +26,8 @@ setup(
     'ambuild2',
     'ambuild2.frontend',
     'ambuild2.ipc',
-    'ambuild2.frontend.amb2'
+    'ambuild2.frontend.amb2',
+    'ambuild2.frontend.vs',
   ],
   scripts = scripts
 )
