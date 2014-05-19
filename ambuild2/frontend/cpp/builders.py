@@ -27,6 +27,54 @@ class Dep(object):
     self.text = text
     self.node = node
 
+class BuilderProxy(object):
+  def __init__(self, builder, compiler, name):
+    self.constructor_ = builder.constructor_
+    self.sources = builder.sources[:]
+    self.compiler = compiler
+    self.name_ = name
+
+  @property
+  def outputFile(self):
+    return self.constructor_.buildName(self.name_)
+
+  @property
+  def localFolder(self):
+    return self.name_
+
+  @staticmethod
+  def Dep(text, node=None): 
+    return Dep(text, node)
+
+class Builder(object):
+  def __init__(self, constructor, compiler, name):
+    super(Builder, self).__init__()
+    self.constructor_ = constructor
+    self.compiler = compiler
+    self.name = name
+    self.sources = []
+    self.proxies_ = []
+    self.builders_ = []
+
+  def finish(self, cx):
+    for task in self.proxies_:
+      builder = task.constructor_(task.compiler, task.name_)
+      builder.sources = task.sources
+      builder.finish(cx)
+      self.builders_.append(builder)
+
+  def generate(self, generator, cx):
+    outputs = []
+    for builder in self.builders_:
+      outputs += [builder.generate(generator, cx)]
+    return outputs
+
+  def Configure(self, name, tag):
+    compiler = self.compiler.clone()
+    proxy = BuilderProxy(self, compiler, name)
+    self.proxies_.append(proxy)
+    return proxy
+
 # Environment representing a C/C++ compiler invocation. Encapsulates most
 # arguments.
 class ArgBuilder(object):
@@ -69,11 +117,15 @@ class RCFile(object):
 class BinaryBuilder(object):
   def __init__(self, compiler, name):
     super(BinaryBuilder, self).__init__()
-    self.compiler = compiler.clone()
+    self.compiler = compiler
     self.sources = []
     self.name_ = name
     self.used_cxx_ = False
     self.linker_ = None
+
+  @property
+  def outputFile(self):
+    return self.buildName(self.name_)
 
   def generate(self, generator, cx):
     return generator.addCxxTasks(cx, self)
@@ -252,7 +304,10 @@ class BinaryBuilder(object):
 class Program(BinaryBuilder):
   def __init__(self, compiler, name):
     super(Program, self).__init__(compiler, name)
-    self.outputFile = name + util.ExecutableSuffix()
+
+  @staticmethod
+  def buildName(name):
+    return name + util.ExecutableSuffix()
 
   def generateBinary(self, cx, files):
     argv = self.linker_.command.split(' ')
@@ -277,7 +332,10 @@ class Program(BinaryBuilder):
 class Library(BinaryBuilder):
   def __init__(self, compiler, name):
     super(Library, self).__init__(compiler, name)
-    self.outputFile = name + util.SharedLibSuffix()
+
+  @staticmethod
+  def buildName(name):
+    return name + util.SharedLibSuffix()
 
   def generateBinary(self, cx, files):
     argv = self.linker_.command.split(' ')
@@ -307,7 +365,10 @@ class Library(BinaryBuilder):
 class StaticLibrary(BinaryBuilder):
   def __init__(self, compiler, name):
     super(StaticLibrary, self).__init__(compiler, name)
-    self.outputFile = util.StaticLibPrefix() + name + util.StaticLibSuffix()
+
+  @staticmethod
+  def buildName(name):
+    return util.StaticLibPrefix() + name + util.StaticLibSuffix()
 
   def generateBinary(self, cx, files):
     if isinstance(self.linker_, MSVC):
