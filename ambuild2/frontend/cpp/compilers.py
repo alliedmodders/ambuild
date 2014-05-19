@@ -58,6 +58,33 @@ class Compiler(object):
     for attr in self.attrs:
       setattr(self, attr, copy.copy(getattr(other, attr)))
 
+  def clone(self):
+    raise Exception('Must be implemented!')
+
+  def like(self, name):
+    raise Exception('Must be implemented!')
+
+  @property
+  def vendor(self):
+    raise Exception('Must be implemented!')
+
+  @property
+  def version(self):
+    raise Exception('Must be implemented!')
+
+  def Program(self, name):
+    raise Exception('Must be implemented!')
+
+  def Library(self, name):
+    raise Exception('Must be implemented!')
+
+  def StaticLibrary(self, name):
+    raise Exception('Must be implemented!')
+
+  @staticmethod
+  def Dep(text, node=None):
+    return builders.Dep(text, node)
+
 class CxxCompiler(Compiler):
   def __init__(self, cc, cxx, options = None):
     super(CxxCompiler, self).__init__(options)
@@ -71,18 +98,23 @@ class CxxCompiler(Compiler):
     cc.inherit(self)
     return cc
 
-  @staticmethod
-  def Dep(text, node=None):
-    return builders.Dep(text, node)
-
   def Program(self, name):
-    return builders.Program(self, name)
+    return builders.Program(self.clone(), name)
 
   def Library(self, name):
-    return builders.Library(self, name)
+    return builders.Library(self.clone(), name)
 
   def StaticLibrary(self, name):
-    return builders.StaticLibrary(self, name)
+    return builders.StaticLibrary(self.clone(), name)
+
+  def ProgramBuilder(self, name):
+    return builders.Builder(builders.Program, self.clone(), name)
+
+  def LibraryBuilder(self, name):
+    return builders.Builder(builders.Library, self.clone(), name)
+
+  def StaticLibraryBuilder(self, name):
+    return builders.Builder(builders.StaticLibrary, self.clone(), name)
 
   # These functions use |cxx|, because we expect the vendors to be the same
   # across |cc| and |cxx|.
