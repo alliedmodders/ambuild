@@ -17,7 +17,7 @@
 import os
 from ambuild2 import util
 from ambuild2.frontend.version import Version
-from ambuild2.frontend.cpp import BaseCompiler, Dep
+from ambuild2.frontend.cpp import compilers
 
 class CompilerShell(object):
   def __init__(self, version):
@@ -25,7 +25,7 @@ class CompilerShell(object):
     self.behavior = 'msvc'
     self.name = 'msvc'
 
-class Compiler(BaseCompiler):
+class Compiler(compilers.Compiler):
   def __init__(self, version):
     super(Compiler, self).__init__()
 

@@ -58,6 +58,10 @@ class Compiler(object):
     for attr in self.attrs:
       setattr(self, attr, copy.copy(getattr(other, attr)))
 
+  @staticmethod
+  def Dep(text, node=None):
+    return builders.Dep(text, node)
+
 class CxxCompiler(Compiler):
   def __init__(self, cc, cxx, options = None):
     super(CxxCompiler, self).__init__(options)
@@ -70,10 +74,6 @@ class CxxCompiler(Compiler):
     cc = CxxCompiler(self.cc, self.cxx)
     cc.inherit(self)
     return cc
-
-  @staticmethod
-  def Dep(text, node=None):
-    return builders.Dep(text, node)
 
   def Program(self, name):
     return builders.Program(self, name)
