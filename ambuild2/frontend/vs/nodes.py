@@ -15,15 +15,21 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 
-class Entry(object):
+class Node(object):
   def __init__(self, path):
-    super(Entry, self).__init__()
+    super(Node, self).__init__()
     self.path = path
+    self.children = set()
+    self.parents = set()
 
-class FolderEntry(Entry):
+class FolderNode(Node):
   def __init__(self, path):
-    super(FolderEntry, self).__init__(path)
+    super(FolderNode, self).__init__(path)
 
   @property
   def kind(self):
     return 'folder'
+
+class OutputNode(Node):
+  def __init__(self, path):
+    super(OutputNode, self).__init__(path)

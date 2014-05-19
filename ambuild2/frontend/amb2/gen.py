@@ -22,11 +22,6 @@ from ambuild2 import database
 from ambuild2.frontend import cpp
 from ambuild2.frontend import paths
 
-class CppNodes(object):
-  def __init__(self, output, debug_outputs):
-    self.binary = output
-    self.debug = debug_outputs
-
 class Generator(base_gen.Generator):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args, db=None, refactoring=False):
     super(Generator, self).__init__(sourcePath, buildPath, originalCwd, options, args)
@@ -651,7 +646,7 @@ class Generator(base_gen.Generator):
       inputs = inputs
     )
 
-    return CppNodes(output_file, debug_file)
+    return cpp.CppNodes(output_file, debug_file)
 
   def addFileOp(self, cmd, context, source, output_path):
     # Try to detect if our output_path is actually a folder, via trailing

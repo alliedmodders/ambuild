@@ -62,6 +62,9 @@ class BinaryBuilder(object):
   def Dep(self, text, node=None): 
     return Dep(text, node)
 
+  def finish(self, cx):
+    pass
+
 class Library(BinaryBuilder):
   def __init__(self, compiler, name):
     super(Library, self).__init__(compiler, name)
@@ -71,9 +74,6 @@ class Library(BinaryBuilder):
   def outputFile(self):
     return '{0}.dll'.format(self.name)
 
-  def finish(self, cx):
-    pass
-
 class StaticLibrary(BinaryBuilder):
   def __init__(self, compiler, name):
     super(StaticLibrary, self).__init__(compiler, name)
@@ -82,6 +82,3 @@ class StaticLibrary(BinaryBuilder):
   @property
   def outputFile(self):
     return '{0}.lib'.format(self.name)
-
-  def finish(self, cx):
-    pass

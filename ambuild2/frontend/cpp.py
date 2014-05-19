@@ -310,6 +310,11 @@ class Dep(object):
     self.text = text
     self.node = node
 
+class CppNodes(object):
+  def __init__(self, output, debug_outputs):
+    self.binary = output
+    self.debug = debug_outputs
+
 class BaseCompiler(object):
   attrs = [
     'includes',         # C and C++ include paths

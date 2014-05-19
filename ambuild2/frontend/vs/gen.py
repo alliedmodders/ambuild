@@ -19,7 +19,7 @@ from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.frontend import base_gen, paths
 from ambuild2.frontend.vs.compiler import Compiler
-from ambuild2.frontend.vs.entry import FolderEntry
+from ambuild2.frontend.vs import nodes
 
 SupportedVersions = ['10', '11', '12']
 YearMap = {
@@ -67,7 +67,7 @@ class Generator(base_gen.Generator):
     _, path = paths.ResolveFolder(cx.localFolder, folder)
     if path in self.files_:
       entry = self.files_[path]
-      if type(entry) is not FolderEntry:
+      if type(entry) is not nodes.FolderNode:
         util.con_err(
           util.ConsoleRed, 'Path already exists as: {0}'.format(entry.kind),
           util.ConsoleNormal
@@ -81,7 +81,7 @@ class Generator(base_gen.Generator):
       if not (exn.errno == errno.EEXIST and os.path.isdir(path)):
         raise
 
-    obj = FolderEntry(path)
+    obj = nodes.FolderNode(path)
     self.files_[path] = obj
 
     return obj
