@@ -170,7 +170,15 @@ class Generator(object):
   def popContext(self):
     self.contextStack_.pop()
 
+  def enterContext(self, cx):
+    pass
+
+  def leaveContext(self, cx):
+    pass
+
   def evalScript(self, file, vars={}):
+    file = os.path.normpath(file)
+
     cx = Context(self, self.contextStack_[-1], file)
     self.pushContext(cx)
 
@@ -192,7 +200,10 @@ class Generator(object):
 
       code = compile(chars, full_path, 'exec')
 
+    self.enterContext(cx)
     exec(code, new_vars)
+    self.leaveContext(cx)
+
     if 'rvalue' in new_vars:
       rvalue = new_vars['rvalue']
       del new_vars['rvalue']

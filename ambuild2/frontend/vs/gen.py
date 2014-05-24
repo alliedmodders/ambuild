@@ -14,11 +14,11 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import os, errno
+import os, errno, uuid
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.frontend import base_gen, paths
-from ambuild2.frontend.vs.compiler import Compiler
+from ambuild2.frontend.vs import cxx
 from ambuild2.frontend.vs import nodes
 
 SupportedVersions = ['10', '11', '12']
@@ -34,6 +34,7 @@ class Generator(base_gen.Generator):
     self.compiler = None
     self.vs_version = None
     self.files_ = {}
+    self.projects_ = set()
 
     if self.options.vs_version in SupportedVersions:
       self.vs_version = int(self.options.vs_version)
@@ -47,32 +48,76 @@ class Generator(base_gen.Generator):
         raise Exception('Unsupported Visual Studio version: {0}'.format(self.options.vs_version)) 
       self.vs_version = YearMap[self.options.vs_version]
 
+  # Overridden.
   @property
   def backend(self):
     return 'vs'
 
+  # Overridden.
   def preGenerate(self):
     pass
 
+  # Overriden.
+  def postGenerate(self):
+    self.generateProjects()
+
+  def generateProjects(self):
+    for node in self.projects_:
+      node.uuid = str(uuid.uuid1()).upper()
+      node.project.export(node)
+
+  # Overridden.
+  #
   # We don't support reconfiguring in this frontend.
   def addConfigureFile(self, cx, path):
     pass
 
+  # Overridden.
   def detectCompilers(self):
     if not self.compiler:
-      self.compiler = Compiler(Compiler.GetVersionFromVS(self.vs_version))
+      self.compiler = cxx.Compiler(cxx.Compiler.GetVersionFromVS(self.vs_version))
     return self.compiler
 
+  # Overridden.
+  def enterContext(self, cx):
+    cx.vs_nodes = []
+
+  # Overridden.
+  def leaveContext(self, cx):
+    pass
+
+  def ensureUnique(self, path):
+    if path in self.files_:
+      entry = self.files_[path]
+      util.con_err(
+        util.ConsoleRed, 'Path {0} already exists as: {1}'.format(path, entry.kind),
+        util.ConsoleNormal
+      )
+      raise Exception('Path {0} already exists as: {1}'.format(path, entry.kind))
+
+  # Overridden.
+  def getLocalFolder(self, context):
+    if type(context.localFolder_) is nodes.FolderNode or context.localFolder_ is None:
+      return context.localFolder_
+
+    if not len(context.buildFolder):
+      context.localFolder_ = None
+    else:
+      context.localFolder_ = self.addFolder(context.parent, context.buildFolder)
+
+    return context.localFolder_
+
+  # Overridden.
   def addFolder(self, cx, folder):
-    _, path = paths.ResolveFolder(cx.localFolder, folder)
+    parentFolderNode = None
+    if cx is not None:
+      parentFolderNode = cx.localFolder
+
+    _, path = paths.ResolveFolder(parentFolderNode, folder)
     if path in self.files_:
       entry = self.files_[path]
       if type(entry) is not nodes.FolderNode:
-        util.con_err(
-          util.ConsoleRed, 'Path already exists as: {0}'.format(entry.kind),
-          util.ConsoleNormal
-        )
-        raise Exception('Path already exists as: {0}'.format(entry.kind))
+        self.ensureUnique(path) # Will always throw.
       return entry
 
     try:
@@ -83,9 +128,21 @@ class Generator(base_gen.Generator):
 
     obj = nodes.FolderNode(path)
     self.files_[path] = obj
-
     return obj
 
+  # Overridden.
   def addShellCommand(self, context, inputs, argv, outputs, folder=-1, dep_type=None,
                       weak_inputs=[], shared_outputs=[]):
     print(inputs, argv, outputs, folder, dep_type, weak_inputs, shared_outputs)
+
+  def addOutput(self, context, path, parent):
+    self.ensureUnique(path)
+
+    node = nodes.OutputNode(context, path, parent)
+    self.files_[path] = node
+    return node
+
+  def addProjectNode(self, context, project):
+    self.ensureUnique(project.path)
+    self.projects_.add(project)
+    self.files_[project.path] = project

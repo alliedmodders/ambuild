@@ -16,20 +16,48 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 
 class Node(object):
-  def __init__(self, path):
+  def __init__(self, context, path):
     super(Node, self).__init__()
+    self.context = context
     self.path = path
     self.children = set()
     self.parents = set()
 
+  def addParent(self, parent):
+    self.parents.add(parent)
+    parent.children.add(self)
+
 class FolderNode(Node):
   def __init__(self, path):
-    super(FolderNode, self).__init__(path)
+    super(FolderNode, self).__init__(None, path)
 
   @property
   def kind(self):
     return 'folder'
 
+class ContainerNode(Node):
+  def __init__(self, cx):
+    super(ContainerNode, self).__init__()
+
+  @property
+  def kind(self):
+    return 'container'
+
 class OutputNode(Node):
-  def __init__(self, path):
-    super(OutputNode, self).__init__(path)
+  def __init__(self, context, path, parent):
+    super(OutputNode, self).__init__(context, path)
+    self.addParent(parent)
+
+  @property
+  def kind(self):
+    return 'output'
+
+class ProjectNode(Node):
+  def __init__(self, context, path, project):
+    super(ProjectNode, self).__init__(context, path)
+    self.project = project
+    self.uuid = None
+
+  @property
+  def kind(self):
+    return 'project'

@@ -27,6 +27,24 @@ class Dep(object):
     self.text = text
     self.node = node
 
+  @staticmethod
+  def resolve(cx, builder, item):
+    if type(item) is Dep:
+      # If the dep is a file dependency (no node attached), and has a relative
+      # path, make it absolute so the linker knows where to look.
+      if item.node is None and not os.path.isabs(item.text):
+        return os.path.join(cx.currentSourcePath, item.text)
+      return item.text
+
+    if hasattr(item, 'path'):
+      if os.path.isabs(item.path):
+        return item.path
+
+      local_path = os.path.join(cx.buildFolder, builder.localFolder)
+      return os.path.relpath(item.path, local_path)
+
+    return item
+
 class BuilderProxy(object):
   def __init__(self, builder, compiler, name):
     self.constructor_ = builder.constructor_
@@ -149,26 +167,9 @@ class BinaryBuilder(object):
   def getBuildFolder(self, builder):
     return os.path.join(builder.buildFolder, self.localFolder)
 
-  def linkFlag(self, cx, item):
-    if type(item) is Dep:
-      # If the dep is a file dependency (no node attached), and has a relative
-      # path, make it absolute so the linker knows where to look.
-      if item.node is None and not os.path.isabs(item.text):
-        return os.path.join(cx.currentSourcePath, item.text)
-      return item.text
-
-    if hasattr(item, 'path'):
-      if os.path.isabs(item.path):
-        return item.path
-
-      local_path = os.path.join(cx.buildFolder, self.localFolder)
-      return os.path.relpath(item.path, local_path)
-
-    return item
-
   def linkFlags(self, cx):
-    argv = [self.linkFlag(cx, item) for item in self.compiler.linkflags]
-    argv += [self.linkFlag(cx, item) for item in self.compiler.postlink]
+    argv = [Dep.resolve(cx, builder, item) for item in self.compiler.linkflags]
+    argv += [Dep.resolve(cx, builder, item) for item in self.compiler.postlink]
     return argv
 
   def finish(self, cx):

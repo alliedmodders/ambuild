@@ -37,3 +37,14 @@ def ResolveFolder(parent, folder):
     raise Exception('Cannot generate folders outside the build folder')
 
   return parent_path, path
+
+def Join(*nodes):
+  paths = []
+  for node in nodes:
+    if node is None:
+      continue
+    if util.IsString(node):
+      paths.append(node)
+    else:
+      paths.append(node.path)
+  return os.path.join(*paths)
