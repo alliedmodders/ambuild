@@ -17,11 +17,11 @@
 import os, types
 from ambuild2 import util
 from ambuild2.frontend import paths
-from ambuild2.frontend.version import Version
-from ambuild2.frontend.cpp import compilers
-from ambuild2.frontend.cpp import Dep, CppNodes
 from ambuild2.frontend.vs import nodes
 from ambuild2.frontend.vs import export_vcxproj
+from ambuild2.frontend.cpp import compilers
+from ambuild2.frontend.cpp import Dep, CppNodes
+from ambuild2.frontend.version import Version
 
 class CompilerShell(object):
   def __init__(self, version):
@@ -136,6 +136,12 @@ class BinaryBuilder(object):
 
   @property
   def localFolder(self):
+    # If this is a one-off binary, we need to make sure its folder name won't
+    # create conflicts.
+    if hasattr(self, 'generate'):
+      return '{0} - {1}'.format(self.name_, self.tag_)
+
+    # Otherwise - we basically expect one project per context.
     return self.tag_
 
   @property

@@ -14,8 +14,9 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import re
+import os, re
 from ambuild2 import util
+from ambuild2.frontend import paths
 from ambuild2.frontend.cpp import Dep
 from ambuild2.frontend.vs.xmlbuilder import XmlBuilder
 
@@ -25,9 +26,16 @@ def export(node):
 
 def export_fp(node, fp):
   xml = XmlBuilder(fp)
+
+  version = node.project.compiler.version 
+  if version >= 1600 and version < 1800:
+    toolsVersion = '4.0'
+  elif version >= 1800:
+    toolsVersion = '12.0'
+
   scope = xml.block('Project',
     DefaultTargets = 'Build',
-    ToolsVersion = '4.0',
+    ToolsVersion = toolsVersion,
     xmlns = 'http://schemas.microsoft.com/developer/msbuild/2003'
   )
   with scope:
@@ -60,6 +68,12 @@ def export_body(node, xml):
     with xml.block('ItemDefinitionGroup', Condition = condition_for(builder)):
       export_configuration_options(node, xml, builder)
 
+  export_source_files(node, xml)
+
+  xml.tag('Import', Project = '$(VCTargetsPath)\Microsoft.cpp.targets')
+  with xml.block('ImportGroup', Label = 'ExtensionTargets'):
+    pass
+
 def condition_for(builder):
   full_tag = '{0}|Win32'.format(builder.tag_)
   return "'$(Configuration)|$(Platform)'=='{0}'".format(full_tag)
@@ -79,6 +93,12 @@ def export_configuration_properties(node, xml):
       xml.tag('CharacterSet', 'MultiByte')
       if '/GL' in builder.compiler.cxxflags:
         xml.tag('WholeProgramOptimization', 'true')
+      
+      version = builder.compiler.version
+      if version >= 1700 and version < 1800:
+        xml.tag('PlatformToolset', 'v110')
+      elif version >= 1800:
+        xml.tag('PlatformToolset', 'v120')
 
 def export_configuration_user_props(node, xml):
   for builder in node.project.builders_:
@@ -99,13 +119,28 @@ def export_configuration_paths(node, xml):
       xml.tag('LinkIncremental', 'true', Condition = condition)
     xml.tag('TargetName', builder.name_, Condition = condition)
 
+def sanitize_val_defines(defines):
+  new_defines = []
+  for option in defines:
+    index = option.find('=')
+    if index == -1:
+      new_defines.append(option)
+      continue
+
+    key = option[0:index]
+    val = option[index + 1:]
+    if val[0] == '"' and val[-1] == '"':
+      val = '\\"{0}\\"'.format(val)
+    new_defines.append('{0}={1}'.format(key, val))
+  return new_defines
+
 def export_configuration_options(node, xml, builder):
   compiler = builder.compiler
 
   includes = ['%(AdditionalIncludeDirectories)'] + compiler.includes + compiler.cxxincludes
   all_defines = compiler.defines + compiler.cxxdefines
-  val_defines = ['/D' + option for option in all_defines if '=' in option]
   simple_defines = ['%(PreprocessorDefinitions)'] + [option for option in all_defines if '=' not in option]
+  val_defines = ['/D{0}'.format(option) for option in all_defines if '=' in option]
 
   with xml.block('ClCompile'):
     flags = compiler.cflags + compiler.cxxflags
@@ -151,7 +186,7 @@ def export_configuration_options(node, xml, builder):
     if '/Oy-' in flags:
       xml.tag('OmitFramePointer', 'true')
     if '/EHsc' in flags:
-      xml.tag('ExceptionHandling', 'Yes')
+      xml.tag('ExceptionHandling', 'Sync')
 
     if '/MT' in flags:
       xml.tag('RuntimeLibrary', 'MultiThreaded')
@@ -185,10 +220,11 @@ def export_configuration_options(node, xml, builder):
       pass
     xml.tag('MultiProcessorCompilation', 'true')
 
-  with xml.block('ResourceCompiler'):
+  with xml.block('ResourceCompile'):
     defines = ['%(PreprocessorDefinitions)'] + compiler.defines + compiler.cxxdefines + compiler.rcdefines
+    defines = sanitize_val_defines(defines)
     xml.tag('PreprocessorDefinitions', ';'.join(defines))
-    xml.tag('AdditionalIncludeDirectories', ';'.join(includes))
+    xml.tag('AdditionalIncludeDirectories', ';'.join(includes[1:] + includes[0:1]))
 
   with xml.block('Link'):
     link_flags = compiler.linkflags + compiler.postlink
@@ -236,3 +272,41 @@ def export_configuration_options(node, xml, builder):
     elif '/OPT:NOICF' in link_flags:
       xml.tag('EnableCOMDATFolding', 'true')
     xml.tag('TargetMachine', 'Machine{0}'.format(machine))
+
+def export_source_files(node, xml):
+  files = {}
+  all_builders = set()
+  for builder in node.project.builders_:
+    for source in builder.sources:
+      file = os.path.relpath(
+        paths.Join(node.context.currentSourcePath, source),
+        paths.Join(node.context.localFolder)
+      )
+      builders = files.setdefault(file, set())
+      builders.add(builder)
+    all_builders.add(builder)
+
+  def emit(file, kind):
+    builders = files[file]
+    excluded = all_builders - builders
+
+    if len(excluded) == 0:
+      xml.tag(kind, Include = file)
+      return
+
+    with xml.block(kind, Include = file):
+      for builder in excluded:
+        xml.tag('ExcludedFromBuild', Condition = condition_for(builder))
+
+
+  with xml.block('ItemGroup'):
+    for file in files:
+      _, ext = os.path.splitext(file)
+      if ext != '.rc':
+        emit(file, 'ClCompile')
+
+  with xml.block('ItemGroup'):
+    for file in files:
+      _, ext = os.path.splitext(file)
+      if ext == '.rc':
+        emit(file, 'ResourceCompile')
