@@ -17,8 +17,7 @@
 import os, sys
 import platform
 from ambuild2 import util
-from optparse import OptionParser
-from optparse import Values
+from optparse import OptionParser, Values, SUPPRESS_HELP
 
 class Preparer(object):
   def __init__(self, sourcePath, buildPath):
@@ -39,6 +38,10 @@ class Preparer(object):
     self.options.add_option("--symbol-files", action="store_true", dest="symbol_files", default=False,
                             help="Split debugging symbols from binaries into separate symbol files.")
 
+    # Generator specific options.
+    self.options.add_option("--vs-version", type="string", dest="vs_version", default="10",
+                            help=SUPPRESS_HELP)
+
   @staticmethod
   def default_build_folder(prep):
     return 'obj-' + util.Platform() + '-' + platform.machine()
@@ -58,6 +61,10 @@ class Preparer(object):
     if options.list_gen:
       print('Available build system generators:')
       print('  {0:24} - AMBuild 2 (default)'.format('ambuild2'))
+      print('  {0:24} - Visual Studio'.format('vs'))
+      print('')
+      print('Extra options:')
+      print('  --vs-version=N        Visual Studio version (2010 or 10 default)')
       sys.exit(0)
 
     if options.no_color:
@@ -99,6 +106,9 @@ class Preparer(object):
 
     if options.generator == 'ambuild2':
       from ambuild2.frontend.amb2 import gen
+      builder = gen.Generator(self.sourcePath, self.buildPath, os.getcwd(), options, args)
+    elif options.generator == 'vs':
+      from ambuild2.frontend.vs import gen
       builder = gen.Generator(self.sourcePath, self.buildPath, os.getcwd(), options, args)
     else:
       sys.stderr.write('Unrecognized build generator: ' + options.generator + '\n')

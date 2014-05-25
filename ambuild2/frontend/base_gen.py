@@ -87,6 +87,10 @@ class Context(object):
   def originalCwd(self):
     return self.generator.originalCwd
 
+  @property
+  def backend(self):
+    return self.generator.backend
+
   def SetBuildFolder(self, folder):
     if folder == '/' or folder == '.' or folder == './':
       self.buildFolder = ''
@@ -166,7 +170,15 @@ class Generator(object):
   def popContext(self):
     self.contextStack_.pop()
 
+  def enterContext(self, cx):
+    pass
+
+  def leaveContext(self, cx):
+    pass
+
   def evalScript(self, file, vars={}):
+    file = os.path.normpath(file)
+
     cx = Context(self, self.contextStack_[-1], file)
     self.pushContext(cx)
 
@@ -188,7 +200,10 @@ class Generator(object):
 
       code = compile(chars, full_path, 'exec')
 
+    self.enterContext(cx)
     exec(code, new_vars)
+    self.leaveContext(cx)
+
     if 'rvalue' in new_vars:
       rvalue = new_vars['rvalue']
       del new_vars['rvalue']
@@ -225,6 +240,10 @@ all:
 
   def getLocalFolder(self, context):
     return context.localFolder_
+
+  @property
+  def backend(self):
+    raise Exception('Must be implemented!')
 
   def addSymlink(self, context, source, output_path):
     raise Exception('Must be implemented!')

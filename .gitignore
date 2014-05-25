@@ -1,3 +1,5 @@
 # Ignore build directories
 build/
 tests/*/obj-*/
+*.pyc
+*.*~

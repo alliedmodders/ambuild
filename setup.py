@@ -28,6 +28,7 @@ setup(
     'ambuild2.ipc',
     'ambuild2.frontend.amb2',
     'ambuild2.frontend.cpp',
+    'ambuild2.frontend.vs',
   ],
   scripts = scripts
 )

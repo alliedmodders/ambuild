@@ -19,12 +19,9 @@ from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.frontend import base_gen
 from ambuild2 import database
+from ambuild2.frontend import cpp
+from ambuild2.frontend import paths
 from ambuild2.frontend.cpp import detect
-
-class CppNodes(object):
-  def __init__(self, output, debug_outputs):
-    self.binary = output
-    self.debug = debug_outputs
 
 class Generator(base_gen.Generator):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args, db=None, refactoring=False):
@@ -42,6 +39,10 @@ class Generator(base_gen.Generator):
     self.compiler = None
     self.symlink_support = False
     self.had_symlink_fallback = False
+
+  @property
+  def backend(self):
+    return 'amb2'
 
   @classmethod
   def FromVars(cls, vars, db, refactoring):
@@ -216,22 +217,7 @@ class Generator(base_gen.Generator):
     return context.localFolder_
 
   def generateFolder(self, parent, folder):
-    parent_path = ''
-    if parent:
-      parent_path = parent.path
-    path = os.path.normpath(os.path.join(parent_path, folder))
-
-    if path.startswith('..'):
-      util.con_err(
-        util.ConsoleRed,
-        'Output path ',
-        util.ConsoleBlue,
-        path,
-        util.ConsoleRed,
-        ' is outside the build folder!',
-        util.ConsoleNormal
-      )
-      raise Exception('Cannot generate folders outside the build folder')
+    parent_path, path = paths.ResolveFolder(parent, folder)
 
     # Quick check. If this folder is not in our old folder list, and it's in
     # the DB, then we already have an entry for it that has already negotiated
@@ -661,7 +647,7 @@ class Generator(base_gen.Generator):
       inputs = inputs
     )
 
-    return CppNodes(output_file, debug_file)
+    return cpp.CppNodes(output_file, debug_file)
 
   def addFileOp(self, cmd, context, source, output_path):
     # Try to detect if our output_path is actually a folder, via trailing

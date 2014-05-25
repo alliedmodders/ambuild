@@ -15,28 +15,3 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 
-class Version(object):
-  def __init__(self, string):
-    if type(string) is int:
-      self.string = str(string)
-      self.components = [string]
-    else:
-      self.string = string
-      self.components = Version.split(string)
-
-  def __str__(self):
-    return self.string
-
-  @staticmethod
-  def split(string):
-    return [int(part) for part in string.split('.')]
-
-  def __cmp__(self, other):
-    if hasattr(other, 'components'):
-      components = other.components
-    elif type(other) is int:
-      components = [other]
-    else:
-      components = Version.split(str(other))
-
-    return cmp(self.components, components)
