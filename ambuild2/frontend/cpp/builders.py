@@ -168,8 +168,8 @@ class BinaryBuilder(object):
     return os.path.join(builder.buildFolder, self.localFolder)
 
   def linkFlags(self, cx):
-    argv = [Dep.resolve(cx, builder, item) for item in self.compiler.linkflags]
-    argv += [Dep.resolve(cx, builder, item) for item in self.compiler.postlink]
+    argv = [Dep.resolve(cx, self, item) for item in self.compiler.linkflags]
+    argv += [Dep.resolve(cx, self, item) for item in self.compiler.postlink]
     return argv
 
   def finish(self, cx):
