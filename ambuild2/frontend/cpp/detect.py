@@ -87,13 +87,11 @@ def DetectCxxCompiler(env, var):
   raise Exception('Unable to find a suitable ' + var + ' compiler')
 
 def VerifyCompiler(env, mode, cmd, vendor):
-  args = cmd.split(' ')
-  if 'CXXFLAGS' in env:
-    args.extend(env['CXXFLAGS'])
+  args = cmd.split()
   if 'CFLAGS' in env:
-    args.extend(env['CFLAGS'])
+    args.extend(env['CFLAGS'].split())
   if mode == 'CXX' and 'CXXFLAGS' in env:
-    args.extend(env['CXXFLAGS'])
+    args.extend(env['CXXFLAGS'].split())
   if mode == 'CXX':
     filename = 'test.cpp'
   else:
