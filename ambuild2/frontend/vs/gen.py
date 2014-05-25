@@ -14,7 +14,8 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import os, errno, uuid
+import os, errno
+import uuid as uuids
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.frontend import base_gen, paths
@@ -48,6 +49,16 @@ class Generator(base_gen.Generator):
         raise Exception('Unsupported Visual Studio version: {0}'.format(self.options.vs_version)) 
       self.vs_version = YearMap[self.options.vs_version]
 
+    self.cacheFile = os.path.join(self.buildPath, '.cache')
+    try:
+      with open(self.cacheFile, 'rb') as fp:
+        self.vars_ = util.pickle.load(fp)
+    except:
+      self.vars_ = {}
+
+    if 'uuids' not in self.vars_:
+      self.vars_['uuids'] = {}
+
   # Overridden.
   @property
   def backend(self):
@@ -60,10 +71,16 @@ class Generator(base_gen.Generator):
   # Overriden.
   def postGenerate(self):
     self.generateProjects()
+    with open(self.cacheFile, 'wb') as fp:
+      util.DiskPickle(self.vars_, fp)
 
   def generateProjects(self):
     for node in self.projects_:
-      node.uuid = str(uuid.uuid1()).upper()
+      # We cache uuids across runs to keep them consistent.
+      node.uuid = self.vars_['uuids'].get(node.path)
+      if node.uuid is None:
+        node.uuid = str(uuids.uuid1()).upper()
+        self.vars_['uuids'][node.path] = node.uuid
       node.project.export(node)
 
   # Overridden.

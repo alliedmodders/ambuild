@@ -153,6 +153,7 @@ def export_configuration_options(node, xml, builder):
     other_flags = [flag for flag in other_flags if not flag.startswith('/MT')]
     other_flags = [flag for flag in other_flags if not flag.startswith('/MD')]
     other_flags = [flag for flag in other_flags if not flag.startswith('/W')]
+    other_flags = [flag for flag in other_flags if not flag.startswith('/GR')]
 
     if len(other_flags):
       xml.tag('AdditionalOptions', ' '.join(other_flags))
@@ -215,6 +216,8 @@ def export_configuration_options(node, xml, builder):
 
     if '/GR-' in flags:
       xml.tag('RuntimeTypeInfo', 'false')
+    elif '/GR' in flags:
+      xml.tag('RuntimeTypeInfo', 'true')
 
     with xml.block('PrecompiledHeader'):
       pass
