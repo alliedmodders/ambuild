@@ -97,6 +97,7 @@ class CxxCompiler(Compiler):
     cc = CxxCompiler(self.cc, self.cxx)
     cc.inherit(self)
     return cc
+
   def Program(self, name):
     return builders.Program(self.clone(), name)
 
