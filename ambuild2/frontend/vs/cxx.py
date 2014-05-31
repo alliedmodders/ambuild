@@ -122,6 +122,13 @@ class Compiler(compilers.Compiler):
   def StaticLibrary(self, name):
     return Project(StaticLibrary, self, name).default()
 
+  def like(self, name):
+    return name == 'msvc'
+
+  @property
+  def vendor(self):
+    return 'msvc'
+
 class BinaryBuilder(object):
   def __init__(self, project, compiler, name, tag):
     super(BinaryBuilder, self).__init__()
