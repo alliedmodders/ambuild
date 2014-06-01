@@ -40,6 +40,7 @@ class Project(object):
   def Configure(self, name, tag):
     compiler = self.compiler.clone()
     builder = self.ctor_(self, compiler, name, tag)
+    builder.sources = self.sources[:]
     self.builders_ += [builder]
     return builder
 
@@ -104,13 +105,13 @@ class Compiler(compilers.Compiler):
   def GetVersionFromVS(vs_version):
     return Version((vs_version * 100) + 600)
 
-  def ProgramBuilder(self, name):
+  def ProgramProject(self, name):
     return Project(Program, self, name)
 
-  def LibraryBuilder(self, name):
+  def LibraryProject(self, name):
     return Project(Library, self, name)
 
-  def StaticLibraryBuilder(self, name):
+  def StaticLibraryProject(self, name):
     return Project(StaticLibrary, self, name)
 
   def Program(self, name):
