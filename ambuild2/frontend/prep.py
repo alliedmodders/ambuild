@@ -41,6 +41,8 @@ class Preparer(object):
     # Generator specific options.
     self.options.add_option("--vs-version", type="string", dest="vs_version", default="10",
                             help=SUPPRESS_HELP)
+    self.options.add_option("--vs-split", action='store_true', dest="vs_split", default=False,
+                            help=SUPPRESS_HELP)
 
   @staticmethod
   def default_build_folder(prep):
@@ -64,7 +66,8 @@ class Preparer(object):
       print('  {0:24} - Visual Studio'.format('vs'))
       print('')
       print('Extra options:')
-      print('  --vs-version=N        Visual Studio version (2010 or 10 default)')
+      print('  --vs-version=N        Visual Studio: IDE version (2010 or 10 default)')
+      print('  --vs-split            Visual Studio: generate one project file per configuration')
       sys.exit(0)
 
     if options.no_color:

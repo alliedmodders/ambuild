@@ -57,6 +57,20 @@ class Project(object):
     pass
 
   def generate(self, generator, cx):
+    if generator.options.vs_split:
+      return self.generate_split(generator, cx)
+    return self.generate_combined(generator, cx)
+
+  def generate_split(self, generator, cx):
+    outputs = []
+    for builder in self.builders_:
+      project = Project(self.ctor_, self.compiler, builder.name_)
+      project.sources = self.sources[:]
+      project.builders_ = [builder]
+      outputs += project.generate_combined(generator, cx)
+    return outputs
+
+  def generate_combined(self, generator, cx):
     outputs = []
     proj_path = paths.Join(cx.localFolder, self.name_ + self.compiler.projectFileSuffix)
     node = nodes.ProjectNode(cx, proj_path, self)
