@@ -299,7 +299,7 @@ def export_source_files(node, xml):
 
     with xml.block(kind, Include = file):
       for builder in excluded:
-        xml.tag('ExcludedFromBuild', Condition = condition_for(builder))
+        xml.tag('ExcludedFromBuild', 'true', Condition = condition_for(builder))
 
 
   with xml.block('ItemGroup'):
