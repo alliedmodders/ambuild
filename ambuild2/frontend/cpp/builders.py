@@ -310,6 +310,10 @@ class Program(BinaryBuilder):
   def buildName(name):
     return name + util.ExecutableSuffix()
 
+  @property
+  def type(self):
+    return 'program'
+
   def generateBinary(self, cx, files):
     argv = self.linker_.command.split(' ')
     argv += files
@@ -337,6 +341,10 @@ class Library(BinaryBuilder):
   @staticmethod
   def buildName(name):
     return name + util.SharedLibSuffix()
+
+  @property
+  def type(self):
+    return 'library'
 
   def generateBinary(self, cx, files):
     argv = self.linker_.command.split(' ')
@@ -370,6 +378,10 @@ class StaticLibrary(BinaryBuilder):
   @staticmethod
   def buildName(name):
     return util.StaticLibPrefix() + name + util.StaticLibSuffix()
+
+  @property
+  def type(self):
+    return 'static'
 
   def generateBinary(self, cx, files):
     if isinstance(self.linker_, MSVC):

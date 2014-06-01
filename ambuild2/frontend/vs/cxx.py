@@ -164,6 +164,10 @@ class Program(BinaryBuilder):
     return '{0}.exe'.format(name)
 
   @property
+  def type(self):
+    return 'program'
+
+  @property
   def configurationType(self):
     return 'Application'
 
@@ -176,6 +180,10 @@ class Library(BinaryBuilder):
     return '{0}.dll'.format(name)
 
   @property
+  def type(self):
+    return 'library'
+
+  @property
   def configurationType(self):
     return 'DynamicLibrary'
 
@@ -186,6 +194,10 @@ class StaticLibrary(BinaryBuilder):
   @staticmethod
   def buildOutputName(name):
     return '{0}.lib'.format(name)
+
+  @property
+  def type(self):
+    return 'static'
 
   @property
   def configurationType(self):
