@@ -64,9 +64,9 @@ class BuilderProxy(object):
   def Dep(text, node=None): 
     return Dep(text, node)
 
-class Builder(object):
+class Project(object):
   def __init__(self, constructor, compiler, name):
-    super(Builder, self).__init__()
+    super(Project, self).__init__()
     self.constructor_ = constructor
     self.compiler = compiler
     self.name = name

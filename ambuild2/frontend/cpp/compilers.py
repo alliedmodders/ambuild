@@ -107,14 +107,14 @@ class CxxCompiler(Compiler):
   def StaticLibrary(self, name):
     return builders.StaticLibrary(self.clone(), name)
 
-  def ProgramBuilder(self, name):
-    return builders.Builder(builders.Program, self.clone(), name)
+  def ProgramProject(self, name):
+    return builders.Project(builders.Program, self.clone(), name)
 
-  def LibraryBuilder(self, name):
-    return builders.Builder(builders.Library, self.clone(), name)
+  def LibraryProject(self, name):
+    return builders.Project(builders.Library, self.clone(), name)
 
-  def StaticLibraryBuilder(self, name):
-    return builders.Builder(builders.StaticLibrary, self.clone(), name)
+  def StaticLibraryProject(self, name):
+    return builders.Project(builders.StaticLibrary, self.clone(), name)
 
   # These functions use |cxx|, because we expect the vendors to be the same
   # across |cc| and |cxx|.
