@@ -60,6 +60,10 @@ class BuilderProxy(object):
   def localFolder(self):
     return self.name_
 
+  @property
+  def type(self):
+    return self.constructor_.type
+
   @staticmethod
   def Dep(text, node=None): 
     return Dep(text, node)
