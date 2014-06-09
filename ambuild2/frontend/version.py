@@ -14,9 +14,11 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+from ambuild2 import util
 
-class Version(object):
+class Version(util.Orderable):
   def __init__(self, string):
+    super(Version, self).__init__()
     if type(string) is int:
       self.string = str(string)
       self.components = [string]
@@ -39,4 +41,4 @@ class Version(object):
     else:
       components = Version.split(str(other))
 
-    return cmp(self.components, components)
+    return util.compare(self.components, components)

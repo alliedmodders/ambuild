@@ -411,3 +411,34 @@ def WriteEncodedText(fd, text):
   if not hasattr(fd, 'encoding') or fd.encoding == None:
     text = text.encode(locale.getpreferredencoding(), 'replace')
   fd.write(text)
+
+class CmpOrderable(object):
+  def __init__(self):
+    super(CmpOrderable, self).__init__()
+
+  def __lt__(self, other):
+    return self.__cmp__(other) < 0
+
+  def __le__(self, other):
+    return self.__cmp__(other) <= 0
+
+  def __eq__(self, other):
+    return self.__cmp__(other) == 0
+
+  def __ne__(self, other):
+    return self.__cmp__(other) != 0
+
+  def __gt__(self, other):
+    return self.__cmp__(other) > 0
+
+  def __ge__(self, other):
+    return self.__cmp__(other) >= 0
+
+if str == bytes:
+  class Orderable(object):
+    pass
+  compare = cmp
+else:
+  class Orderable(CmpOrderable):
+    pass
+  compare = lambda a, b: (a > b) - (a < b)
