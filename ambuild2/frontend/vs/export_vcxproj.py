@@ -237,7 +237,6 @@ def export_configuration_options(node, xml, builder):
     ignore_libs = ['%(IgnoreSpecificDefaultLibraries)']
     machine = 'X86'
     subsystem = 'Windows'
-    dependencies = []
     for flag in link_flags:
       if util.IsString(flag):
         if flag == '/SUBSYSTEM:CONSOLE':
@@ -245,7 +244,7 @@ def export_configuration_options(node, xml, builder):
           continue
 
         if '.lib' in flag:
-          dependencies.append(flag)
+          libs.append(flag)
           continue
 
         m = re.match('/NODEFAULTLIB:(.+)', flag)
