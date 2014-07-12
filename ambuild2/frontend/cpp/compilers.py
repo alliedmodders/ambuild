@@ -143,3 +143,7 @@ class CxxCompiler(Compiler):
   def argv(self):
     return self.cxx.command.split(' ')
 
+  # Returns the debuginfo modulo what the underlying vendor's compiler supports.
+  @property
+  def debug_symbols(self):
+    return self.cxx.parse_debuginfo(self.debuginfo)
