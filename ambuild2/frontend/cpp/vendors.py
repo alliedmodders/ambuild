@@ -40,6 +40,11 @@ class MSVC(Vendor):
   def like(self, name):
     return name == 'msvc'
 
+  def parse_debuginfo(self, debuginfo):
+    if debuginfo == 'bundled':
+      return 'separate'
+    return debuginfo
+
   @staticmethod
   def IncludePath(outputPath, includePath):
     # Hack - try and get a relative path because CL, with either 
@@ -76,6 +81,9 @@ class CompatGCC(Vendor):
 
   def objectArgs(self, sourceFile, objFile):
     return ['-H', '-c', sourceFile, '-o', objFile]
+
+  def parse_debuginfo(self, debuginfo):
+    return debuginfo
 
 class GCC(CompatGCC):
   def __init__(self, command, version):

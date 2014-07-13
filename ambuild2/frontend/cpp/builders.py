@@ -103,7 +103,7 @@ class ArgBuilder(object):
   def __init__(self, outputPath, config, compiler):
     args = compiler.command.split(' ')
     args += config.cflags
-    if config.debuginfo:
+    if config.debug_symbols:
       args += compiler.debuginfo_argv
     if compiler == config.cxx:
       args += config.cxxflags
@@ -185,7 +185,7 @@ class BinaryBuilder(object):
     self.default_cxx_env = ArgBuilder(self.outputPath, self.compiler, self.compiler.cxx)
 
     shared_cc_outputs = []
-    if self.compiler.debuginfo and self.compiler.cc.behavior == 'msvc':
+    if self.compiler.debug_symbols and self.compiler.cc.behavior == 'msvc':
       cl_version = int(self.compiler.cc.version) - 600
       shared_pdb = 'vc{0}.pdb'.format(int(cl_version / 10))
       shared_cc_outputs += [shared_pdb]
@@ -255,7 +255,7 @@ class BinaryBuilder(object):
         self.linker_outputs += [self.name_ + '.lib']
         self.linker_outputs += [self.name_ + '.exp']
 
-    if self.compiler.debuginfo == 'separate':
+    if self.compiler.debug_symbols == 'separate':
       self.perform_symbol_steps(cx)
 
   def perform_symbol_steps(self, cx):
@@ -299,8 +299,8 @@ class BinaryBuilder(object):
       folder = folder,
       shared_outputs = shared_outputs
     )
-    if not self.debug_entry and self.compiler.debuginfo:
-      if self.linker_.behavior != 'msvc' and self.compiler.debuginfo == 'bundled':
+    if not self.debug_entry and self.compiler.debug_symbols:
+      if self.linker_.behavior != 'msvc' and self.compiler.debug_symbols == 'bundled':
         self.debug_entry = outputs[0]
       else:
         self.debug_entry = outputs[-1]
@@ -330,7 +330,7 @@ class Program(BinaryBuilder):
         '/OUT:' + self.outputFile,
         '/nologo',
       ]
-      if self.compiler.debuginfo:
+      if self.compiler.debug_symbols:
         argv += ['/DEBUG', '/PDB:"' + self.name_ + '.pdb"']
     else:
       argv.extend(self.linkFlags(cx))
@@ -363,7 +363,7 @@ class Library(BinaryBuilder):
         '/nologo',
         '/DLL',
       ]
-      if self.compiler.debuginfo:
+      if self.compiler.debug_symbols:
         argv += ['/DEBUG', '/PDB:"' + self.name_ + '.pdb"']
     elif isinstance(self.linker_, CompatGCC):
       argv.extend(self.linkFlags(cx))
