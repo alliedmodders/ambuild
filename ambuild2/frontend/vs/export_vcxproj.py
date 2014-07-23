@@ -262,9 +262,9 @@ def export_configuration_options(node, xml, builder):
     xml.tag('OutputFile', '$(OutDir)$(TargetFileName)')
     xml.tag('IgnoreSpecificDefaultLibraries', ';'.join(ignore_libs))
     if compiler.debuginfo is None:
-      xml.tag('GenerateDebugInforation', 'false')
+      xml.tag('GenerateDebugInformation', 'false')
     else:
-      xml.tag('GenerateDebugInforation', 'true')
+      xml.tag('GenerateDebugInformation', 'true')
     if '/OPT:REF' in link_flags:
       xml.tag('OptimizeReferences', 'true')
     elif '/OPT:NOREF' in link_flags:
