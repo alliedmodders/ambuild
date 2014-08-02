@@ -59,6 +59,8 @@ class Generator(base_gen.Generator):
     if 'uuids' not in self.vars_:
       self.vars_['uuids'] = {}
 
+    self.target_platform = 'windows'
+
   # Overridden.
   @property
   def backend(self):
