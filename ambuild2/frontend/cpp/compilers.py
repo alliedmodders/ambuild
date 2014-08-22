@@ -29,6 +29,8 @@ class Compiler(object):
     'defines',          # C and C++ #defines
     'cxxdefines',       # C++-only #defines
 
+    'c_only_flags',     # Flags for C but not C++.
+
     'rcdefines',        # Resource Compiler (RC) defines
 
     # Link flags. If any members are not strings, they will be interpreted as

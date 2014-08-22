@@ -107,6 +107,8 @@ class ArgBuilder(object):
       args += compiler.debuginfo_argv
     if compiler == config.cxx:
       args += config.cxxflags
+    else:
+      args += config.c_only_flags
     args += [compiler.definePrefix + define for define in config.defines]
     if compiler == config.cxx:
       args += [compiler.definePrefix + define for define in config.cxxdefines]
