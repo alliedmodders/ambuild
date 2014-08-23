@@ -27,7 +27,7 @@ class Vendor(object):
     self.objSuffix = objSuffix
     self.debuginfo_argv = []
     self.extra_props = {}
-    self.versionObject = Version(self.version)
+    self.versionObject = Version('{0}-{1}'.format(name, self.version))
 
 class MSVC(Vendor):
   def __init__(self, command, version):
@@ -94,12 +94,14 @@ class GCC(CompatGCC):
     return name == 'gcc'
 
 class Clang(CompatGCC):
-  def __init__(self, command, version):
-    super(Clang, self).__init__('clang', command, version)
+  def __init__(self, vendor_name, command, version):
+    super(Clang, self).__init__(vendor_name, command, version)
+    self.name = 'clang' # Rewrite name to just 'clang' to make things easier.
+    self.vendor_name = vendor_name
     self.debuginfo_argv = ['-g3']
 
   def like(self, name):
-    return name == 'gcc' or name == 'clang'
+    return name == 'gcc' or name == 'clang' or name == self.vendor_name
 
 class SunPro(Vendor):
   def __init__(self, command, version):
@@ -115,4 +117,3 @@ class SunPro(Vendor):
 
   def like(self, name):
     return name == 'sun'
-
