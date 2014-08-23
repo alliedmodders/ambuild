@@ -107,7 +107,11 @@ int main()
   printf("icc %d\\n", __ICC);
 #elif defined __clang__
 # if defined(__clang_major__) && defined(__clang_minor__)
-  printf("clang %d.%d\\n", __clang_major__, __clang_minor__);
+#  if defined(__apple_build_version__)
+    printf("apple-clang %d.%d\\n", __clang_major__, __clang_minor__);
+#  else   
+    printf("clang %d.%d\\n", __clang_major__, __clang_minor__);
+#  endif
 # else
   printf("clang 1.%d\\n", __GNUC_MINOR__);
 # endif
@@ -190,8 +194,10 @@ int main()
   vendor, version = lines[0].split(' ')
   if vendor == 'gcc':
     v = vendors.GCC(cmd, version)
+  elif vendor == 'apple-clang':
+    v = vendors.Clang('apple-clang', cmd, version)
   elif vendor == 'clang':
-    v = vendors.Clang(cmd, version)
+    v = vendors.Clang('clang', cmd, version)
   elif vendor == 'msvc':
     v = vendors.MSVC(cmd, version)
   elif vendor == 'sun':
