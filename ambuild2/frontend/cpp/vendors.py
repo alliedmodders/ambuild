@@ -16,6 +16,7 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 
 import os
+from ambuild2 import util
 from ambuild2.frontend.version import Version
 
 class Vendor(object):
@@ -28,6 +29,15 @@ class Vendor(object):
     self.debuginfo_argv = []
     self.extra_props = {}
     self.versionObject = Version('{0}-{1}'.format(name, self.version))
+
+  def nameForExecutable(self, name):
+    return name + util.ExecutableSuffix
+
+  def nameForSharedLibrary(self, name):
+    return name + util.SharedLibSuffix
+
+  def nameForStaticLibrary(self, name):
+    return util.StaticLibPrefix + name + util.StaticLibSuffix
 
 class MSVC(Vendor):
   def __init__(self, command, version):
@@ -112,6 +122,9 @@ class Emscripten(Clang):
     if name == 'emscripten':
       return true
     return super(Emscripten, self).like(name)
+
+  def nameForExecutable(self, name):
+    return name + '.js'
 
 class SunPro(Vendor):
   def __init__(self, command, version):

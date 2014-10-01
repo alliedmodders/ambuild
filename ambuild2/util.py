@@ -64,30 +64,27 @@ def IsUnixy():
 def IsBSD():
   return IsMac() or IsFreeBSD() or IsOpenBSD() or IsNetBSD()
 
-def ExecutableSuffix():
-  if IsWindows():
-    return '.exe'
-  else:
-    return ''
+if IsWindows():
+  ExecutableSuffix = '.exe'
+else:
+  ExecutableSuffix = ''
 
-def SharedLibSuffix():
-  if IsWindows():
-    return '.dll'
-  elif sys.platform == 'darwin':
-    return '.dylib'
-  else:
-    return '.so'
+if IsWindows():
+  SharedLibSuffix = '.dll'
+elif sys.platform == 'darwin':
+  SharedLibSuffix = '.dylib'
+else:
+  SharedLibSuffix = '.so'
 
-def StaticLibSuffix():
-  if IsUnixy():
-    return '.a'
-  return '.lib'
+if IsUnixy():
+  StaticLibSuffix = '.a'
+else:
+  StaticLibSuffix = '.lib'
 
-def StaticLibPrefix():
-  if IsWindows():
-    return ''
-  else:
-    return 'lib'
+if IsWindows():
+  StaticLibPrefix = ''
+else:
+  StaticLibPrefix = 'lib'
 
 def WaitForProcess(process):
   out, err = process.communicate()

@@ -189,9 +189,9 @@ int main()
 """)
   file.close()
   if mode == 'CC':
-    executable = 'test' + util.ExecutableSuffix()
+    executable = 'test' + util.ExecutableSuffix
   elif mode == 'CXX':
-    executable = 'testp' + util.ExecutableSuffix()
+    executable = 'testp' + util.ExecutableSuffix
 
   # Make sure the exe is gone.
   if os.path.exists(executable):
