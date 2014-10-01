@@ -149,3 +149,11 @@ class CxxCompiler(Compiler):
   @property
   def debug_symbols(self):
     return self.cxx.parse_debuginfo(self.debuginfo)
+
+  # Internal API.
+  def nameForStaticLibrary(self, name):
+    return self.cxx.nameForStaticLibrary(name)
+  def nameForSharedLibrary(self, name):
+    return self.cxx.nameForSharedLibrary(name)
+  def nameForExecutable(self, name):
+    return self.cxx.nameForExecutable(name)

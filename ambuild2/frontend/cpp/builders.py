@@ -54,7 +54,7 @@ class BuilderProxy(object):
 
   @property
   def outputFile(self):
-    return self.constructor_.buildName(self.name_)
+    return self.constructor_.buildName(self.compiler, self.name_)
 
   @property
   def localFolder(self):
@@ -149,7 +149,7 @@ class BinaryBuilder(object):
 
   @property
   def outputFile(self):
-    return self.buildName(self.name_)
+    return self.buildName(self.compiler, self.name_)
 
   def generate(self, generator, cx):
     return generator.addCxxTasks(cx, self)
@@ -313,8 +313,8 @@ class Program(BinaryBuilder):
     super(Program, self).__init__(compiler, name)
 
   @staticmethod
-  def buildName(name):
-    return name + util.ExecutableSuffix()
+  def buildName(compiler, name):
+    return compiler.nameForExecutable(name)
 
   @property
   def type(self):
@@ -345,8 +345,8 @@ class Library(BinaryBuilder):
     super(Library, self).__init__(compiler, name)
 
   @staticmethod
-  def buildName(name):
-    return name + util.SharedLibSuffix()
+  def buildName(compiler, name):
+    return compiler.nameForSharedLibrary(name)
 
   @property
   def type(self):
@@ -382,8 +382,8 @@ class StaticLibrary(BinaryBuilder):
     super(StaticLibrary, self).__init__(compiler, name)
 
   @staticmethod
-  def buildName(name):
-    return util.StaticLibPrefix() + name + util.StaticLibSuffix()
+  def buildName(compiler, name):
+    return compiler.nameForStaticLibrary(name)
 
   @property
   def type(self):

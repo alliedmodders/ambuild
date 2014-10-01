@@ -16,6 +16,8 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
 import os, re
+import tempfile
+import subprocess
 from ambuild2 import util
 from ambuild2.frontend.cpp import vendors, compilers
 
@@ -84,7 +86,56 @@ def DetectCxxCompiler(env, var):
     cc = TryVerifyCompiler(env, var, i)
     if cc:
       return cc
+
+  # Try for Emscripten. This only works with an env override.
+  if 'emcc' in env.get(var, ''):
+    cc = DetectEmscripten(env, var)
+    if cc:
+      return cc
+
+  # Fail.
   raise Exception('Unable to find a suitable ' + var + ' compiler')
+
+def DetectEmscripten(env, var):
+  cmd = env[var]
+  argv = cmd.split()
+  if 'CFLAGS' in env:
+    argv += env.get('CFLAGS', '').split()
+  if var == 'CC':
+    suffix = '.c'
+  elif var == 'CXX':
+    argv += env.get('CXXFLAGS', '').split()
+    suffix = '.cpp'
+
+  # Run emcc -dM -E on a blank file to get preprocessor definitions.
+  with tempfile.NamedTemporaryFile(suffix = suffix, delete = True) as fp:
+    argv = cmd.split() + ['-dM', '-E', fp.name]
+    output = subprocess.check_output(args = argv)
+  output = output.replace('\r', '')
+  lines = output.split('\n')
+
+  # Map the definitions into a dictionary.
+  defs = {}
+  for line in lines:
+    m = re.match('#define\s+([A-Za-z_][A-Za-z0-9_]*)\s*(.*)', line)
+    if m is None:
+      continue
+    macro = m.group(1)
+    value = m.group(2)
+    defs[macro] = value
+
+  if '__EMSCRIPTEN__' not in defs:
+    return None
+
+  version = '{0}.{1}'.format(defs['__EMSCRIPTEN_major__'], defs['__EMSCRIPTEN_minor__'])
+  v = vendors.Emscripten(cmd, version)
+
+  util.con_out(
+    util.ConsoleHeader,
+    'found {0} version {1}'.format('Emscripten', version),
+    util.ConsoleNormal
+  )
+  return v
 
 def VerifyCompiler(env, mode, cmd, vendor):
   args = cmd.split()
@@ -138,9 +189,9 @@ int main()
 """)
   file.close()
   if mode == 'CC':
-    executable = 'test' + util.ExecutableSuffix()
+    executable = 'test' + util.ExecutableSuffix
   elif mode == 'CXX':
-    executable = 'testp' + util.ExecutableSuffix()
+    executable = 'testp' + util.ExecutableSuffix
 
   # Make sure the exe is gone.
   if os.path.exists(executable):
@@ -178,7 +229,7 @@ int main()
   exe = util.MakePath('.', executable)
   p = util.CreateProcess([executable], executable = exe)
   if p == None:
-    print('failed to create executable')
+    print('failed to create executable with {0}'.format(cmd))
     return False
   if util.WaitForProcess(p) != 0:
     print('executable failed with return code {0}'.format(p.returncode))
