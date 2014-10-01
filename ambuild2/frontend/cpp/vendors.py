@@ -120,7 +120,7 @@ class Emscripten(Clang):
 
   def like(self, name):
     if name == 'emscripten':
-      return true
+      return True
     return super(Emscripten, self).like(name)
 
   def nameForExecutable(self, name):
