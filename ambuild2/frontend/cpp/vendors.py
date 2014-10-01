@@ -103,6 +103,16 @@ class Clang(CompatGCC):
   def like(self, name):
     return name == 'gcc' or name == 'clang' or name == self.vendor_name
 
+class Emscripten(Clang):
+  def __init__(self, command, version):
+    super(Emscripten, self).__init__('emscripten', command, version)
+    self.name = 'emscripten'
+
+  def like(self, name):
+    if name == 'emscripten':
+      return true
+    return super(Emscripten, self).like(name)
+
 class SunPro(Vendor):
   def __init__(self, command, version):
     super(SunPro, self).__init__('sun', version, 'sun', command, '.o')
