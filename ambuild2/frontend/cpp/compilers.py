@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import copy
+import subprocess
 from ambuild2.frontend.cpp import builders
 
 # Base compiler object.
@@ -94,6 +95,7 @@ class CxxCompiler(Compiler):
     # Accesssing these attributes through the API is deprecated.
     self.cc = cc
     self.cxx = cxx
+    self.found_pkg_config_ = False
 
   def clone(self):
     cc = CxxCompiler(self.cc, self.cxx)
@@ -157,3 +159,27 @@ class CxxCompiler(Compiler):
     return self.cxx.nameForSharedLibrary(name)
   def nameForExecutable(self, name):
     return self.cxx.nameForExecutable(name)
+  def run_pkg_config(self, argv):
+    output = subprocess.check_output(args = ['pkg-config'] + argv)
+    return [item.strip() for item in output.strip().split(' ') if item.strip() != '']
+
+  # Helper for running pkg-config.
+  def pkg_config(self, pkg, link = 'dynamic'):
+    if not self.found_pkg_config_:
+      try:
+        self.run_pkg_config(['--version'])
+        self.found_pkg_config = True
+      except:
+        raise Exception('failed to find pkg-config!')
+
+    for include in self.run_pkg_config(['--cflags-only-I', pkg]):
+      if include.startswith('-I'):
+        self.includes += [include]
+      else:
+        self.cflags += [include]
+    self.cflags += self.run_pkg_config(['--cflags-only-other', pkg])
+
+    if link == 'dynamic':
+      self.linkflags += self.run_pkg_config(['--libs', pkg])
+    elif link == 'static':
+      self.linkflags += self.run_pkg_config(['--libs', '--static', pkg])
