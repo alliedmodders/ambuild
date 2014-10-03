@@ -18,9 +18,10 @@ import os, errno
 import uuid as uuids
 from ambuild2 import util
 from ambuild2 import nodetypes
-from ambuild2.frontend import base_gen, paths
+from ambuild2.frontend import paths
 from ambuild2.frontend.vs import cxx
 from ambuild2.frontend.vs import nodes
+from ambuild2.frontent.base import BaseGenerator
 
 SupportedVersions = ['10', '11', '12']
 YearMap = {
@@ -29,7 +30,7 @@ YearMap = {
   '2013': 12,
 }
 
-class Generator(base_gen.Generator):
+class Generator(BaseGenerator):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args):
     super(Generator, self).__init__(sourcePath, buildPath, originalCwd, options, args)
     self.compiler = None

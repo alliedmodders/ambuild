@@ -145,8 +145,9 @@ class Context(object):
   def AddConfigureFile(self, path):
     return self.generator.addConfigureFile(self, path)
 
-class Generator(object):
+class BaseGenerator(object):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args):
+    super(BaseGenerator, self).__init__()
     self.sourcePath = sourcePath
     self.buildPath = os.path.normpath(buildPath)
     self.originalCwd = originalCwd
