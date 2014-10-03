@@ -27,6 +27,7 @@ setup(
     'ambuild2.frontend',
     'ambuild2.ipc',
     'ambuild2.frontend.amb2',
+    'ambuild2.frontend.base',
     'ambuild2.frontend.cpp',
     'ambuild2.frontend.vs',
   ],

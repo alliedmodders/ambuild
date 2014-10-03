@@ -17,13 +17,13 @@
 import os
 from ambuild2 import util
 from ambuild2 import nodetypes
-from ambuild2.frontend import base_gen
 from ambuild2 import database
 from ambuild2.frontend import cpp
 from ambuild2.frontend import paths
 from ambuild2.frontend.cpp import detect
+from ambuild2.frontend.base import BaseGenerator
 
-class Generator(base_gen.Generator):
+class Generator(BaseGenerator):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args, db=None, refactoring=False):
     super(Generator, self).__init__(sourcePath, buildPath, originalCwd, options, args)
     self.cacheFolder = os.path.join(self.buildPath, '.ambuild2')
