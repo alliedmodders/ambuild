@@ -174,7 +174,7 @@ class CxxCompiler(Compiler):
 
     for include in self.run_pkg_config(['--cflags-only-I', pkg]):
       if include.startswith('-I'):
-        self.includes += [include]
+        self.includes += [include[2:].strip()]
       else:
         self.cflags += [include]
     self.cflags += self.run_pkg_config(['--cflags-only-other', pkg])
