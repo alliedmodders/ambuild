@@ -184,6 +184,38 @@ elif util.IsSolaris():
 
     return ctypes.cast(Align(addr + cmsg_len, ctypes.sizeof(ctypes.c_int)), cmsghdr_base_t_p)
 
+elif util.IsNetBSD():
+  for lib in os.listdir('/usr/lib'):
+    if not lib.startswith('libc.so'):
+      continue
+    sLibC = ctypes.CDLL(lib, use_errno=True)
+    if sLibC:
+      break
+  if not sLibC:
+    raise Exception('Could not find a suitable libc binary')
+
+  posix_spawn_file_actions_t = ctypes.c_void_p
+  pid_t = ctypes.c_int
+  msg_socklen_t = ctypes.c_uint
+  SOL_SOCKET = 0xffff
+  SCM_RIGHTS = 1
+  MSG_NOSIGNAL = 0x400
+  MSG_CTRUNC = 0x20
+
+  __ALIGNBYTES = ctypes.sizeof(ctypes.c_size_t)
+  def __CMSG_ALIGN(n):
+    return (n + __ALIGNBYTES) & ~__ALIGNBYTES
+
+  def CMSG_NXTHDR(msg, cmsg):
+    cmsg_len = __CMSG_ALIGN(cmsg.contents.cmsg_len)
+    cmsg_hdr_size = __CMSG_ALIGN(ctypes.sizeof(cmsghdr_base_t))
+    addr = ctypes.addressof(cmsg.contents)
+
+    if addr + cmsg_len + cmsg_hdr_size > msg.msg_control + msg.msg_controllen:
+      return None
+
+    return ctypes.cast(addr + cmsg_len, cmsghdr_base_t_p)
+
 if hasattr(ctypes, 'c_ssize_t'):
   ssize_t = ctypes.c_ssize_t
 else:
