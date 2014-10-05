@@ -3,6 +3,11 @@
 import sys
 from distutils.core import setup
 
+try:
+  import sqlite3
+except:
+  raise Exception('py-sqlite3 must be installed')
+
 scripts = [
   'scripts/ambuild'
 ]
