@@ -282,7 +282,7 @@ def export_source_files(node, xml):
     for source in builder.sources:
       file = os.path.relpath(
         paths.Join(node.context.currentSourcePath, source),
-        paths.Join(node.context.localFolder)
+        node.context.buildFolder
       )
       builders = files.setdefault(file, set())
       builders.add(builder)
