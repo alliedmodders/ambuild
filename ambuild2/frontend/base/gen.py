@@ -103,6 +103,9 @@ class Context(object):
       self.compiler = self.generator.detectCompilers()
     return self.compiler
 
+  def ImportScript(self, file, vars={}):
+    return self.generator.importScript(self, file, vars)
+
   def RunScript(self, file, vars={}):
     return self.generator.evalScript(file, vars)
 
@@ -177,6 +180,31 @@ class BaseGenerator(object):
   def leaveContext(self, cx):
     pass
 
+  def compileScript(self, path):
+    with open(path) as fp:
+      chars = fp.read()
+
+      # Python 2.6 can't compile() with Windows line endings?!?!!?
+      chars = chars.replace('\r\n', '\n')
+      chars = chars.replace('\r', '\n')
+
+      return compile(chars, path, 'exec')
+
+  def importScript(self, context, file, vars={}):
+    path = os.path.normpath(os.path.join(context.sourcePath, file))
+    self.addConfigureFile(context, path)
+
+    new_vars = copy.copy(vars)
+    new_vars['builder'] = context
+
+    code = self.compileScript(path)
+    exec(code, new_vars)
+
+    obj = util.Expando()
+    for key in new_vars:
+      setattr(obj, key, new_vars[key])
+    return obj
+
   def evalScript(self, file, vars={}):
     file = os.path.normpath(file)
 
@@ -192,14 +220,7 @@ class BaseGenerator(object):
 
     # Run it.
     rvalue = None
-    with open(full_path) as fp:
-      chars = fp.read()
-
-      # Python 2.6 can't compile() with Windows line endings?!?!!?
-      chars = chars.replace('\r\n', '\n')
-      chars = chars.replace('\r', '\n')
-
-      code = compile(chars, full_path, 'exec')
+    code = self.compileScript(full_path)
 
     self.enterContext(cx)
     exec(code, new_vars)
