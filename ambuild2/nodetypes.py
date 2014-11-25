@@ -91,8 +91,8 @@ def HasAutoDependencies(type):
   return type == CopyFolder or type == Cxx
 
 NotDirty = 0
-KnownDirty = (1 << 0)
-NewDirty = (1 << 1)
+KnownDirty = (1 << 0)   # Node was known to be dirty.
+NewDirty = (1 << 1)     # Node was just computed to be dirty.
 
 # The basic properties of a node as it exists in the database.
 class Entry(object):

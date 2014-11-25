@@ -115,6 +115,20 @@ class Graph(object):
   def leafs(self):
     return [node for node in self.node_list if not len(node.incoming)]
 
+  def for_each_child_of(self, node, callback):
+    for outgoing in node.outgoing:
+      if outgoing.isCommand():
+        callback(outgoing.entry)
+      else:
+        self.for_each_child_of(outgoing, callback)
+
+  def for_each_leaf_command(self, callback):
+    for node in self.leafs:
+      if node.isCommand():
+        callback(node.entry)
+      else:
+        self.for_each_child_of(node, callback)
+
   def printGraph(self):
     for entry in self.create:
       print(' : ' + entry.format())

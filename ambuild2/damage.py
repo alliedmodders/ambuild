@@ -102,4 +102,14 @@ def ComputeDamageGraph(database, only_changed = False):
       add_dirty(entry)
 
   graph.finish()
+
+  # Find all leaf commands in the graph and mark them as dirty. This ensures
+  # that we'll include them in the next damage graph.
+  def finish_mark_dirty(entry):
+    if entry.dirty == nodetypes.NotDirty:
+      # Mark this node as dirty in the DB so we don't have to check the
+      # filesystem next time.
+      database.mark_dirty(entry)
+  graph.for_each_leaf_command(finish_mark_dirty)
+
   return graph
