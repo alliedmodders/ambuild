@@ -32,7 +32,7 @@ class MessagePump(process.MessagePump):
     self.fdmap = {}
 
   def close(self):
-    super(LinuxMessagePump, self).close()
+    super(MessagePump, self).close()
     self.ep.close()
 
   def addChannel(self, channel, listener):

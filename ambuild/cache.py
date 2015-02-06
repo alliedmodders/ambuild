@@ -15,9 +15,9 @@ class Cache:
 		try:
 			pickle.dump(self.vars, f)
 		except Exception as e:
-			f.close()
 			raise e
-		f.close
+		finally:
+			f.close()
 
 	def LoadCache(self):
 		f = open(self.path, 'rb')

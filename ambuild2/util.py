@@ -2,17 +2,16 @@
 import errno
 import subprocess
 import re, os, sys, locale
-import multiprocessing
 import uuid
 from tempfile import NamedTemporaryFile
 
 try:
   import __builtin__ as builtins
-except:
+except ImportError:
   import builtins
 try:
   import cPickle as pickle
-except:
+except ImportError:
   import pickle
 
 def Platform():
@@ -206,7 +205,7 @@ def ParseGCCDeps(text):
           strip = True
           deps.add(name)
         else:
-          state = LookForIncludeGuard
+          state = sLookForIncludeGuard
     if state == sLookForIncludeGuard:
       if line.startswith('Multiple include guards may be useful for:'):
         state = sFoundIncludeGuard

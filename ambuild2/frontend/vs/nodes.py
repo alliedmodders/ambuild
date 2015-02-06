@@ -37,7 +37,7 @@ class FolderNode(Node):
 
 class ContainerNode(Node):
   def __init__(self, cx):
-    super(ContainerNode, self).__init__()
+    super(ContainerNode, self).__init__(cx, None)
 
   @property
   def kind(self):

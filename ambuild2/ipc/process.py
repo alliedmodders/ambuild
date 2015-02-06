@@ -16,9 +16,9 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import time
 import logging
-import os, sys
+import os
 import traceback
-import multiprocessing as mp
+
 
 class Error:
   NormalShutdown = 'normal'
