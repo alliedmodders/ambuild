@@ -112,7 +112,7 @@ class Compiler:
 	def AddToListVar(self, key, item):
 		if type(item) == list:
 			if not key in self.env:
-				self.env[key] = [].extend(item)
+				self.env[key] = item
 			else:
 				self.env[key].extend(item)
 		else:
@@ -252,11 +252,8 @@ int main()
 	def HasProp(self, item):
 		return item in self.env
 
-	def __getitem__(self, key):
-		return self.env[key]
-
 def ObjectFile(file):
-	return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0]);
+	return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
 
 class CompileCommand(command.Command):
 	def __init__(self, runner, compiler, file, objFile, workFolder):
@@ -437,9 +434,6 @@ class BinaryBuilder:
 
 		return False
 
-	def __getitem__(self, key):
-		return self.env[key]
-			
 	def _SendToJob(self, type):
 		self.job.AddCommandGroup(self.sourceFiles, False)
 		if type == 'shared':
@@ -455,15 +449,12 @@ class BinaryBuilder:
 
 		if type == 'static':
 			if osutil.IsUnixy():
-				args = ['ar']
-				args.append('rcs');
-				args.append(binaryName)
+				args = ['ar', 'rcs', binaryName]
 				args.extend([i for i in self.objFiles])
 				self.job.AddCommand(LinkCommand(args, self, binaryPath))
 				return
 			else:
-				args = ['lib.exe']
-				args.append('/OUT:' + binaryName)
+				args = ['lib.exe', '/OUT:' + binaryName]
 				args.extend([i for i in self.objFiles])
 				self.job.AddCommand(LinkCommand(args, self, binaryPath))
 				return

@@ -3,7 +3,7 @@ import threading
 
 class Worker:
 	def __call__(self):
-		while len(self.jobs) > 0:
+		while len(self.jobs):
 			try:
 				job = self.jobs.pop()
 				job.run()

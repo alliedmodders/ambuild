@@ -121,7 +121,7 @@ class ArgBuilder(object):
     self.compiler = compiler
 
 def NameForObjectFile(file):
-  return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0]);
+  return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
 
 class ObjectFile(object):
   def __init__(self, sourceFile, outputFile, argv, sharedOutputs):

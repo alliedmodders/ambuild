@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
+import sys
 from ambuild2 import nodetypes
 from ambuild2.graph import Graph
 

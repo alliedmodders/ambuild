@@ -113,7 +113,7 @@ class NamedPipe(Channel):
     data = util.pickle.dumps(obj)
     data_bytes = bytearray(data)
     while len(data_bytes) < 8 - kPrefixLength:
-      buf.append(0)
+      data.append(0)
 
     prefix = struct.pack('i', len(data))
     data = bytearray(prefix) + data
@@ -361,7 +361,7 @@ class MessagePump(process.MessagePump):
     self.pending = deque()
 
   def close(self):
-    super(LinuxMessagePump, self).close()
+    super(MessagePump, self).close()
     winapi.CloseHandle(self.port)
 
   def shouldProcessEvents(self):
