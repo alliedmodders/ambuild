@@ -148,6 +148,20 @@ class Context(object):
   def AddConfigureFile(self, path):
     return self.generator.addConfigureFile(self, path)
 
+  def Context(self, name):
+    return self.generator.Context(name)
+
+class AutoContext(Context):
+  def __init__(self, gen, parent, file):
+    super(AutoContext, self).__init__(gen, parent, file)
+
+  def __enter__(self):
+    self.generator.pushContext(self)
+    return self
+
+  def __exit__(self, type, value, traceback):
+    self.generator.popContext()
+
 class BaseGenerator(object):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args):
     super(BaseGenerator, self).__init__()
@@ -204,6 +218,9 @@ class BaseGenerator(object):
     for key in new_vars:
       setattr(obj, key, new_vars[key])
     return obj
+
+  def Context(self, name):
+    return AutoContext(self, self.contextStack_[-1], name)
 
   def evalScript(self, file, vars={}):
     file = os.path.normpath(file)
