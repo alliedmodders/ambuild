@@ -95,7 +95,8 @@ class Generator(BaseGenerator):
   # Overridden.
   def detectCompilers(self):
     if not self.compiler:
-      self.compiler = cxx.Compiler(cxx.Compiler.GetVersionFromVS(self.vs_version))
+      self.base_compiler = cxx.Compiler(cxx.Compiler.GetVersionFromVS(self.vs_version))
+      self.compiler = self.base_compiler.clone()
     return self.compiler
 
   # Overridden.

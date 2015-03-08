@@ -202,7 +202,8 @@ class Generator(BaseGenerator):
   def detectCompilers(self):
     if not self.compiler:
       with util.FolderChanger(self.cacheFolder):
-        self.compiler = detect.DetectCxx(os.environ, self.options)
+        self.base_compiler = detect.DetectCxx(os.environ, self.options)
+        self.compiler = self.base_compiler.clone()
 
     return self.compiler
 

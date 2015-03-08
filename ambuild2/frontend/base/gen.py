@@ -40,7 +40,7 @@ class Context(object):
     self.compiler = None
 
     if parent:
-      self.compiler = parent.compiler
+      self.compiler = parent.compiler.clone()
 
     # By default, all generated files for a build script are placed in a path
     # matching its layout in the source tree.
@@ -100,7 +100,7 @@ class Context(object):
 
   def DetectCompilers(self):
     if not self.compiler:
-      self.compiler = self.generator.detectCompilers()
+      self.compiler = self.generator.detectCompilers().clone()
     return self.compiler
 
   def ImportScript(self, file, vars={}):
