@@ -111,7 +111,7 @@ class Clang(CompatGCC):
     self.debuginfo_argv = ['-g3']
 
   def like(self, name):
-    return name == 'gcc' or name == 'clang' or name == self.vendor_name
+    return name in ('gcc', 'clang', self.vendor_name)
 
 class Emscripten(Clang):
   def __init__(self, command, version):

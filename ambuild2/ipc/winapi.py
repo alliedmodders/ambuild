@@ -16,7 +16,6 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import ctypes
 import os, sys
-import tempfile
 from ambuild2 import util
 
 handle_t = ctypes.c_void_p

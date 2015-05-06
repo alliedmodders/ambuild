@@ -52,7 +52,7 @@ def IsCygwin():
   return sys.platform == 'cygwin'
 
 def IsMac():
-  return sys.platform == 'darwin' or sys.platform[0:6] == 'Darwin'
+  return sys.platform[:6].lower() == 'darwin'
 
 def IsSolaris():
   return sys.platform[0:5] == 'sunos'
@@ -92,11 +92,12 @@ def WaitForProcess(process):
   return process.returncode
 
 def CreateProcess(argv, executable = None):
-  pargs = { 'args': argv }
-  pargs['stdout'] = subprocess.PIPE
-  pargs['stderr'] = subprocess.PIPE
-  if executable != None:
-    pargs['executable'] = executable
+  pargs = {
+    'args': argv,
+    'stdout': subprocess.PIPE,
+    'stderr': subprocess.PIPE,
+    'executable': executable,
+  }
   try:
     process = subprocess.Popen(**pargs)
   except:

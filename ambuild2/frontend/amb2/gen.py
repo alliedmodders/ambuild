@@ -317,7 +317,7 @@ class Generator(BaseGenerator):
     raise Exception('illegal path component')
 
   def parseOutput(self, cwd_entry, path, kind):
-    if path[-1] == os.sep or path[-1] == os.altsep or path == '.' or path == '':
+    if path in ('.', '') or path[-1] in (os.sep, os.altsep):
       util.con_err(util.ConsoleRed, 'Path "',
                    util.ConsoleBlue, path,
                    util.ConsoleRed, '" looks like a folder; a folder was not expected.',
@@ -325,7 +325,6 @@ class Generator(BaseGenerator):
       raise Exception('Expected folder, but path has a trailing slash')
 
     path = os.path.normpath(path)
-
     path, name = os.path.split(path)
     path = nodetypes.combine(cwd_entry, path)
 
@@ -436,8 +435,10 @@ class Generator(BaseGenerator):
     raise Exception('Tried to use non-file node as a file path')
 
   def addCommand(self, context, node_type, folder, data, inputs, outputs,
-                 weak_inputs=[], shared_outputs=[]):
+                 weak_inputs=None, shared_outputs=None):
     assert not folder or isinstance(folder, nodetypes.Entry)
+    weak_inputs = weak_inputs or []
+    shared_outputs = shared_outputs or []
 
     # Build the set of weak links.
     weak_links = set()
@@ -655,9 +656,9 @@ class Generator(BaseGenerator):
     # slash or '.'/'' indicating the context folder.
     detected_folder = None
     if util.IsString(output_path):
-      if output_path[-1] == os.sep or output_path[-1] == os.altsep:
+      if output_path[-1] in (os.sep, os.altsep):
         detected_folder = os.path.join(context.buildFolder, os.path.normpath(output_path))
-      elif output_path == '.' or output_path == '':
+      elif output_path in ('.', ''):
         detected_folder = context.buildFolder
 
       # Since we're building something relative to the context folder, ensure
@@ -725,15 +726,8 @@ class Generator(BaseGenerator):
   def addFolder(self, context, folder):
     return self.generateFolder(context.localFolder, folder)
 
-  def addShellCommand(self,
-                      context,
-                      inputs,
-                      argv,
-                      outputs,
-                      folder=-1,
-                      dep_type=None,
-                      weak_inputs=[],
-                      shared_outputs=[]):
+  def addShellCommand(self, context, inputs, argv, outputs, folder=-1,
+                      dep_type=None, weak_inputs=None, shared_outputs=None):
     if folder is -1:
       folder = context.localFolder
 

@@ -59,7 +59,7 @@ class Compiler(object):
   def inherit(self, other):
     self.debuginfo = other.debuginfo
     for attr in self.attrs:
-      setattr(self, attr, copy.copy(getattr(other, attr)))
+      setattr(self, attr, copy.deepcopy(getattr(other, attr)))
 
   def clone(self):
     raise Exception('Must be implemented!')

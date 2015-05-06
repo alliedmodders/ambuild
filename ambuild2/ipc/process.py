@@ -231,6 +231,20 @@ class MessagePump(object):
   def addChannel(self, channel, listener):
     raise Exception('must be implemented!')
 
+
+class LinuxMessagePumpMixin(object):
+  def close(self):
+    super(LinuxMessagePumpMixin, self).close()
+    self.ep.close()
+
+  def dropChannel(self, channel):
+    self.ep.unregister(channel.fd)
+    del self.fdmap[channel.fd]
+
+  def shouldProcessEvents(self):
+    return len(self.fdmap) and super(LinuxMessagePumpMixin, self).shouldProcessEvents()
+
+
 # A ProcessHost is the parent process's view of a child process. It
 # encapsulates the process ID, various state, and an IPC channel.
 class ProcessHost(object):
@@ -291,7 +305,7 @@ class ParentWrapperListener(MessageListener):
     # be ignored. It's the user layer's responsibility to make sure all data
     # in the pipe has been received.
     if self.child.closing == Error.NormalShutdown:
-      if error == Error.EOF or error == Error.Closed:
+      if error in (Error.EOF, Error.Closed):
         error = Error.NormalShutdown
 
     if not self.child.closing:

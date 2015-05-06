@@ -18,10 +18,9 @@ import struct
 import ctypes
 import socket
 import signal
-import traceback
 import os, sys, fcntl
 from ambuild2 import util
-from . process import Channel, ProcessHost, Special
+from . process import Channel, ProcessHost, Special, MessagePump
 
 kStartFd = 3
 
@@ -30,9 +29,6 @@ class iovec_t(ctypes.Structure):
     ('iov_base', ctypes.c_void_p),
     ('iov_len', ctypes.c_size_t)
   ]
-
-  def __init__(self):
-    super(iovec_t, self).__init__()
 
 # Note that msg_socklen_t is not really socklen_t. Darwin uses socklen_t but
 # Linux uses size_t, so we alias that.
@@ -81,9 +77,6 @@ elif util.IsLinux():
       ('spawn_action', ctypes.c_void_p),
       ('pad', ctypes.c_int * 16)
     ]
-
-    def __init__(self):
-      super(posix_spawn_file_actions_t, self).__init__()
 
   def CMSG_NXTHDR(msg, cmsg):
     cmsg_len = cmsg.contents.cmsg_len
@@ -164,9 +157,6 @@ elif util.IsSolaris():
       ('__file_attrp', ctypes.c_void_p),
     ]
 
-    def __init__(self):
-      super(posix_spawn_file_actions_t, self).__init__()
-
   pid_t = ctypes.c_int
   msg_socklen_t = ctypes.c_uint
   SOL_SOCKET = 0xffff
@@ -185,6 +175,7 @@ elif util.IsSolaris():
     return ctypes.cast(Align(addr + cmsg_len, ctypes.sizeof(ctypes.c_int)), cmsghdr_base_t_p)
 
 elif util.IsNetBSD():
+  sLibC = None
   for lib in os.listdir('/usr/lib'):
     if not lib.startswith('libc.so'):
       continue
@@ -600,3 +591,17 @@ class Process(object):
     posix_spawn_file_actions_destroy(file_actions)
 
     return cls(pid.value)
+
+
+class PosixMessagePump(MessagePump):
+  def __init__(self):
+    self.fdmap = {}
+    super(PosixMessagePump, self).__init__()
+
+  def createChannel(self, name):
+    parent, child = SocketChannel.pair(name)
+    return parent, child
+
+  def handle_channel_error(self, channel, listener, error):
+    self.dropChannel(channel)
+    listener.receiveError(channel, error)
