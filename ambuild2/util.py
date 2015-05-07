@@ -92,11 +92,12 @@ def WaitForProcess(process):
   return process.returncode
 
 def CreateProcess(argv, executable = None):
-  pargs = { 'args': argv }
-  pargs['stdout'] = subprocess.PIPE
-  pargs['stderr'] = subprocess.PIPE
-  if executable != None:
-    pargs['executable'] = executable
+  pargs = {
+    'args': argv,
+    'stdout': subprocess.PIPE,
+    'stderr': subprocess.PIPE,
+    'executable': executable,
+  }
   try:
     process = subprocess.Popen(**pargs)
   except:

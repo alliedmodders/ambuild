@@ -2,13 +2,12 @@
 import errno
 import shutil
 import os, sys
-import traceback
 import multiprocessing as mp
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.ipc import ParentProcessListener, ChildProcessListener
-from ambuild2.ipc import ProcessManager, MessageListener, Error
-from ambuild2.ipc import Channel
+from ambuild2.ipc import ProcessManager, Error
+
 
 class Task(object):
   def __init__(self, id, entry, outputs):
@@ -34,14 +33,13 @@ class Task(object):
     return self.folder
 
   def format(self):
-    text = ''
     if self.type == nodetypes.Cxx:
       return '[' + self.data['type'] + ']' + ' -> ' + (' '.join([arg for arg in self.data['argv']]))
     if self.type == nodetypes.Symlink:
       return 'ln -s "{0}" "{1}"'.format(self.data[0], os.path.join(self.folder_name, self.data[1]))
     if self.type == nodetypes.Copy:
       return 'cp "{0}" "{1}"'.format(self.data[0], os.path.join(self.folder_name, self.data[1]))
-    return (' '.join([arg for arg in self.data]))
+    return ' '.join([arg for arg in self.data])
 
 class WorkerChild(ChildProcessListener):
   def __init__(self, pump, channel, vars):
@@ -66,12 +64,7 @@ class WorkerChild(ChildProcessListener):
     })
 
   def receiveTask(self, channel, message):
-    task_id = message['task_id']
     task_type = message['task_type']
-    task_folder = message['task_folder']
-    if not task_folder:
-      task_folder = '.'
-
     # Remove all outputs.
     for output in message['task_outputs']:
       try:
