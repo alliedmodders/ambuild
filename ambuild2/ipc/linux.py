@@ -17,40 +17,24 @@
 import errno
 import traceback
 import socket
-import select, os
-import multiprocessing as mp
+import select
 from . import process
+from . import generic_poll
 from . import posix_proc
-from . process import ProcessHost, Channel, Error, Special
+from . process import Error, Special
 
 # Linux multiprocess support is implemented using epoll().
 
-class MessagePump(process.MessagePump):
+class MessagePump(process.LinuxMessagePumpMixin, posix_proc.PosixMessagePump):
   def __init__(self):
     super(MessagePump, self).__init__()
     self.ep = select.epoll()
-    self.fdmap = {}
-
-  def close(self):
-    super(MessagePump, self).close()
-    self.ep.close()
 
   def addChannel(self, channel, listener):
     events = select.EPOLLIN | select.EPOLLERR | select.EPOLLHUP
 
     self.ep.register(channel.fd, events)
     self.fdmap[channel.fd] = (channel, listener)
-
-  def dropChannel(self, channel):
-    self.ep.unregister(channel.fd)
-    del self.fdmap[channel.fd]
-
-  def createChannel(self, name):
-    parent, child = posix_proc.SocketChannel.pair(name)
-    return parent, child
-
-  def shouldProcessEvents(self):
-    return len(self.fdmap) and super(MessagePump, self).shouldProcessEvents()
 
   def processEvents(self):
     for fd, event in self.ep.poll():
@@ -92,33 +76,10 @@ class MessagePump(process.MessagePump):
       if event & (select.EPOLLERR | select.EPOLLHUP):
         self.handle_channel_error(channel, listener, Error.EOF)
 
-  def handle_channel_error(self, channel, listener, error):
-    self.dropChannel(channel)
-    listener.receiveError(channel, error)
-
-class ProcessManager(process.ProcessManager):
-  def __init__(self, pump):
-    super(ProcessManager, self).__init__(pump)
-
-  def create_process_and_pipe(self, id, listener):
-    # Create pipes.
-    parent, child = posix_proc.SocketChannel.pair(listener.name)
-
-    # Watch for changes on the parent channel.
-    self.pump.addChannel(parent, listener)
-
-    # Spawn the process.
-    proc = posix_proc.Process.spawn(child)
-
-    # There is a race condition where if the child dies before sending an ACK,
-    # we will never close the parent process's fildes for the child socket.
-    # epoll() will then deadlock since no EOF will be delivered. I don't see
-    # an easy way to solve this yet, so we just cross our fingers.
-    #
-    # On BSD this is not a problem since kqueue() can watch pids.
-    return posix_proc.PosixHost(id, proc, parent, child)
-
-  def close_process(self, host):
-    # There should be nothing open for this channel, since we wait for process death.
-    assert host.channel.fd not in self.pump.fdmap
-    host.shutdown()
+# There is a race condition where if the child dies before sending an ACK,
+# we will never close the parent process's fildes for the child socket.
+# epoll() will then deadlock since no EOF will be delivered. I don't see
+# an easy way to solve this yet, so we just cross our fingers.
+#
+# On BSD this is not a problem since kqueue() can watch pids.
+ProcessManager = generic_poll.ProcessManager

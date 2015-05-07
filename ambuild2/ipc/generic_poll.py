@@ -17,40 +17,23 @@
 import errno
 import traceback
 import socket
-import select, os
-import multiprocessing as mp
+import select
 from . import process
 from . import posix_proc
-from . process import ProcessHost, Channel, Error, Special
+from . process import Error, Special
 
 # Generic POSIX multiprocess support, implemented using poll().
 
-class MessagePump(process.MessagePump):
+class MessagePump(process.LinuxMessagePumpMixin, posix_proc.PosixMessagePump):
   def __init__(self):
     super(MessagePump, self).__init__()
     self.ep = select.poll()
-    self.fdmap = {}
-
-  def close(self):
-    super(LinuxMessagePump, self).close()
-    self.ep.close()
 
   def addChannel(self, channel, listener):
     events = select.POLLIN | select.POLLERR | select.POLLHUP
 
     self.ep.register(channel.fd, events)
     self.fdmap[channel.fd] = (channel, listener)
-
-  def dropChannel(self, channel):
-    self.ep.unregister(channel.fd)
-    del self.fdmap[channel.fd]
-
-  def createChannel(self, name):
-    parent, child = posix_proc.SocketChannel.pair(name)
-    return parent, child
-
-  def shouldProcessEvents(self):
-    return len(self.fdmap) and super(MessagePump, self).shouldProcessEvents()
 
   def processEvents(self):
     for fd, event in self.ep.poll():
@@ -92,14 +75,8 @@ class MessagePump(process.MessagePump):
       if event & (select.POLLERR | select.POLLHUP):
         self.handle_channel_error(channel, listener, Error.EOF)
 
-  def handle_channel_error(self, channel, listener, error):
-    self.dropChannel(channel)
-    listener.receiveError(channel, error)
 
 class ProcessManager(process.ProcessManager):
-  def __init__(self, pump):
-    super(ProcessManager, self).__init__(pump)
-
   def create_process_and_pipe(self, id, listener):
     # Create pipes.
     parent, child = posix_proc.SocketChannel.pair(listener.name)

@@ -14,13 +14,12 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import time
 import traceback
-import os, sys, imp
+import os, sys
 from ambuild2 import util, database, damage
 from ambuild2.builder import Builder
 from ambuild2.ipc import ProcessManager, MessagePump
-from optparse import OptionParser
+
 
 class Context(object):
   def __init__(self, buildPath, options, args):

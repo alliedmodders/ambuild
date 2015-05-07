@@ -15,11 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import traceback
-import select, os, sys
-import multiprocessing as mp
+import select
 from . import process
 from . import posix_proc
-from . process import ProcessHost, Channel, Error, Special
+from . process import Error, Special
 
 # BSD multiprocess support is implemented using kqueue() on top of Python's
 # Pipe object, which itself uses Unix domain sockets.
@@ -29,10 +28,10 @@ KQ_NOTE_EXIT = select.KQ_NOTE_EXIT
 if KQ_NOTE_EXIT == 0x80000000:
   KQ_NOTE_EXIT = -0x80000000
 
-class MessagePump(process.MessagePump):
+class MessagePump(posix_proc.PosixMessagePump):
   def __init__(self):
+    super(MessagePump, self).__init__()
     self.kq = select.kqueue()
-    self.fdmap = {}
     self.pidmap = {}
 
   def close(self):
@@ -58,10 +57,6 @@ class MessagePump(process.MessagePump):
     )
     self.kq.control([event], 0)
     del self.fdmap[channel.fd]
-
-  def createChannel(self, name):
-    parent, child = posix_proc.SocketChannel.pair(name)
-    return parent, child
 
   def addPid(self, pid, channel, listener):
     event = select.kevent(
@@ -152,14 +147,8 @@ class MessagePump(process.MessagePump):
       listener.receiveError(channel, Error.Killed)
       del self.pidmap[event.ident]
 
-  def handle_channel_error(self, channel, listener, error):
-    self.dropChannel(channel)
-    listener.receiveError(channel, error)
 
 class ProcessManager(process.ProcessManager):
-  def __init__(self, pump):
-    super(ProcessManager, self).__init__(pump)
-
   def create_process_and_pipe(self, id, listener):
     # Create pipes.
     parent, child = posix_proc.SocketChannel.pair(listener.name)

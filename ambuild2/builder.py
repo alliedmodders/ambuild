@@ -1,10 +1,9 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
-import sys
-import os, errno
-import traceback
+import os
+from collections import deque
+
 from ambuild2 import util
 from ambuild2 import nodetypes
-from collections import deque
 from ambuild2.task import Task, TaskMasterParent
 
 # Given the partial command DAG, compute a task tree we can send to the task

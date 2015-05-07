@@ -384,7 +384,7 @@ class MessagePump(process.MessagePump):
     return key
 
   def addChannel(self, channel, listener):
-    key = self.registerChannel(channel, listener)
+    self.registerChannel(channel, listener)
 
     # On Windows, we must initiate a recv() that would block in order to
     # receive io completion events. Since that could return actual data,

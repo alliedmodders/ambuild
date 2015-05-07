@@ -153,9 +153,9 @@ class Entry(object):
     return self.folder.path
 
   def format(self):
-    if self.type == Source or self.type == Output or self.type == SharedOutput:
+    if self.type in (Source, Output, SharedOutput):
       return self.path
-    text = ''
+
     if self.type == Mkdir:
       return 'mkdir -p ' + self.path
     if self.type == Symlink:
@@ -168,7 +168,8 @@ class Entry(object):
       return ' '.join([arg for arg in self.blob['cl_argv']]) + ' && ' + ' '.join([arg for arg in self.blob['rc_argv']])
     if self.type == Group:
       return 'group "{0}"'.format(self.path)
-    return (' '.join([arg for arg in self.blob]))
+
+    return ' '.join([arg for arg in self.blob])
 
 def combine(a, b):
   if type(a) is Entry:

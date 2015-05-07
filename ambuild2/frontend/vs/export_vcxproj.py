@@ -236,11 +236,9 @@ def export_configuration_options(node, xml, builder):
     libs = ['%(AdditionalDependencies)']
     ignore_libs = ['%(IgnoreSpecificDefaultLibraries)']
     machine = 'X86'
-    subsystem = 'Windows'
     for flag in link_flags:
       if util.IsString(flag):
         if flag == '/SUBSYSTEM:CONSOLE':
-          subsystem = 'Console'
           continue
 
         if '.lib' in flag:

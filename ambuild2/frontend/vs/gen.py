@@ -17,7 +17,6 @@
 import os, errno
 import uuid as uuids
 from ambuild2 import util
-from ambuild2 import nodetypes
 from ambuild2.frontend import paths
 from ambuild2.frontend.vs import cxx
 from ambuild2.frontend.vs import nodes
@@ -153,7 +152,7 @@ class Generator(BaseGenerator):
 
   # Overridden.
   def addShellCommand(self, context, inputs, argv, outputs, folder=-1, dep_type=None,
-                      weak_inputs=[], shared_outputs=[]):
+                      weak_inputs=None, shared_outputs=None):
     print(inputs, argv, outputs, folder, dep_type, weak_inputs, shared_outputs)
 
   def addOutput(self, context, path, parent):
