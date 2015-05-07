@@ -153,7 +153,7 @@ class Generator(BaseGenerator):
 
   # Overridden.
   def addShellCommand(self, context, inputs, argv, outputs, folder=-1, dep_type=None,
-                      weak_inputs=[], shared_outputs=[]):
+                      weak_inputs=None, shared_outputs=None):
     print(inputs, argv, outputs, folder, dep_type, weak_inputs, shared_outputs)
 
   def addOutput(self, context, path, parent):

@@ -436,11 +436,13 @@ class Generator(BaseGenerator):
     raise Exception('Tried to use non-file node as a file path')
 
   def addCommand(self, context, node_type, folder, data, inputs, outputs,
-                 weak_inputs=[], shared_outputs=[]):
+                 weak_inputs=None, shared_outputs=None):
     assert not folder or isinstance(folder, nodetypes.Entry)
 
     # Build the set of weak links.
     weak_links = set()
+    weak_inputs = []
+    shared_outputs = []
     for weak_input in weak_inputs:
       assert type(weak_input) is nodetypes.Entry
       assert weak_input.type != nodetypes.Source
@@ -732,8 +734,8 @@ class Generator(BaseGenerator):
                       outputs,
                       folder=-1,
                       dep_type=None,
-                      weak_inputs=[],
-                      shared_outputs=[]):
+                      weak_inputs=None,
+                      shared_outputs=None):
     if folder is -1:
       folder = context.localFolder
 

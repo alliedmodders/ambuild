@@ -103,13 +103,13 @@ class Context(object):
       self.compiler = self.generator.detectCompilers().clone()
     return self.compiler
 
-  def ImportScript(self, file, vars={}):
+  def ImportScript(self, file, vars=None):
     return self.generator.importScript(self, file, vars)
 
-  def RunScript(self, file, vars={}):
+  def RunScript(self, file, vars=None):
     return self.generator.evalScript(file, vars)
 
-  def RunBuildScripts(self, files, vars={}):
+  def RunBuildScripts(self, files, vars=None):
     if util.IsString(files):
       self.generator.evalScript(files, vars)
     else:
@@ -132,8 +132,8 @@ class Context(object):
   def AddCopy(self, source, output_path):
     return self.generator.addCopy(self, source, output_path)
 
-  def AddCommand(self, inputs, argv, outputs, folder=-1, dep_type=None, weak_inputs=[],
-                 shared_outputs=[]):
+  def AddCommand(self, inputs, argv, outputs, folder=-1, dep_type=None, weak_inputs=None,
+                 shared_outputs=None):
     return self.generator.addShellCommand(
       self,
       inputs,
@@ -204,11 +204,11 @@ class BaseGenerator(object):
 
       return compile(chars, path, 'exec')
 
-  def importScript(self, context, file, vars={}):
+  def importScript(self, context, file, vars=None):
     path = os.path.normpath(os.path.join(context.sourcePath, file))
     self.addConfigureFile(context, path)
 
-    new_vars = copy.copy(vars)
+    new_vars = copy.copy(vars or {})
     new_vars['builder'] = context
 
     code = self.compileScript(path)
@@ -222,7 +222,7 @@ class BaseGenerator(object):
   def Context(self, name):
     return AutoContext(self, self.contextStack_[-1], name)
 
-  def evalScript(self, file, vars={}):
+  def evalScript(self, file, vars=None):
     file = os.path.normpath(file)
 
     cx = Context(self, self.contextStack_[-1], file)
@@ -232,7 +232,7 @@ class BaseGenerator(object):
 
     self.addConfigureFile(cx, full_path)
 
-    new_vars = copy.copy(vars)
+    new_vars = copy.copy(vars or {})
     new_vars['builder'] = cx
 
     # Run it.
@@ -294,7 +294,7 @@ all:
     raise Exception('Must be implemented!')
 
   def addShellCommand(self, context, inputs, argv, outputs, folder=-1, dep_type=None,
-                      weak_inputs=[], shared_outputs=[]):
+                      weak_inputs=None, shared_outputs=None):
     raise Exception('Must be implemented!')
 
   def addConfigureFile(self, context, path):
