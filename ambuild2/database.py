@@ -22,8 +22,6 @@ from ambuild2 import nodetypes
 from ambuild2.nodetypes import Entry
 import traceback
 
-GroupPrefix = '//group/./'
-
 def CreateDatabase(path):
   cn = sqlite3.connect(path)
   queries = [
@@ -142,7 +140,7 @@ class Database(object):
     except:
       version = 1
 
-    latest_version = 3
+    latest_version = 4
     if version == latest_version:
       return
     if version > latest_version:
@@ -159,6 +157,9 @@ class Database(object):
 
     if version == 2:
       version = self.upgrade_to_v3()
+
+    if version == 3:
+      version = self.upgrade_to_v4()
 
   def upgrade_to_v2(self):
     queries = [
@@ -221,6 +222,23 @@ class Database(object):
     self.cn.commit()
     return 3
 
+  def upgrade_to_v4(self):
+    # If we're not on v4, assume the API version is 2.0.
+    self.cn.execute("insert or replace into vars (key, val) values ('api_version', ?)", ('2.0',))
+    self.cn.execute("insert or replace into vars (key, val) values ('db_version', ?)", (4,))
+    self.cn.commit()
+    return 4
+
+  def query_var(self, var):
+    cursor = self.cn.execute("select val from vars where key = ?", (var,))
+    row = cursor.fetchone()
+    if row is None:
+      return None
+    return row[0]
+
+  def set_var(self, var, value):
+    self.cn.execute("insert or replace into vars (key, val) values (?, ?)", (var, value))
+
   def add_folder(self, parent, path):
     assert path not in self.path_cache_
     assert not os.path.isabs(path)
@@ -264,14 +282,6 @@ class Database(object):
       id=cursor.lastrowid,
       row=row
     )
-
-  def find_group(self, name):
-    path = GroupPrefix + name
-    return self.query_path(path)
-
-  def add_group(self, name):
-    path = GroupPrefix + name
-    return self.add_file(nodetypes.Group, path, False)
 
   def update_command(self, entry, type, folder, data, refactoring):
     if not data:

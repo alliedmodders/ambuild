@@ -19,7 +19,7 @@ import os, re
 import tempfile
 import subprocess
 from ambuild2 import util
-from ambuild2.frontend.cpp import vendors, compilers
+from ambuild2.frontend.v2_0.cpp import vendors, compilers
 
 def TryVerifyCompiler(env, mode, cmd):
   if util.IsWindows():

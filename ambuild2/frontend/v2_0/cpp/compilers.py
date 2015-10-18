@@ -16,7 +16,7 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import copy
 import subprocess
-from ambuild2.frontend.cpp import builders
+from ambuild2.frontend.v2_0.cpp import builders
 
 # Base compiler object.
 class Compiler(object):

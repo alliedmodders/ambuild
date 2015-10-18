@@ -19,9 +19,9 @@ import uuid as uuids
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.frontend import paths
-from ambuild2.frontend.vs import cxx
-from ambuild2.frontend.vs import nodes
-from ambuild2.frontend.base import BaseGenerator
+from ambuild2.frontend.v2_0.vs import cxx
+from ambuild2.frontend.v2_0.vs import nodes
+from ambuild2.frontend.v2_0.base import BaseGenerator
 
 SupportedVersions = ['10', '11', '12']
 YearMap = {

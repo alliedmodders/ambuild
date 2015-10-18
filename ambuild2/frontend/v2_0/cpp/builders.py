@@ -20,7 +20,7 @@ from ambuild2 import util
 
 # Poor abstraction - vendor object should encapsulate logic to avoid instanceof
 # checks. For now, we just import the name.
-from ambuild2.frontend.cpp.vendors import MSVC, CompatGCC
+from ambuild2.frontend.v2_0.cpp.vendors import MSVC, CompatGCC
 
 class Dep(object):
   def __init__(self, text, node):

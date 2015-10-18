@@ -108,10 +108,10 @@ class Preparer(object):
       self.buildPath = new_buildpath
 
     if options.generator == 'ambuild2':
-      from ambuild2.frontend.amb2 import gen
+      from ambuild2.frontend.v2_0.amb2 import gen
       builder = gen.Generator(self.sourcePath, self.buildPath, os.getcwd(), options, args)
     elif options.generator == 'vs':
-      from ambuild2.frontend.vs import gen
+      from ambuild2.frontend.v2_0.vs import gen
       builder = gen.Generator(self.sourcePath, self.buildPath, os.getcwd(), options, args)
     else:
       sys.stderr.write('Unrecognized build generator: ' + options.generator + '\n')

@@ -92,7 +92,14 @@ class Context(object):
       util.ConsoleNormal
     )
 
-    from ambuild2.frontend.amb2.gen import Generator
+    # The database should be upgraded here, so we should always have an
+    # API version set.
+    api_version = self.db.query_var('api_version')
+    assert api_version is not None
+
+    if api_version == '2.0':
+      from ambuild2.frontend.v2_0.amb2.gen import Generator
+
     gen = Generator.FromVars(self.vars, self.db, self.options.refactor)
     try:
       gen.generate()

@@ -18,10 +18,10 @@ import os
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2 import database
-from ambuild2.frontend import cpp
 from ambuild2.frontend import paths
-from ambuild2.frontend.cpp import detect
-from ambuild2.frontend.base import BaseGenerator
+from ambuild2.frontend.v2_0 import cpp
+from ambuild2.frontend.v2_0.cpp import detect
+from ambuild2.frontend.v2_0.base import BaseGenerator
 
 class Generator(BaseGenerator):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args, db=None, refactoring=False):

@@ -18,7 +18,6 @@ from __future__ import print_function
 import os, sys
 from optparse import OptionParser
 from ambuild2 import util
-from ambuild2.frontend.prep import Preparer
 from ambuild2.context import Context
 
 SampleScript = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
@@ -39,7 +38,7 @@ SampleConfigure = """# vim: set sts=2 ts=8 sw=2 tw=99 et:
 import sys
 from ambuild2 import run
 
-builder = run.PrepareBuild(sourcePath = sys.path[0])
+builder = run.BuildParser(sourcePath = sys.path[0], api="2.0")
 builder.Configure()
 """
 
@@ -97,7 +96,26 @@ def CompatBuild(buildPath):
   return Build(buildPath, options, argv)
 
 def PrepareBuild(sourcePath, buildPath=None):
+  return BuildParser(sourcePath, '2.0', buildPath)
+
+def PreparerForAPI(api):
+  if api == '2.0':
+    from ambuild2.frontend.v2_0.prep import Preparer
+  else:
+    raise Exception('API version {0} not found'.format(api))
+  return Preparer
+
+def HasAPI(api):
+  try:
+    if PreparerForAPI(api) is not None:
+      return True
+  except:
+    pass
+  return False
+
+def BuildParser(sourcePath, api, buildPath=None):
   if buildPath == None:
     buildPath = os.path.abspath(os.getcwd())
-  return Preparer(sourcePath=sourcePath, buildPath=buildPath)
 
+  Preparer = PreparerForAPI(api)
+  return Preparer(sourcePath=sourcePath, buildPath=buildPath)
