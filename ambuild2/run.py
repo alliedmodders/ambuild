@@ -101,6 +101,8 @@ def PrepareBuild(sourcePath, buildPath=None):
 def PreparerForAPI(api):
   if api == '2.0':
     from ambuild2.frontend.v2_0.prep import Preparer
+  elif api == '2.1':
+    from ambuild2.frontend.v2_1 import Preparer
   else:
     raise Exception('API version {0} not found'.format(api))
   return Preparer
