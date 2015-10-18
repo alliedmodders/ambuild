@@ -17,11 +17,11 @@
 import os, types
 from ambuild2 import util
 from ambuild2.frontend import paths
-from ambuild2.frontend.vs import nodes
-from ambuild2.frontend.vs import export_vcxproj
-from ambuild2.frontend.cpp import compilers
-from ambuild2.frontend.cpp import Dep, CppNodes
 from ambuild2.frontend.version import Version
+from ambuild2.frontend.v2_0.vs import nodes
+from ambuild2.frontend.v2_0.vs import export_vcxproj
+from ambuild2.frontend.v2_0.cpp import compilers
+from ambuild2.frontend.v2_0.cpp import Dep, CppNodes
 
 class CompilerShell(object):
   def __init__(self, version):

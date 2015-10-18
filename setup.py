@@ -31,10 +31,11 @@ setup(
     'ambuild2',
     'ambuild2.frontend',
     'ambuild2.ipc',
-    'ambuild2.frontend.amb2',
-    'ambuild2.frontend.base',
-    'ambuild2.frontend.cpp',
-    'ambuild2.frontend.vs',
+    'ambuild2.frontend.v2_0',
+    'ambuild2.frontend.v2_0.amb2',
+    'ambuild2.frontend.v2_0.base',
+    'ambuild2.frontend.v2_0.cpp',
+    'ambuild2.frontend.v2_0.vs',
   ],
   scripts = scripts
 )
