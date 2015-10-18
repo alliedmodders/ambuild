@@ -18,13 +18,14 @@ import os, sys
 import platform
 from ambuild2 import util
 from optparse import OptionParser, Values, SUPPRESS_HELP
+from ambuild2.frontend.system import System
 
 class Preparer(object):
   def __init__(self, sourcePath, buildPath):
     self.sourcePath = sourcePath
     self.buildPath = buildPath
-    self.host_platform = util.Platform()
-    self.target_platform = util.Platform()
+    self.host = System.Host
+    self.target_arch = None
 
     self.options = OptionParser("usage: %prog [options]")
     self.options.add_option("-g", "--gen", type="string", dest="generator", default="ambuild2",
@@ -49,6 +50,10 @@ class Preparer(object):
     return 'obj-' + util.Platform() + '-' + platform.machine()
 
   def Configure(self): 
+    if self.target_arch is None:
+      self.options.add_option("--target-arch", type="string", dest="target_arch", default=None,
+                              help="Override the target architecture.")
+
     v_options, args = self.options.parse_args()
 
     # In order to support pickling, we need to rewrite |options| to not use
@@ -59,6 +64,11 @@ class Preparer(object):
       if attr in ignore_attrs:
         continue
       setattr(options, attr, getattr(v_options, attr))
+
+    # Propagate the overridden architecture.
+    if self.target_arch is not None:
+      assert getattr(options, 'target_arch', None) is None
+      options.target_arch = self.target_arch
 
     if options.list_gen:
       print('Available build system generators:')

@@ -28,6 +28,7 @@ class CommandAndVendor(object):
   def __init__(self, argv, vendor):
     self.argv = argv
     self.vendor = vendor
+    self.arch = None
 
 def FindCompiler(env, mode, cmd):
   if util.IsWindows():
@@ -49,7 +50,7 @@ CompilerSearch = {
   }
 }
 
-def DetectCxx(env):
+def DetectCxx(target, env):
   cc = DetectCxxCompiler(env, 'CC')
   cxx = DetectCxxCompiler(env, 'CXX')
 
@@ -60,6 +61,14 @@ def DetectCxx(env):
 
     util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
     raise Exception(message)
+
+  if cxx.arch != cc.arch:
+    message = "C architecture {0} does not match C++ architecture {1}".format(cc.arch, cxx.arch)
+    util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
+    raise Exception(message)
+
+  # :TODO: Check that the arch is == to target. We don't do this yet since
+  # on Windows we can't use platform.architecture().
 
   return compiler.CliCompiler(cxx.vendor, cc.argv, cxx.argv)
 

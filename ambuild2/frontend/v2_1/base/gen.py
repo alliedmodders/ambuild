@@ -17,6 +17,7 @@
 import os
 import sys, copy
 from ambuild2 import util
+from ambuild2.frontend.system import System
 
 # AMBuild 2 scripts are parsed recursively. Each script is supplied with a
 # "builder" object, which maps to a Context object. Each script gets its own
@@ -76,12 +77,12 @@ class Context(object):
     return self.generator.getLocalFolder(self)
 
   @property
-  def target_platform(self):
-    return self.generator.target_platform
+  def target(self):
+    return self.generator.target
 
   @property
-  def host_platform(self):
-    return self.generator.host_platform
+  def host(self):
+    return self.generator.host
 
   @property
   def originalCwd(self):
@@ -173,10 +174,14 @@ class BaseGenerator(object):
     self.contextStack_ = [None]
     self.configure_failed = False
 
-    # This is a hack... if we ever do cross-compiling or something, we'll have
-    # to change this.
-    self.host_platform = util.Platform()
-    self.target_platform = util.Platform()
+    # Detect the target architecture.
+    self.host = System.Host
+    self.target = System.Host
+
+    # Override the target architecture.
+    new_arch = getattr(self.options, 'target_arch', None)
+    if new_arch is not None:
+      self.target = System(self.target.platform, util.NormalizeArchString(new_arch))
 
   def parseBuildScripts(self):
     root = os.path.join(self.sourcePath, 'AMBuildScript')
