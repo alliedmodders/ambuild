@@ -18,10 +18,6 @@ import subprocess
 import re, os
 from ambuild2 import util
 
-# Poor abstraction - vendor object should encapsulate logic to avoid instanceof
-# checks. For now, we just import the name.
-from ambuild2.frontend.v2_1.cpp.vendors import MSVC, CompatGCC
-
 class Dep(object):
   def __init__(self, text, node):
     self.text = text
@@ -100,25 +96,35 @@ class Project(object):
 # Environment representing a C/C++ compiler invocation. Encapsulates most
 # arguments.
 class ArgBuilder(object):
-  def __init__(self, outputPath, config, compiler):
-    args = compiler.command.split(' ')
-    args += config.cflags
-    if config.debug_symbols:
-      args += compiler.debuginfo_argv
-    if compiler == config.cxx:
-      args += config.cxxflags
+  def __init__(self, outputPath, config, mode):
+    vendor = config.vendor
+
+    if mode == 'cc':
+      self.argv = config.cc_argv[:]
+    elif mode == 'cxx':
+      self.argv = config.cxx_argv[:]
+
+    self.argv += config.cflags
+
+    if config.symbol_files is not None:
+      self.argv += vendor.debugInfoArgv
+
+    if mode == 'cxx':
+      self.argv += config.cxxflags
     else:
-      args += config.c_only_flags
-    args += [compiler.definePrefix + define for define in config.defines]
-    if compiler == config.cxx:
-      args += [compiler.definePrefix + define for define in config.cxxdefines]
+      self.argv += config.c_only_flags
+
+    self.argv += [vendor.definePrefix + define for define in config.defines]
+    if mode == 'cxx':
+      self.argv += [vendor.definePrefix + define for define in config.cxxdefines]
+
     for include in config.includes:
-      args += compiler.formatInclude(outputPath, include)
-    if compiler == config.cxx:
+      self.argv += vendor.formatInclude(outputPath, include)
+    if mode == 'cxx':
       for include in config.cxxincludes:
-        args += compiler.formatInclude(outputPath, include)
-    self.argv = args
-    self.compiler = compiler
+        self.argv += vendor.formatInclude(outputPath, include)
+
+    self.vendor = vendor
 
 def NameForObjectFile(file):
   return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
@@ -183,14 +189,12 @@ class BinaryBuilder(object):
     # vendor object), we need to compute an absolute path to the build folder.
     self.outputFolder = self.getBuildFolder(cx)
     self.outputPath = os.path.join(cx.buildPath, self.outputFolder)
-    self.default_c_env = ArgBuilder(self.outputPath, self.compiler, self.compiler.cc)
-    self.default_cxx_env = ArgBuilder(self.outputPath, self.compiler, self.compiler.cxx)
+    self.default_c_env = ArgBuilder(self.outputPath, self.compiler, 'cc')
+    self.default_cxx_env = ArgBuilder(self.outputPath, self.compiler, 'cxx')
 
     shared_cc_outputs = []
-    if self.compiler.debug_symbols and self.compiler.cc.behavior == 'msvc':
-      cl_version = int(self.compiler.cc.version) - 600
-      shared_pdb = 'vc{0}.pdb'.format(int(cl_version / 10))
-      shared_cc_outputs += [shared_pdb]
+    if self.compiler.symbol_files and self.compiler.family == 'msvc':
+      shared_cc_outputs += [self.compiler.vendor.shared_pdb_name()]
 
     self.objects = []
     self.resources = []
@@ -213,11 +217,11 @@ class BinaryBuilder(object):
         else:
           cenv = self.default_cxx_env
           self.used_cxx_ = True
-        objectFile = encname + cenv.compiler.objSuffix
+        objectFile = encname + cenv.vendor.objSuffix
 
       if extension == '.rc':
         # This is only relevant on Windows.
-        vendor = cenv.compiler
+        vendor = cenv.vendor
         defines = self.compiler.defines + self.compiler.cxxdefines + self.compiler.rcdefines
         cl_argv = vendor.command.split(' ')
         cl_argv += [vendor.definePrefix + define for define in defines]
@@ -235,15 +239,15 @@ class BinaryBuilder(object):
 
         self.resources.append(RCFile(sourceFile, encname + '.i', objectFile, cl_argv, rc_argv))
       else:
-        argv = cenv.argv + cenv.compiler.objectArgs(sourceFile, objectFile)
+        argv = cenv.argv + cenv.vendor.objectArgs(sourceFile, objectFile)
         obj = ObjectFile(sourceFile, objectFile, argv, shared_cc_outputs)
         self.objects.append(obj)
 
-    if not self.linker_:
-      if self.used_cxx_:
-        self.linker_ = self.compiler.cxx
-      else:
-        self.linker_ = self.compiler.cc
+    if self.used_cxx_:
+      self.linker_argv_ = self.compiler.cxx_argv
+    else:
+      self.linker_argv_ = self.compiler.cc_argv
+    self.linker_ = self.compiler.vendor
 
     files = [out.outputFile for out in self.objects + self.resources]
     self.argv = self.generateBinary(cx, files)
@@ -257,11 +261,11 @@ class BinaryBuilder(object):
         self.linker_outputs += [self.name_ + '.lib']
         self.linker_outputs += [self.name_ + '.exp']
 
-    if self.compiler.debug_symbols == 'separate':
+    if self.compiler.symbol_files == 'separate':
       self.perform_symbol_steps(cx)
 
   def perform_symbol_steps(self, cx):
-    if isinstance(self.linker_, MSVC):
+    if self.linker_.family == 'msvc':
       # Note, pdb is last since we read the pdb as outputs[-1].
       self.linker_outputs += [self.name_ + '.pdb']
     elif cx.target_platform is 'mac':
@@ -301,8 +305,8 @@ class BinaryBuilder(object):
       folder = folder,
       shared_outputs = shared_outputs
     )
-    if not self.debug_entry and self.compiler.debug_symbols:
-      if self.linker_.behavior != 'msvc' and self.compiler.debug_symbols == 'bundled':
+    if not self.debug_entry and self.compiler.symbol_files:
+      if self.linker_.behavior != 'msvc' and self.compiler.symbol_files == 'bundled':
         self.debug_entry = outputs[0]
       else:
         self.debug_entry = outputs[-1]
@@ -314,31 +318,19 @@ class Program(BinaryBuilder):
 
   @staticmethod
   def buildName(compiler, name):
-    return compiler.nameForExecutable(name)
+    return compiler.vendor.nameForExecutable(name)
 
   @property
   def type(self):
     return 'program'
 
   def generateBinary(self, cx, files):
-    argv = self.linker_.command.split(' ')
-    argv += files
-
-    if isinstance(self.linker_, MSVC):
-      argv.append('/link')
-      argv.extend(self.linkFlags(cx))
-      argv.append('/nologo')
-      argv += [
-        '/OUT:' + self.outputFile,
-        '/nologo',
-      ]
-      if self.compiler.debug_symbols:
-        argv += ['/DEBUG', '/PDB:"' + self.name_ + '.pdb"']
-    else:
-      argv.extend(self.linkFlags(cx))
-      argv.extend(['-o', self.outputFile])
-
-    return argv
+    return self.compiler.vendor.programLinkArgv(
+      cmd_argv = self.linker_argv_,
+      files = files,
+      linkFlags = self.linkFlags(cx),
+      symbolFile = self.name_ if self.compiler.symbol_files else None,
+      outputFile = self.outputFile)
 
 class Library(BinaryBuilder):
   def __init__(self, compiler, name):
@@ -346,36 +338,19 @@ class Library(BinaryBuilder):
 
   @staticmethod
   def buildName(compiler, name):
-    return compiler.nameForSharedLibrary(name)
+    return compiler.vendor.nameForSharedLibrary(name)
 
   @property
   def type(self):
     return 'library'
 
   def generateBinary(self, cx, files):
-    argv = self.linker_.command.split(' ')
-    argv += files
-
-    if isinstance(self.linker_, MSVC):
-      argv.append('/link')
-      argv.extend(self.linkFlags(cx))
-      argv += [
-        '/OUT:' + self.outputFile,
-        '/DEBUG',
-        '/nologo',
-        '/DLL',
-      ]
-      if self.compiler.debug_symbols:
-        argv += ['/DEBUG', '/PDB:"' + self.name_ + '.pdb"']
-    elif isinstance(self.linker_, CompatGCC):
-      argv.extend(self.linkFlags(cx))
-      if util.IsMac():
-        argv.append('-dynamiclib')
-      else:
-        argv.append('-shared')
-      argv.extend(['-o', self.outputFile])
-
-    return argv
+    return self.compiler.vendor.libLinkArgv(
+      cmd_argv = self.linker_argv_,
+      files = files,
+      linkFlags = self.linkFlags(cx),
+      symbolFile = self.name_ if self.compiler.symbol_files else None,
+      outputFile = self.outputFile)
 
 class StaticLibrary(BinaryBuilder):
   def __init__(self, compiler, name):
@@ -383,19 +358,14 @@ class StaticLibrary(BinaryBuilder):
 
   @staticmethod
   def buildName(compiler, name):
-    return compiler.nameForStaticLibrary(name)
+    return compiler.vendor.nameForStaticLibrary(name)
 
   @property
   def type(self):
     return 'static'
 
   def generateBinary(self, cx, files):
-    if isinstance(self.linker_, MSVC):
-      argv = ['lib.exe', '/OUT:' + self.outputFile]
-    else:
-      argv = ['ar', 'rcs', self.outputFile]
-    argv += files
-    return argv
+    return self.linker_.staticLinkArgv(files, self.outputFile)
 
   def perform_symbol_steps(self, cx):
     pass

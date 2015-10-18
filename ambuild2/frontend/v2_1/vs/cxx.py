@@ -26,7 +26,6 @@ from ambuild2.frontend.v2_1.cpp import Dep, CppNodes
 class CompilerShell(object):
   def __init__(self, version):
     self.version = version
-    self.behavior = 'msvc'
     self.name = 'msvc'
 
 class Project(object):

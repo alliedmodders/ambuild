@@ -19,14 +19,22 @@ import os, re
 import tempfile
 import subprocess
 from ambuild2 import util
-from ambuild2.frontend.v2_1.cpp import vendors, compilers
+from ambuild2.frontend.v2_1.cpp import vendor, compiler
+from ambuild2.frontend.v2_1.cpp.msvc import MSVC
+from ambuild2.frontend.v2_1.cpp.gcc import GCC, Clang
+from ambuild2.frontend.v2_1.cpp.sunpro import SunPro
 
-def TryVerifyCompiler(env, mode, cmd):
+class CommandAndVendor(object):
+  def __init__(self, argv, vendor):
+    self.argv = argv
+    self.vendor = vendor
+
+def FindCompiler(env, mode, cmd):
   if util.IsWindows():
-    cc = VerifyCompiler(env, mode, cmd, 'msvc')
-    if cc:
+    result = TryVerifyCompiler(env, mode, cmd, 'msvc')
+    if result is not None:
       return cc
-  return VerifyCompiler(env, mode, cmd, 'gcc')
+  return TryVerifyCompiler(env, mode, cmd, 'gcc')
 
 CompilerSearch = {
   'CC': {
@@ -41,38 +49,19 @@ CompilerSearch = {
   }
 }
 
-def DetectMicrosoftInclusionPattern(text):
-  for line in [raw.strip() for raw in text.split('\n')]:
-    m = re.match(r'(.*)\s+([A-Za-z]:\\.*stdio\.h)$', line)
-    if m is None:
-      continue
-
-    phrase = m.group(1)
-    return re.escape(phrase) + r'\s+([A-Za-z]:\\.*)$'
-
-  raise Exception('Could not find compiler inclusion pattern')
-
-def DetectCxx(env, options):
+def DetectCxx(env):
   cc = DetectCxxCompiler(env, 'CC')
   cxx = DetectCxxCompiler(env, 'CXX')
 
   # Ensure that the two compilers have the same vendor.
-  if type(cc) is not type(cxx):
-    message = 'C and C++ compiler vendors are not the same: CC={0}, CXX={1}'
-    message = message.format(cc.name, cxx.name)
+  if not cxx.vendor.equals(cc.vendor):
+    message = 'C and C++ compiler are different: CC={0}, CXX={1}'
+    message = message.format(cc.vendor, cxx.vendor)
 
     util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
     raise Exception(message)
 
-  # Ensure that the two compilers have the same version.
-  if cc.version != cxx.version:
-    message = 'C and C++ compilers have different versions: CC={0}-{1}, CXX={2}-{3}'
-    message = message.format(cc.name, cc.version, cxx.name, cxx.version)
-
-    util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
-    raise Exception(message)
-
-  return compilers.CxxCompiler(cc, cxx, options)
+  return compiler.CliCompiler(cxx.vendor, cc.argv, cxx.argv)
 
 def DetectCxxCompiler(env, var):
   if var in env:
@@ -83,66 +72,31 @@ def DetectCxxCompiler(env, var):
     else:
       trys = CompilerSearch[var]['default']
   for i in trys:
-    cc = TryVerifyCompiler(env, var, i)
-    if cc:
-      return cc
+    result = FindCompiler(env, var, i)
+    if result is not None:
+      return result
 
-  # Try for Emscripten. This only works with an env override.
-  if 'emcc' in env.get(var, ''):
-    cc = DetectEmscripten(env, var)
-    if cc:
-      return cc
-
-  # Fail.
   raise Exception('Unable to find a suitable ' + var + ' compiler')
 
-def DetectEmscripten(env, var):
-  cmd = env[var]
-  argv = cmd.split()
-  if 'CFLAGS' in env:
-    argv += env.get('CFLAGS', '').split()
-  if var == 'CC':
-    suffix = '.c'
-  elif var == 'CXX':
-    argv += env.get('CXXFLAGS', '').split()
-    suffix = '.cpp'
-
-  # Run emcc -dM -E on a blank file to get preprocessor definitions.
-  with tempfile.NamedTemporaryFile(suffix = suffix, delete = True) as fp:
-    argv = cmd.split() + ['-dM', '-E', fp.name]
-    output = subprocess.check_output(args = argv)
-  output = output.replace('\r', '')
-  lines = output.split('\n')
-
-  # Map the definitions into a dictionary.
-  defs = {}
-  for line in lines:
-    m = re.match('#define\s+([A-Za-z_][A-Za-z0-9_]*)\s*(.*)', line)
-    if m is None:
-      continue
-    macro = m.group(1)
-    value = m.group(2)
-    defs[macro] = value
-
-  if '__EMSCRIPTEN__' not in defs:
+def TryVerifyCompiler(env, mode, cmd, assumed_family):
+  try:
+    return VerifyCompiler(env, mode, cmd, assumed_family)
+  except Exception as e:
+    util.con_out(
+      util.ConsoleHeader,
+      'Compiler {0} for {1} failed: '.format(cmd, mode),
+      util.ConsoleRed,
+      e.message,
+      util.ConsoleNormal
+    )
     return None
 
-  version = '{0}.{1}'.format(defs['__EMSCRIPTEN_major__'], defs['__EMSCRIPTEN_minor__'])
-  v = vendors.Emscripten(cmd, version)
-
-  util.con_out(
-    util.ConsoleHeader,
-    'found {0} version {1}'.format('Emscripten', version),
-    util.ConsoleNormal
-  )
-  return v
-
-def VerifyCompiler(env, mode, cmd, vendor):
-  args = cmd.split()
+def VerifyCompiler(env, mode, cmd, assumed_family):
+  argv = cmd.split()
   if 'CFLAGS' in env:
-    args.extend(env['CFLAGS'].split())
+    argv.extend(env['CFLAGS'].split())
   if mode == 'CXX' and 'CXXFLAGS' in env:
-    args.extend(env['CXXFLAGS'].split())
+    argv.extend(env['CXXFLAGS'].split())
   if mode == 'CXX':
     filename = 'test.cpp'
   else:
@@ -197,65 +151,55 @@ int main()
   if os.path.exists(executable):
     os.unlink(executable)
 
-  # Until we can better detect vendors, don't do this.
-  # if vendor == 'gcc' and mode == 'CXX':
-  #   args.extend(['-fno-exceptions', '-fno-rtti'])
-  args.extend([filename, '-o', executable])
+  argv.extend([filename, '-o', executable])
 
   # For MSVC, we need to detect the inclusion pattern for foreign-language
   # systems.
-  if vendor == 'msvc':
-    args += ['-nologo', '-showIncludes']
+  if assumed_family == 'msvc':
+    argv += ['-nologo', '-showIncludes']
 
   util.con_out(
     util.ConsoleHeader,
-    'Checking {0} compiler (vendor test {1})... '.format(mode, vendor),
+    'Checking {0} compiler (vendor test {1})... '.format(mode, assumed_family),
     util.ConsoleBlue,
-    '{0}'.format(args),
+    '{0}'.format(argv),
     util.ConsoleNormal
   )
-  p = util.CreateProcess(args)
+  p = util.CreateProcess(argv)
   if p == None:
-    print('not found')
-    return False
+    raise Exception('compiler not found')
   if util.WaitForProcess(p) != 0:
-    print('failed with return code {0}'.format(p.returncode))
-    return False
+    raise Exception('compiler failed with return code {0}'.format(p.returncode))
 
   inclusion_pattern = None
-  if vendor == 'msvc':
-    inclusion_pattern = DetectMicrosoftInclusionPattern(p.stdoutText)
+  if assumed_family == 'msvc':
+    inclusion_pattern = MSVC.DetectInclusionPattern(p.stdoutText)
 
   exe = util.MakePath('.', executable)
   p = util.CreateProcess([executable], executable = exe)
   if p == None:
-    print('failed to create executable with {0}'.format(cmd))
-    return False
+    raise Exception('failed to create executable with {0}'.format(cmd))
   if util.WaitForProcess(p) != 0:
-    print('executable failed with return code {0}'.format(p.returncode))
-    return False
+    raise Exception('executable failed with return code {0}'.format(p.returncode))
   lines = p.stdoutText.splitlines()
   if len(lines) != 2:
-    print('invalid executable output')
-    return False
+    raise Exception('invalid executable output')
   if lines[1] != mode:
-    print('requested {0} compiler, found {1}'.format(mode, lines[1]))
-    return False
+    raise Exception('requested {0} compiler, found {1}'.format(mode, lines[1]))
 
   vendor, version = lines[0].split(' ')
   if vendor == 'gcc':
-    v = vendors.GCC(cmd, version)
+    v = GCC(version)
   elif vendor == 'apple-clang':
-    v = vendors.Clang('apple-clang', cmd, version)
+    v = Clang(version, 'apple-clang')
   elif vendor == 'clang':
-    v = vendors.Clang('clang', cmd, version)
+    v = Clang(version)
   elif vendor == 'msvc':
-    v = vendors.MSVC(cmd, version)
+    v = MSVC(version)
   elif vendor == 'sun':
-    v = vendors.SunPro(cmd, version)
+    v = SunPro(version)
   else:
-    print('Unknown vendor {0}'.format(vendor))
-    return False
+    raise Exception('Unknown vendor {0}'.format(vendor))
 
   if inclusion_pattern is not None:
     v.extra_props['inclusion_pattern'] = inclusion_pattern
@@ -265,5 +209,4 @@ int main()
     'found {0} version {1}'.format(vendor, version),
     util.ConsoleNormal
   )
-  return v
-
+  return CommandAndVendor(cmd.split(), v)

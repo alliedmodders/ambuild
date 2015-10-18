@@ -22,7 +22,7 @@ from ambuild2.frontend.v2_1.cpp import builders
 class Compiler(object):
   EnvVars = ['CFLAGS', 'CXXFLAGS', 'CC', 'CXX']
 
-  attrs = [
+  attrs_ = [
     'includes',         # C and C++ include paths
     'cxxincludes',      # C++-only include paths
     'cflags',           # C and C++ compiler flags
@@ -48,32 +48,65 @@ class Compiler(object):
     'sourcedeps',
   ]
 
-  def __init__(self, options = None):
-    if getattr(options, 'symbol_files', False):
-      self.debuginfo = 'separate'
-    else:
-      self.debuginfo = 'bundled'
-    for attr in self.attrs:
+  def __init__(self, vendor):
+    self.vendor = vendor
+    for attr in self.attrs_:
       setattr(self, attr, [])
+    self.symbol_files = 'bundled'
 
   def inherit(self, other):
-    self.debuginfo = other.debuginfo
-    for attr in self.attrs:
+    for attr in self.attrs_:
       setattr(self, attr, copy.copy(getattr(other, attr)))
+    self.symbol_files_ = other.symbol_files_
 
   def clone(self):
     raise Exception('Must be implemented!')
 
+  # Returns whether this compiler acts like another compiler. Current responses
+  # are:
+  #
+  #    msvc:        msvc
+  #    gcc:         gcc
+  #    clang:       gcc, clang
+  #    apple-clang: gcc, clang, apple-clang
+  #    sun:         sun
+  #
   def like(self, name):
-    raise Exception('Must be implemented!')
+    return self.vendor.like(name)
 
+  # Returns the meta family the compiler belongs to. The meta family is the
+  # most generic compiler that this compiler aims to emulate.
+  # Responses are one of: msvc, gcc, sun
   @property
-  def vendor(self):
-    raise Exception('Must be implemented!')
+  def behavior(self):
+    return self.vendor.behavior
 
+  # Returns the family the compiler belongs to.
+  # Responses are one of: msvc, gcc, clang, sun
+  @property
+  def family(self):
+    return self.vendor.family
+
+  # Returns a version object representing the compiler. The version is
+  # prefixed by the compiler name.
   @property
   def version(self):
-    raise Exception('Must be implemented!')
+    return self.vendor.version
+
+  # Returns how symbol files are generated, either 'bundled' or 'separate'.
+  @property
+  def symbol_files(self):
+    return self.symbol_files_
+
+  # Sets how symbol files are generated. Must be 'bundled' or 'separate'.
+  # Default is 'bundled' if the underlying compiler supports it. If the vendor
+  # does not support the requested symbol file type, the value remains
+  # unchanged.
+  @symbol_files.setter
+  def symbol_files(self, value):
+    if value not in ['bundled', 'separate']:
+      raise Exception("Symbol files value must be 'bundled' or 'separate'")
+    self.symbol_files_ = self.vendor.parseDebugInfoType(value)
 
   def Program(self, name):
     raise Exception('Must be implemented!')
@@ -84,21 +117,28 @@ class Compiler(object):
   def StaticLibrary(self, name):
     raise Exception('Must be implemented!')
 
+  def ProgramProject(self, name):
+    raise Exception('Must be implemented!')
+
+  def LibraryProject(self, name):
+    raise Exception('Must be implemented!')
+
+  def StaticLibraryProject(self, name):
+    raise Exception('Must be implemented!')
+
   @staticmethod
   def Dep(text, node=None):
     return builders.Dep(text, node)
 
-class CxxCompiler(Compiler):
-  def __init__(self, cc, cxx, options = None):
-    super(CxxCompiler, self).__init__(options)
-
-    # Accesssing these attributes through the API is deprecated.
-    self.cc = cc
-    self.cxx = cxx
+class CliCompiler(Compiler):
+  def __init__(self, vendor, cc_argv, cxx_argv):
+    super(CliCompiler, self).__init__(vendor)
+    self.cc_argv = cc_argv
+    self.cxx_argv = cxx_argv
     self.found_pkg_config_ = False
 
   def clone(self):
-    cc = CxxCompiler(self.cc, self.cxx)
+    cc = CliCompiler(self.vendor, self.cc_argv, self.cxx_argv)
     cc.inherit(self)
     return cc
 
@@ -120,46 +160,8 @@ class CxxCompiler(Compiler):
   def StaticLibraryProject(self, name):
     return builders.Project(builders.StaticLibrary, self.clone(), name)
 
-  # These functions use |cxx|, because we expect the vendors to be the same
-  # across |cc| and |cxx|.
-
-  # Returns whether this compiler acts like another compiler. Available names
-  # are: msvc, gcc, icc, sun, clang
-  def like(self, name):
-    return self.cxx.like(name)
-
-  # Returns the vendor name (msvc, gcc, icc, sun, clang)
-  @property
-  def vendor(self):
-    return self.cxx.name
-
-  # Returns the version of the compiler. The return value is an object that
-  # can be compared against other versions, for example:
-  #
-  #  compiler.version >= '4.8.3'
-  #
-  @property
-  def version(self):
-    return self.cxx.versionObject
-
-  # Returns a list containing the program name and arguments used to invoke the compiler.
-  @property
-  def argv(self):
-    return self.cxx.command.split(' ')
-
-  # Returns the debuginfo modulo what the underlying vendor's compiler supports.
-  @property
-  def debug_symbols(self):
-    return self.cxx.parse_debuginfo(self.debuginfo)
-
-  # Internal API.
-  def nameForStaticLibrary(self, name):
-    return self.cxx.nameForStaticLibrary(name)
-  def nameForSharedLibrary(self, name):
-    return self.cxx.nameForSharedLibrary(name)
-  def nameForExecutable(self, name):
-    return self.cxx.nameForExecutable(name)
-  def run_pkg_config(self, argv):
+  @staticmethod
+  def run_pkg_config(argv):
     output = subprocess.check_output(args = ['pkg-config'] + argv)
     return [item.strip() for item in output.strip().split(' ') if item.strip() != '']
 

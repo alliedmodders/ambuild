@@ -186,14 +186,9 @@ class Generator(BaseGenerator):
           env[key] = os.environ[key]
 
       # Save any extra compiler info that must be communicated to the backend.
-      compilers = [
-        ('cc', self.compiler.cc),
-        ('cxx', self.compiler.cxx),
-      ]
-      for prefix, comp in compilers:
-        for prop_name in comp.extra_props:
-          key = '{0}_{1}'.format(prefix, prop_name)
-          vars[key] = comp.extra_props[prop_name]
+      for prop_name in self.compiler.vendor.extra_props:
+        key = '{0}_{1}'.format(self.compiler.vendor.name, prop_name)
+        vars[key] = self.compiler.vendor.extra_props[prop_name]
 
     vars['env'] = env
 
@@ -203,7 +198,7 @@ class Generator(BaseGenerator):
   def detectCompilers(self):
     if not self.compiler:
       with util.FolderChanger(self.cacheFolder):
-        self.base_compiler = detect.DetectCxx(os.environ, self.options)
+        self.base_compiler = detect.DetectCxx(os.environ)
         self.compiler = self.base_compiler.clone()
 
     return self.compiler

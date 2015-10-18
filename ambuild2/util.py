@@ -226,6 +226,8 @@ def ParseMSVCDeps(vars, out):
     pattern = vars['cc_inclusion_pattern']
   elif 'cxx_inclusion_pattern' in vars:
     pattern = vars['cxx_inclusion_pattern']
+  elif 'msvc_inclusion_pattern' in vars:
+    pattern = vars['msvc_inclusion_pattern']
   else:
     pattern = 'Note: including file:\s+(.+)$'
 
