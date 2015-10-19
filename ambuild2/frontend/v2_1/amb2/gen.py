@@ -598,6 +598,38 @@ class Generator(BaseGenerator):
       else:
         inputs.append(item)
 
+  def addCxxObjTask(self, cx, binary, folder, obj):
+    cxxData = {
+      'argv': obj.argv,
+      'type': binary.linker.behavior
+    }
+    _, (cxxNode,) = self.addCommand(
+      context = cx,
+      weak_inputs = binary.compiler.sourcedeps,
+      inputs = [obj.sourceFile],
+      outputs = [obj.outputFile],
+      node_type = nodetypes.Cxx,
+      folder = folder,
+      data = cxxData,
+      shared_outputs = binary.shared_cc_outputs)
+    return cxxNode
+
+  def addCxxRcTask(self, cx, binary, folder, obj):
+    rcData = {
+      'cl_argv': obj.cl_argv,
+      'rc_argv': obj.rc_argv,
+    }
+    _, (_, rcNode) = self.addCommand(
+      context = cx,
+      weak_inputs = binary.compiler.sourcedeps,
+      inputs = [obj.sourceFile],
+      outputs = [obj.preprocFile, obj.outputFile],
+      node_type = nodetypes.Rc,
+      folder = folder,
+      data = rcData
+    )
+    return rcNode
+
   def addCxxTasks(self, cx, binary):
     folder_node = self.generateFolder(cx.localFolder, binary.localFolder)
 
@@ -606,38 +638,14 @@ class Generator(BaseGenerator):
     self.parseCxxDeps(cx, binary, inputs, binary.compiler.linkflags)
     self.parseCxxDeps(cx, binary, inputs, binary.compiler.postlink)
 
-    for objfile in binary.objects:
-      cxxData = {
-        'argv': objfile.argv,
-        'type': binary.linker.behavior
-      }
-      cxxCmd, (cxxNode,) = self.addCommand(
-        context = cx,
-        weak_inputs = binary.compiler.sourcedeps,
-        inputs = [objfile.sourceFile],
-        outputs = [objfile.outputFile],
-        node_type = nodetypes.Cxx,
-        folder = folder_node,
-        data = cxxData,
-        shared_outputs = objfile.sharedOutputs
-      )
-      inputs.append(cxxNode)
-    for rcfile in binary.resources:
-      rcData = {
-        'cl_argv': rcfile.cl_argv,
-        'rc_argv': rcfile.rc_argv,
-      }
-      rcCmd, (preprocNode, rcNode) = self.addCommand(
-        context = cx,
-        weak_inputs = binary.compiler.sourcedeps,
-        inputs = [rcfile.sourceFile],
-        outputs = [rcfile.preprocFile, rcfile.outputFile],
-        node_type = nodetypes.Rc,
-        folder = folder_node,
-        data = rcData
-      )
-      inputs.append(rcNode)
+    # Add object files.
+    for obj in binary.objects:
+      if obj.type == 'object':
+        inputs.append(self.addCxxObjTask(cx, binary, folder_node, obj))
+      elif obj.type == 'resource':
+        inputs.append(self.addCxxRcTask(cx, binary, folder_node, obj))
 
+    # Add the link step.
     output_file, debug_file = binary.link(
       context = cx,
       folder = folder_node,

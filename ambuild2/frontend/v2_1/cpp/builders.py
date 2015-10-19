@@ -93,48 +93,18 @@ class Project(object):
     self.proxies_.append(proxy)
     return proxy
 
-# Environment representing a C/C++ compiler invocation. Encapsulates most
-# arguments.
-class ArgBuilder(object):
-  def __init__(self, outputPath, config, mode):
-    vendor = config.vendor
-
-    if mode == 'cc':
-      self.argv = config.cc_argv[:]
-    elif mode == 'cxx':
-      self.argv = config.cxx_argv[:]
-
-    self.argv += config.cflags
-
-    if config.symbol_files is not None:
-      self.argv += vendor.debugInfoArgv
-
-    if mode == 'cxx':
-      self.argv += config.cxxflags
-    else:
-      self.argv += config.c_only_flags
-
-    self.argv += [vendor.definePrefix + define for define in config.defines]
-    if mode == 'cxx':
-      self.argv += [vendor.definePrefix + define for define in config.cxxdefines]
-
-    for include in config.includes:
-      self.argv += vendor.formatInclude(outputPath, include)
-    if mode == 'cxx':
-      for include in config.cxxincludes:
-        self.argv += vendor.formatInclude(outputPath, include)
-
-    self.vendor = vendor
-
 def NameForObjectFile(file):
   return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
 
 class ObjectFile(object):
-  def __init__(self, sourceFile, outputFile, argv, sharedOutputs):
+  def __init__(self, sourceFile, outputFile, argv):
     self.sourceFile = sourceFile
     self.outputFile = outputFile
     self.argv = argv
-    self.sharedOutputs = sharedOutputs
+
+  @property
+  def type(self):
+    return 'object'
 
 class RCFile(object):
   def __init__(self, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
@@ -143,6 +113,90 @@ class RCFile(object):
     self.outputFile = outputFile
     self.cl_argv = cl_argv 
     self.rc_argv = rc_argv
+
+  @property
+  def type(self):
+    return 'resource'
+
+class ObjectArgvBuilder(object):
+  def __init__(self):
+    super(ObjectArgvBuilder, self).__init__()
+    self.outputFolder = None
+    self.outputPath = None
+    self.vendor = None
+    self.compiler = None
+    self.cc_argv = None
+    self.cxx_argv = None
+    self.objects = []
+    self.resources = []
+    self.used_cxx = False
+
+  def setOutputs(self, outputFolder, outputPath):
+    self.outputFolder = outputFolder
+    self.outputPath = outputPath
+
+  def setCompiler(self, compiler):
+    self.vendor = compiler.vendor
+    self.compiler = compiler
+
+    # Set up the C compiler argv.
+    self.cc_argv = compiler.cc_argv[:]
+    self.cc_argv += compiler.cflags
+    if compiler.symbol_files is not None:
+      self.cc_argv += self.vendor.debugInfoArgv
+    self.cc_argv += compiler.c_only_flags
+    self.cc_argv += [self.vendor.definePrefix + define for define in compiler.defines]
+    for include in compiler.includes:
+      self.cc_argv += self.vendor.formatInclude(self.outputPath, include)
+
+    # Set up the C++ compiler argv.
+    self.cxx_argv = compiler.cxx_argv[:]
+    self.cxx_argv += compiler.cflags
+    if compiler.symbol_files is not None:
+      self.cxx_argv += self.vendor.debugInfoArgv
+    self.cxx_argv += compiler.cxxflags
+    self.cxx_argv += [self.vendor.definePrefix + define for define in compiler.defines]
+    self.cxx_argv += [self.vendor.definePrefix + define for define in compiler.cxxdefines]
+    for include in compiler.includes + compiler.cxxincludes:
+      self.cxx_argv += self.vendor.formatInclude(self.outputPath, include)
+
+  def buildItem(self, sourceName, sourceFile):
+    sourceNameSansExtension, extension = os.path.splitext(sourceName)
+    encodedName = NameForObjectFile(sourceNameSansExtension)
+
+    if extension == '.rc':
+      return self.buildRcItem(sourceFile, encodedName)
+    return self.buildCxxItem(sourceFile, encodedName, extension)
+
+  def buildCxxItem(self, sourceFile, encodedName, extension):
+    if extension == '.c':
+      argv = self.cc_argv[:]
+    else:
+      argv = self.cxx_argv[:]
+      self.used_cxx = True
+    objectFile = encodedName + self.vendor.objSuffix
+
+    argv += self.vendor.objectArgs(sourceFile, objectFile)
+    return ObjectFile(sourceFile, objectFile, argv)
+
+  def buildRcItem(self, sourceFile, encodedName):
+    objectFile = encodedName + '.res'
+
+    defines = self.compiler.defines + self.compiler.cxxdefines + self.compiler.rcdefines
+    cl_argv = self.cc_argv[:]
+    cl_argv += [self.vendor.definePrefix + define for define in defines]
+    for include in (self.compiler.includes + self.compiler.cxxincludes):
+      cl_argv += self.vendor.formatInclude(objectFile, include)
+    cl_argv += self.vendor.preprocessArgv(sourceFile, encodedName + '.i')
+
+    rc_argv = ['rc', '/nologo']
+    rc_argv += [['/d', define] for define in defines]
+    for include in (self.compiler.includes + self.compiler.cxxincludes):
+      rc_argv += ['/i', self.vendor.IncludePath(objectFile, include)]
+    rc_argv += ['/fo' + objectFile, sourceFile]
+
+    return RCFile(sourceFile, encodedName + '.i', objectFile,
+                  cl_argv, rc_argv)
 
 class BinaryBuilder(object):
   def __init__(self, compiler, name):
@@ -185,19 +239,17 @@ class BinaryBuilder(object):
     return argv
 
   def finish(self, cx):
-    # Because we want to compute relative include folders for MSVC (see its
-    # vendor object), we need to compute an absolute path to the build folder.
-    self.outputFolder = self.getBuildFolder(cx)
-    self.outputPath = os.path.join(cx.buildPath, self.outputFolder)
-    self.default_c_env = ArgBuilder(self.outputPath, self.compiler, 'cc')
-    self.default_cxx_env = ArgBuilder(self.outputPath, self.compiler, 'cxx')
+    builder = ObjectArgvBuilder()
+    builder.setOutputs(
+      outputFolder = self.getBuildFolder(cx),
+      outputPath = os.path.join(cx.buildPath, self.getBuildFolder(cx)))
+    builder.setCompiler(self.compiler)
 
-    shared_cc_outputs = []
+    self.shared_cc_outputs = []
     if self.compiler.symbol_files and self.compiler.family == 'msvc':
-      shared_cc_outputs += [self.compiler.vendor.shared_pdb_name()]
+      self.shared_cc_outputs += [self.compiler.vendor.shared_pdb_name()]
 
     self.objects = []
-    self.resources = []
     for item in self.sources:
       if os.path.isabs(item):
         sourceFile = item
@@ -205,51 +257,15 @@ class BinaryBuilder(object):
         sourceFile = os.path.join(cx.currentSourcePath, item)
       sourceFile = os.path.normpath(sourceFile)
 
-      filename, extension = os.path.splitext(item)
-      encname = NameForObjectFile(filename)
+      self.objects.append(builder.buildItem(item, sourceFile))
 
-      if extension == '.rc':
-        cenv = self.default_c_env
-        objectFile = encname + '.res'
-      else:
-        if extension == '.c':
-          cenv = self.default_c_env
-        else:
-          cenv = self.default_cxx_env
-          self.used_cxx_ = True
-        objectFile = encname + cenv.vendor.objSuffix
-
-      if extension == '.rc':
-        # This is only relevant on Windows.
-        vendor = cenv.vendor
-        defines = self.compiler.defines + self.compiler.cxxdefines + self.compiler.rcdefines
-        cl_argv = vendor.command.split(' ')
-        cl_argv += [vendor.definePrefix + define for define in defines]
-        for include in (self.compiler.includes + self.compiler.cxxincludes):
-          cl_argv += vendor.formatInclude(objectFile, include)
-        cl_argv += vendor.preprocessArgs(sourceFile, encname + '.i')
-
-        rc_argv = ['rc', '/nologo']
-        for define in defines:
-          rc_argv.extend(['/d', define])
-        for include in (self.compiler.includes + self.compiler.cxxincludes):
-          rc_argv.extend(['/i', MSVC.IncludePath(objectFile, include)])
-        rc_argv.append('/fo' + objectFile)
-        rc_argv.append(sourceFile)
-
-        self.resources.append(RCFile(sourceFile, encname + '.i', objectFile, cl_argv, rc_argv))
-      else:
-        argv = cenv.argv + cenv.vendor.objectArgs(sourceFile, objectFile)
-        obj = ObjectFile(sourceFile, objectFile, argv, shared_cc_outputs)
-        self.objects.append(obj)
-
-    if self.used_cxx_:
+    if builder.used_cxx:
       self.linker_argv_ = self.compiler.cxx_argv
     else:
       self.linker_argv_ = self.compiler.cc_argv
     self.linker_ = self.compiler.vendor
 
-    files = [out.outputFile for out in self.objects + self.resources]
+    files = [out.outputFile for out in self.objects]
     self.argv = self.generateBinary(cx, files)
     self.linker_outputs = [self.outputFile]
     self.debug_entry = None

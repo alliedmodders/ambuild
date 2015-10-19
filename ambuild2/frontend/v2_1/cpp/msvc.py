@@ -88,8 +88,7 @@ class MSVC(Vendor):
       argv += ['/DEBUG', '/PDB:"' + symbolFile + '.pdb"']
     return argv
 
-  @staticmethod
-  def PreprocessArgv(self, sourceFile, outFile):
+  def preprocessArgv(self, sourceFile, outFile):
     return ['/showIncludes', '/nologo', '/P', '/c', sourceFile, '/Fi' + outFile]
 
   @staticmethod
