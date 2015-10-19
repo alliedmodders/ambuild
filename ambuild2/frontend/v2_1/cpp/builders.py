@@ -96,21 +96,31 @@ class Project(object):
 def NameForObjectFile(file):
   return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
 
-class ObjectFile(object):
-  def __init__(self, sourceFile, outputFile, argv):
+class ObjectFileBase(object):
+  def __init__(self, compiler, sourceFile, outputFile):
+    super(ObjectFileBase, self).__init__()
     self.sourceFile = sourceFile
     self.outputFile = outputFile
+    self.sourcedeps = compiler.sourcedeps
+
+  @property
+  def type(self):
+    raise Exception("Must be implemented!")
+
+class ObjectFile(ObjectFileBase):
+  def __init__(self, compiler, sourceFile, outputFile, argv):
+    super(ObjectFile, self).__init__(compiler, sourceFile, outputFile)
     self.argv = argv
+    self.behavior = compiler.vendor.behavior
 
   @property
   def type(self):
     return 'object'
 
-class RCFile(object):
+class RCFile(ObjectFileBase):
   def __init__(self, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
-    self.sourceFile = sourceFile
+    super(ObjectFile, self).__init__(sourceFile, outputFile)
     self.preprocFile = preprocFile
-    self.outputFile = outputFile
     self.cl_argv = cl_argv 
     self.rc_argv = rc_argv
 
@@ -177,7 +187,7 @@ class ObjectArgvBuilder(object):
     objectFile = encodedName + self.vendor.objSuffix
 
     argv += self.vendor.objectArgs(sourceFile, objectFile)
-    return ObjectFile(sourceFile, objectFile, argv)
+    return ObjectFile(self.compiler, sourceFile, objectFile, argv)
 
   def buildRcItem(self, sourceFile, encodedName):
     objectFile = encodedName + '.res'
@@ -195,7 +205,7 @@ class ObjectArgvBuilder(object):
       rc_argv += ['/i', self.vendor.IncludePath(objectFile, include)]
     rc_argv += ['/fo' + objectFile, sourceFile]
 
-    return RCFile(sourceFile, encodedName + '.i', objectFile,
+    return RCFile(self.compiler, sourceFile, encodedName + '.i', objectFile,
                   cl_argv, rc_argv)
 
 class BinaryBuilder(object):
