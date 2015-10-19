@@ -30,7 +30,6 @@ class Generator(BaseGenerator):
     self.old_scripts_ = set()
     self.old_folders_ = set()
     self.old_commands_ = set()
-    self.old_groups_ = set()
     self.rm_list_ = []
     self.bad_outputs_ = set()
     self.db = db
@@ -82,7 +81,6 @@ class Generator(BaseGenerator):
     self.db.query_scripts(lambda id,path,stamp: self.old_scripts_.add(path))
     self.db.query_mkdir(lambda entry: self.old_folders_.add(entry))
     self.db.query_commands(lambda entry: self.old_commands_.add(entry))
-    self.db.query_groups(lambda entry:self.old_groups_.add(entry))
     self.db.set_var('api_version', '2.1')
 
   def cleanup(self):
@@ -99,9 +97,6 @@ class Generator(BaseGenerator):
 
     for path in self.old_scripts_:
       self.db.drop_script(path)
-
-    for group in self.old_groups_:
-      self.db.drop_group(group)
 
     self.db.query_dead_sources(lambda e: self.db.drop_source(e))
     self.db.query_dead_shared_outputs(lambda e: self.db.drop_output(e))

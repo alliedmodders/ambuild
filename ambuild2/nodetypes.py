@@ -34,9 +34,6 @@ Output = 'out'
 # outputs.
 SharedOutput = 'sho'
 
-# An aggregate node that reduces incoming edges to other nodes.
-Group = 'grp'
-
 # Mkdir nodes represent a folder creation action, either explicit or
 # automatically generated.
 Mkdir = 'mkd'
@@ -72,7 +69,6 @@ NodeNames = {
   Command: 'command',
   Output: 'output',
   SharedOutput: 'output',
-  Group: 'group',
   Mkdir: 'mkdir',
   Copy: 'copy',
   CopyFolder: 'copy -R',
@@ -85,7 +81,7 @@ def IsFile(type):
   return type == Output or type == Source
 
 def IsCommand(type):
-  return type != Output and type != Source and type != Group
+  return type != Output and type != Source
 
 def HasAutoDependencies(type):
   return type == CopyFolder or type == Cxx
@@ -166,8 +162,6 @@ class Entry(object):
       return '[' + self.blob['type'] + ']' + ' -> ' + (' '.join([arg for arg in self.blob['argv']]))
     if self.type == Rc:
       return ' '.join([arg for arg in self.blob['cl_argv']]) + ' && ' + ' '.join([arg for arg in self.blob['rc_argv']])
-    if self.type == Group:
-      return 'group "{0}"'.format(self.path)
     return (' '.join([arg for arg in self.blob]))
 
 def combine(a, b):

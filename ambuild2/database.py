@@ -711,17 +711,6 @@ class Database(object):
     for rowid, path, stamp in self.cn.execute(query):
       aggregate(rowid, path, stamp)
 
-  def query_groups(self, aggregate):
-    query = """
-      select type, stamp, dirty, path, folder, data, id
-      from nodes
-      where type == 'grp'
-    """
-    for row in self.cn.execute(query):
-      id = row[6]
-      entry = self.import_node(id, row)
-      aggregate(entry)
-
   def query_dead_sources(self, aggregate):
     query = """
       select id from nodes
@@ -748,9 +737,6 @@ class Database(object):
 
   def drop_script(self, path):
     self.cn.execute("delete from reconfigure where path = ?", (path,))
-
-  def drop_group(self, group):
-    self.drop_entry(group)
 
   def change_to_folder(self, entry):
     assert entry.type == nodetypes.Output or entry.type == nodetypes.SharedOutput

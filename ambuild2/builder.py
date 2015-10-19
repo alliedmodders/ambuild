@@ -225,12 +225,6 @@ class Builder(object):
       if input == source:
         return True
 
-      if input.type == nodetypes.Group:
-        # As an optimization, see if we can quickly test group membership.
-        members = self.cx.db.query_strong_inputs(input)
-        if input in members:
-          return True
-
       if self.findPath(source, input):
         return True
 
