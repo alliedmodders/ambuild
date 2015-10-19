@@ -83,6 +83,7 @@ class Generator(BaseGenerator):
     self.db.query_mkdir(lambda entry: self.old_folders_.add(entry))
     self.db.query_commands(lambda entry: self.old_commands_.add(entry))
     self.db.query_groups(lambda entry:self.old_groups_.add(entry))
+    self.db.set_var('api_version', '2.0')
 
   def cleanup(self):
     for path in self.rm_list_:
