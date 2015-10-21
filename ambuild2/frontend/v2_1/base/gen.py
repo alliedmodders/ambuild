@@ -47,13 +47,36 @@ class Context(object):
     # matching its layout in the source tree.
     path, name = os.path.split(script)
     if parent:
-      self.currentSourcePath = os.path.join(parent.currentSourcePath, path)
-      self.currentSourceFolder = os.path.join(parent.currentSourceFolder, path)
-      self.buildFolder = os.path.join(parent.buildFolder, path)
+      if path.startswith('/'):
+        # Navigate relative to the source root. For the shortcut below to work
+        # we must have normalized paths.
+        path = path[1:]
+        assert not path.startswith('/')
+
+        base_path = generator.sourcePath
+        base_folder = ''
+        build_base = ''
+      else:
+        # Navigate based on our relative folder.
+        base_path = parent.currentSourcePath
+        base_folder = parent.currentSourceFolder
+        build_base = parent.buildFolder
+
+      self.currentSourcePath = os.path.join(base_path, path)
+      self.currentSourceFolder = os.path.join(base_folder, path)
+      self.buildFolder = os.path.join(build_base, path)
     else:
       self.currentSourcePath = generator.sourcePath
       self.currentSourceFolder = ''
       self.buildFolder = ''
+
+    # Make sure everything is normalized.
+    self.currentSourcePath = os.path.normpath(self.currentSourcePath)
+    if self.currentSourceFolder:
+      self.currentSourceFolder = os.path.normpath(self.currentSourceFolder)
+    if self.buildFolder:
+      self.buildFolder = os.path.normpath(self.buildFolder)
+
     self.buildScript = os.path.join(self.currentSourceFolder, name)
     self.localFolder_ = self.buildFolder
 
@@ -107,15 +130,14 @@ class Context(object):
   def ImportScript(self, file, vars={}):
     return self.generator.importScript(self, file, vars)
 
-  def RunScript(self, file, vars={}):
+  def RunBuildScript(self, file, vars={}):
     return self.generator.evalScript(file, vars)
 
   def RunBuildScripts(self, files, vars={}):
     if util.IsString(files):
-      self.generator.evalScript(files, vars)
-    else:
-      for script in files:
-        self.generator.evalScript(script, vars)
+      raise Exception("RunBuildScripts() requires a list or tuple of files")
+    for script in files:
+      self.generator.evalScript(script, vars)
 
   def Add(self, taskbuilder):
     taskbuilder.finish(self)
