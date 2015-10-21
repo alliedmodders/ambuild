@@ -257,7 +257,7 @@ class BinaryBuilder(object):
 
     self.shared_cc_outputs = []
     if self.compiler.symbol_files and self.compiler.family == 'msvc':
-      self.shared_cc_outputs += [self.compiler.vendor.shared_pdb_name()]
+      self.shared_cc_outputs += [self.compiler.vendor.shared_pdb_name]
 
     self.objects = []
     for item in self.sources:

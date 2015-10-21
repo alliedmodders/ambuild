@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
+import re
 from ambuild2 import util
 from ambuild2.frontend.v2_1.cpp.vendor import Vendor
 

@@ -34,7 +34,7 @@ def FindCompiler(env, mode, cmd):
   if util.IsWindows():
     result = TryVerifyCompiler(env, mode, cmd, 'msvc')
     if result is not None:
-      return cc
+      return result
   return TryVerifyCompiler(env, mode, cmd, 'gcc')
 
 CompilerSearch = {

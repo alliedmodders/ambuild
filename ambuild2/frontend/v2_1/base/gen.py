@@ -48,10 +48,8 @@ class Context(object):
     path, name = os.path.split(script)
     if parent:
       if path.startswith('/'):
-        # Navigate relative to the source root. For the shortcut below to work
-        # we must have normalized paths.
-        path = path[1:]
-        assert not path.startswith('/')
+        # Navigate relative to the source root.
+        path = path.lstrip('/')
 
         base_path = generator.sourcePath
         base_folder = ''
@@ -250,8 +248,6 @@ class BaseGenerator(object):
     return AutoContext(self, self.contextStack_[-1], name)
 
   def evalScript(self, file, vars={}):
-    file = os.path.normpath(file)
-
     cx = Context(self, self.contextStack_[-1], file)
     self.pushContext(cx)
 
