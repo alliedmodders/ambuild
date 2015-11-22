@@ -17,171 +17,17 @@
 import os
 import sys, copy
 from ambuild2 import util
+from ambuild2.frontend import paths
 from ambuild2.frontend.system import System
-
-# AMBuild 2 scripts are parsed recursively. Each script is supplied with a
-# "builder" object, which maps to a Context object. Each script gets its own
-# context. The context describes the parent build file generator, the local
-# input and output folders, and the global compiler that was detected in the
-# root script (if any).
-#
-# Contexts form a tree that matches the build script hierarchy. This can be
-# utilized by backends for minimal reparsing and DAG updates when build
-# scripts change.
+from ambuild2.frontend.v2_1.base.context import \
+    TopLevelBuildContext, \
+    BuildContext, \
+    EmptyContext, \
+    RootBuildContext
 
 class ConfigureException(Exception):
   def __init__(self, *args, **kwargs):
     super(ConfigureException, self).__init__(*args, **kwargs)
-
-class Context(object):
-  def __init__(self, generator, parent, script):
-    self.generator = generator
-    self.parent = parent
-    self.script = script
-    self.compiler = None
-
-    if parent:
-      self.compiler = parent.compiler.clone()
-
-    # By default, all generated files for a build script are placed in a path
-    # matching its layout in the source tree.
-    path, name = os.path.split(script)
-    if parent:
-      if path.startswith('/'):
-        # Navigate relative to the source root.
-        path = path.lstrip('/')
-
-        base_path = generator.sourcePath
-        base_folder = ''
-        build_base = ''
-      else:
-        # Navigate based on our relative folder.
-        base_path = parent.currentSourcePath
-        base_folder = parent.currentSourceFolder
-        build_base = parent.buildFolder
-
-      self.currentSourcePath = os.path.join(base_path, path)
-      self.currentSourceFolder = os.path.join(base_folder, path)
-      self.buildFolder = os.path.join(build_base, path)
-    else:
-      self.currentSourcePath = generator.sourcePath
-      self.currentSourceFolder = ''
-      self.buildFolder = ''
-
-    # Make sure everything is normalized.
-    self.currentSourcePath = os.path.normpath(self.currentSourcePath)
-    if self.currentSourceFolder:
-      self.currentSourceFolder = os.path.normpath(self.currentSourceFolder)
-    if self.buildFolder:
-      self.buildFolder = os.path.normpath(self.buildFolder)
-
-    self.buildScript = os.path.join(self.currentSourceFolder, name)
-    self.localFolder_ = self.buildFolder
-
-  # Root source folder.
-  @property
-  def sourcePath(self):
-    return self.generator.sourcePath
-
-  @property
-  def options(self):
-    return self.generator.options
-
-  @property
-  def buildPath(self):
-    return self.generator.buildPath
-
-  # In build systems with dependency graphs, this can return a node
-  # representing buildFolder. Otherwise, it returns buildFolder.
-  @property
-  def localFolder(self):
-    return self.generator.getLocalFolder(self)
-
-  @property
-  def target(self):
-    return self.generator.target
-
-  @property
-  def host(self):
-    return self.generator.host
-
-  @property
-  def originalCwd(self):
-    return self.generator.originalCwd
-
-  @property
-  def backend(self):
-    return self.generator.backend
-
-  def SetBuildFolder(self, folder):
-    if folder == '/' or folder == '.' or folder == './':
-      self.buildFolder = ''
-    else:
-      self.buildFolder = os.path.normpath(folder)
-    self.localFolder_ = self.buildFolder
-
-  def DetectCompilers(self):
-    if not self.compiler:
-      self.compiler = self.generator.detectCompilers().clone()
-    return self.compiler
-
-  def ImportScript(self, file, vars={}):
-    return self.generator.importScript(self, file, vars)
-
-  def RunBuildScript(self, file, vars={}):
-    return self.generator.evalScript(file, vars)
-
-  def RunBuildScripts(self, files, vars={}):
-    if util.IsString(files):
-      raise Exception("RunBuildScripts() requires a list or tuple of files")
-    for script in files:
-      self.generator.evalScript(script, vars)
-
-  def Add(self, taskbuilder):
-    taskbuilder.finish(self)
-    return taskbuilder.generate(self.generator, self)
-
-  def AddSource(self, source_path):
-    return self.generator.addSource(self, source_path)
-
-  def AddSymlink(self, source, output_path):
-    return self.generator.addSymlink(self, source, output_path)
-
-  def AddFolder(self, folder):
-    return self.generator.addFolder(self, folder)
-
-  def AddCopy(self, source, output_path):
-    return self.generator.addCopy(self, source, output_path)
-
-  def AddCommand(self, inputs, argv, outputs, folder=-1, dep_type=None, weak_inputs=[],
-                 shared_outputs=[]):
-    return self.generator.addShellCommand(
-      self,
-      inputs,
-      argv,
-      outputs,
-      folder = folder,
-      dep_type = dep_type,
-      weak_inputs = weak_inputs,
-      shared_outputs = shared_outputs
-    )
-
-  def AddConfigureFile(self, path):
-    return self.generator.addConfigureFile(self, path)
-
-  def Context(self, name):
-    return self.generator.Context(name)
-
-class AutoContext(Context):
-  def __init__(self, gen, parent, file):
-    super(AutoContext, self).__init__(gen, parent, file)
-
-  def __enter__(self):
-    self.generator.pushContext(self)
-    return self
-
-  def __exit__(self, type, value, traceback):
-    self.generator.popContext()
 
 class BaseGenerator(object):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args):
@@ -191,7 +37,7 @@ class BaseGenerator(object):
     self.originalCwd = originalCwd
     self.options = options
     self.args = args
-    self.contextStack_ = [None]
+    self.contextStack_ = []
     self.configure_failed = False
 
     # Detect the target architecture.
@@ -205,7 +51,10 @@ class BaseGenerator(object):
 
   def parseBuildScripts(self):
     root = os.path.join(self.sourcePath, 'AMBuildScript')
-    self.evalScript(root)
+    self.addConfigureFile(None, root)
+
+    cx = RootBuildContext(self, {}, root)
+    self.execContext(cx)
 
   def pushContext(self, cx):
     self.contextStack_.append(cx)
@@ -213,11 +62,92 @@ class BaseGenerator(object):
   def popContext(self):
     self.contextStack_.pop()
 
-  def enterContext(self, cx):
-    pass
+  def importScript(self, context, path, vars={}):
+    if not isinstance(path, basestring):
+      for item in path:
+        self.importScriptImpl(context, item, vars)
+      return None
+    return self.importScriptImpl(context, path, vars)
 
-  def leaveContext(self, cx):
-    pass
+  def evalScript(self, context, path, vars={}):
+    obj = self.importScriptImpl(self, context, path, vars)
+    return obj.get('rvalue', None)
+
+  def runBuildScript(self, context, path, vars={}):
+    if not isinstance(path, basestring):
+      for item in path:
+        self.runBuildScriptImpl(context, item, vars)
+      return None
+    return self.runBuildScriptImpl(context, path, vars)
+
+  def importScriptImpl(self, parent, path, vars):
+    assert isinstance(path, basestring)
+
+    sourceFolder, _, scriptFile = self.computeScriptPaths(parent, path)
+
+    # Get the absolute script path.
+    scriptPath = os.path.join(self.sourcePath, scriptFile)
+    self.addConfigureFile(parent, scriptPath)
+
+    # Make the new context.
+    cx = EmptyContext(self, parent, vars, scriptPath)
+    scriptGlobals = self.execContext(cx)
+
+    # Only return variables that changed.
+    obj = util.Expando()
+    for key in scriptGlobals:
+      if (not key in cx.vars_) or (scriptGlobals[key] is not cx.vars_[key]):
+        setattr(obj, key, scriptGlobals[key])
+    return obj
+
+  def runBuildScriptImpl(self, parent, path, vars):
+    assert isinstance(path, basestring)
+
+    if parent is not self.contextStack_[-1]:
+      raise Exception('Can only create child build contexts of the currently active context')
+
+    sourceFolder, buildFolder, scriptFile = self.computeScriptPaths(parent, path)
+
+    # Get the absolute script path.
+    scriptPath = os.path.join(self.sourcePath, scriptFile)
+    self.addConfigureFile(parent, scriptPath)
+
+    # Make the new context. We allow top-level contexts in the root build
+    # and otherwise for absolute paths.
+    if isinstance(parent, RootBuildContext) or \
+       (isinstance(parent, TopLevelBuildContext) and path.startswith('/')):
+      constructor = TopLevelBuildContext
+    else:
+      if not paths.IsSubPath(sourceFolder, parent.sourceFolder): 
+        raise Exception("Nested build contexts must be within the same folder structure")
+      constructor = BuildContext
+
+    cx = constructor(
+      generator = self,
+      parent = parent,
+      vars = vars,
+      script = scriptPath,
+      sourceFolder = sourceFolder,
+      buildFolder = buildFolder)
+
+    scriptGlobals = self.execContext(cx)
+    return scriptGlobals.get('rvalue', None)
+
+  def execContext(self, context):
+    code = self.compileScript(context.script_)
+
+    # Copy vars so changes don't get inherited.
+    scriptGlobals = copy.copy(context.vars_)
+
+    self.pushContext(context)
+    try:
+      exec(code, scriptGlobals)
+    except:
+      self.popContext()
+      raise
+    self.popContext()
+
+    return scriptGlobals
 
   def compileScript(self, path):
     with open(path) as fp:
@@ -229,49 +159,29 @@ class BaseGenerator(object):
 
       return compile(chars, path, 'exec')
 
-  def importScript(self, context, file, vars={}):
-    path = os.path.normpath(os.path.join(context.sourcePath, file))
-    self.addConfigureFile(context, path)
+  def computeScriptPaths(self, parent, target):
+    # By default, all generated files for a build script are placed in a path
+    # matching its layout in the source tree.
+    path, name = os.path.split(target)
+    if parent:
+      if path.startswith('/'):
+        # Navigate relative to the source root.
+        path = path.lstrip('/')
 
-    new_vars = copy.copy(vars)
-    new_vars['builder'] = context
+        base_folder = ''
+        build_base = ''
+      else:
+        # Navigate based on our relative folder.
+        base_folder = parent.currentSourceFolder
+        build_base = parent.buildFolder
 
-    code = self.compileScript(path)
-    exec(code, new_vars)
+      sourceFolder = os.path.join(base_folder, path)
+      buildFolder = os.path.join(build_base, path)
+    else:
+      sourceFolder = ''
+      buildFolder = ''
 
-    obj = util.Expando()
-    for key in new_vars:
-      setattr(obj, key, new_vars[key])
-    return obj
-
-  def Context(self, name):
-    return AutoContext(self, self.contextStack_[-1], name)
-
-  def evalScript(self, file, vars={}):
-    cx = Context(self, self.contextStack_[-1], file)
-    self.pushContext(cx)
-
-    full_path = os.path.join(self.sourcePath, cx.buildScript)
-
-    self.addConfigureFile(cx, full_path)
-
-    new_vars = copy.copy(vars)
-    new_vars['builder'] = cx
-
-    # Run it.
-    rvalue = None
-    code = self.compileScript(full_path)
-
-    self.enterContext(cx)
-    exec(code, new_vars)
-    self.leaveContext(cx)
-
-    if 'rvalue' in new_vars:
-      rvalue = new_vars['rvalue']
-      del new_vars['rvalue']
-
-    self.popContext()
-    return rvalue
+    return sourceFolder, buildFolder, os.path.join(sourceFolder, name)
 
   def generateBuildFiles(self):
     build_py = os.path.join(self.buildPath, 'build.py')
@@ -301,7 +211,7 @@ all:
     return True
 
   def getLocalFolder(self, context):
-    return context.localFolder_
+    return context.buildFolder
 
   @property
   def backend(self):

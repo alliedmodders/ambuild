@@ -199,14 +199,9 @@ class Generator(BaseGenerator):
     return self.compiler
 
   def getLocalFolder(self, context):
-    if type(context.localFolder_) is nodetypes.Entry or context.localFolder_ is None:
-      return context.localFolder_
-
     if len(context.buildFolder):
-      context.localFolder_ = self.generateFolder(None, context.buildFolder)
-    else:
-      context.localFolder_ = None
-    return context.localFolder_
+      return self.generateFolder(None, context.buildFolder)
+    return None
 
   def generateFolder(self, parent, folder):
     parent_path, path = paths.ResolveFolder(parent, folder)
@@ -763,7 +758,7 @@ class Generator(BaseGenerator):
     )
 
   def addConfigureFile(self, context, path):
-    if not os.path.isabs(path):
+    if not os.path.isabs(path) and context is not None:
       path = os.path.join(context.currentSourcePath, path)
     path = os.path.normpath(path)
 

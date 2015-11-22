@@ -375,12 +375,8 @@ LambdaType = type(lambda: None)
 def IsLambda(v):
   return type(v) == LambdaType
 
-if str == bytes:
-  def IsString(v):
-    return type(v) == str or type(v) == unicode
-else:
-  def IsString(v):
-    return type(v) == str
+def IsString(v):
+  return isinstance(v, basestring)
 
 class Expando(object):
   pass
