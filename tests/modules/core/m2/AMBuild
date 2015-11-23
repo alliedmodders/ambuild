@@ -1,0 +1,7 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+
+m2 = program.Module(builder, 'm2')
+m2.compiler.cflags = []
+m2.sources += [
+  'm2.cc',
+]

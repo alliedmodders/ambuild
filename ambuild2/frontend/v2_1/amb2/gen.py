@@ -621,8 +621,6 @@ class Generator(BaseGenerator):
     return rcNode
 
   def addCxxTasks(self, cx, binary):
-    folder_node = self.generateFolder(cx.localFolder, binary.localFolder)
-
     # Find dependencies
     inputs = []
     self.parseCxxDeps(cx, binary, inputs, binary.compiler.linkflags)
@@ -631,11 +629,12 @@ class Generator(BaseGenerator):
     # Add object files.
     for obj in binary.objects:
       if obj.type == 'object':
-        inputs.append(self.addCxxObjTask(cx, binary.shared_cc_outputs, folder_node, obj))
+        inputs.append(self.addCxxObjTask(cx, binary.shared_cc_outputs, obj.folderNode, obj))
       elif obj.type == 'resource':
-        inputs.append(self.addCxxRcTask(cx, folder_node, obj))
+        inputs.append(self.addCxxRcTask(cx, obj.folderNode, obj))
 
     # Add the link step.
+    folder_node = self.generateFolder(cx.localFolder, binary.localFolder)
     output_file, debug_file = binary.link(
       context = cx,
       folder = folder_node,

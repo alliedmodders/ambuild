@@ -17,6 +17,7 @@
 import subprocess
 import re, os
 from ambuild2 import util
+from ambuild2.frontend import paths
 
 class Dep(object):
   def __init__(self, text, node):
@@ -97,8 +98,9 @@ def NameForObjectFile(file):
   return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
 
 class ObjectFileBase(object):
-  def __init__(self, compiler, sourceFile, outputFile):
+  def __init__(self, folderNode, compiler, sourceFile, outputFile):
     super(ObjectFileBase, self).__init__()
+    self.folderNode = folderNode
     self.sourceFile = sourceFile
     self.outputFile = outputFile
     self.sourcedeps = compiler.sourcedeps
@@ -108,8 +110,8 @@ class ObjectFileBase(object):
     raise Exception("Must be implemented!")
 
 class ObjectFile(ObjectFileBase):
-  def __init__(self, compiler, sourceFile, outputFile, argv):
-    super(ObjectFile, self).__init__(compiler, sourceFile, outputFile)
+  def __init__(self, folderNode, compiler, sourceFile, outputFile, argv):
+    super(ObjectFile, self).__init__(folderNode, compiler, sourceFile, outputFile)
     self.argv = argv
     self.behavior = compiler.vendor.behavior
 
@@ -118,8 +120,8 @@ class ObjectFile(ObjectFileBase):
     return 'object'
 
 class RCFile(ObjectFileBase):
-  def __init__(self, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
-    super(ObjectFile, self).__init__(sourceFile, outputFile)
+  def __init__(self, folderNode, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
+    super(ObjectFile, self).__init__(folderNode, sourceFile, outputFile)
     self.preprocFile = preprocFile
     self.cl_argv = cl_argv 
     self.rc_argv = rc_argv
@@ -133,6 +135,7 @@ class ObjectArgvBuilder(object):
     super(ObjectArgvBuilder, self).__init__()
     self.outputFolder = None
     self.outputPath = None
+    self.localFolderNode = None
     self.vendor = None
     self.compiler = None
     self.cc_argv = None
@@ -141,9 +144,10 @@ class ObjectArgvBuilder(object):
     self.resources = []
     self.used_cxx = False
 
-  def setOutputs(self, outputFolder, outputPath):
+  def setOutputs(self, localFolderNode, outputFolder, outputPath):
     self.outputFolder = outputFolder
     self.outputPath = outputPath
+    self.localFolderNode = localFolderNode
 
   def setCompiler(self, compiler):
     self.vendor = compiler.vendor
@@ -187,7 +191,7 @@ class ObjectArgvBuilder(object):
     objectFile = encodedName + self.vendor.objSuffix
 
     argv += self.vendor.objectArgs(sourceFile, objectFile)
-    return ObjectFile(self.compiler, sourceFile, objectFile, argv)
+    return ObjectFile(self.localFolderNode, self.compiler, sourceFile, objectFile, argv)
 
   def buildRcItem(self, sourceFile, encodedName):
     objectFile = encodedName + '.res'
@@ -205,8 +209,16 @@ class ObjectArgvBuilder(object):
       rc_argv += ['/i', self.vendor.IncludePath(objectFile, include)]
     rc_argv += ['/fo' + objectFile, sourceFile]
 
-    return RCFile(self.compiler, sourceFile, encodedName + '.i', objectFile,
+    return RCFile(self.localFolderNode, self.compiler, sourceFile, encodedName + '.i', objectFile,
                   cl_argv, rc_argv)
+
+class Module(object):
+  def __init__(self, context, compiler, name):
+    super(Module, self).__init__()
+    self.context = context
+    self.compiler = compiler
+    self.name = name
+    self.sources = []
 
 class BinaryBuilder(object):
   def __init__(self, compiler, name):
@@ -216,6 +228,7 @@ class BinaryBuilder(object):
     self.name_ = name
     self.used_cxx_ = False
     self.linker_ = None
+    self.modules_ = []
 
   @property
   def outputFile(self):
@@ -228,6 +241,15 @@ class BinaryBuilder(object):
   # dependency.
   def Dep(self, text, node=None): 
     return Dep(text, node)
+
+  # Create a sub-component of the binary.
+  def Module(self, context, name):
+    module = Module(
+      context = context,
+      compiler = self.compiler.clone(),
+      name = name)
+    self.modules_.append(module)
+    return module
 
   # The folder we'll be in, relative to our build context.
   @property
@@ -248,34 +270,91 @@ class BinaryBuilder(object):
     argv += [Dep.resolve(cx, self, item) for item in self.compiler.postlink]
     return argv
 
-  def finish(self, cx):
+  def buildModules(self, cx):
+    for module in self.modules_:
+      self.buildModule(cx, module)
+
+  def buildModule(self, cx, module):
+    localFolder, outputFolder, outputPath = self.computeModuleFolders(cx, module)
+    localFolderNode = cx.AddFolder(localFolder)
+
     builder = ObjectArgvBuilder()
-    builder.setOutputs(
-      outputFolder = self.getBuildFolder(cx),
-      outputPath = os.path.join(cx.buildPath, self.getBuildFolder(cx)))
-    builder.setCompiler(self.compiler)
+    builder.setOutputs(localFolderNode, outputFolder, outputPath)
+    builder.setCompiler(module.compiler)
 
-    self.shared_cc_outputs = []
-    if self.compiler.symbol_files and self.compiler.family == 'msvc':
-      self.shared_cc_outputs += [self.compiler.vendor.shared_pdb_name]
-
-    self.objects = []
-    for item in self.sources:
+    for item in module.sources:
       if os.path.isabs(item):
         sourceFile = item
       else:
-        sourceFile = os.path.join(cx.currentSourcePath, item)
+        sourceFile = os.path.join(module.context.currentSourcePath, item)
       sourceFile = os.path.normpath(sourceFile)
 
       self.objects.append(builder.buildItem(item, sourceFile))
 
     if builder.used_cxx:
+      self.used_cxx_ = True
+
+  def computeModuleFolders(self, cx, module):
+    buildBase = self.getBuildFolder(cx)
+    buildPath = os.path.join(cx.buildPath, buildBase)
+
+    if module.context.sourceFolder == '' and cx.sourceFolder == '':
+      # Special degenerate case that fails os.path.relpath().
+      subfolder = ''
+    elif paths.IsSubPath(module.context.sourceFolder, cx.sourceFolder):
+      # If this module is a subpath of the original context, we use the difference.
+      subfolder = os.path.relpath(module.context.sourceFolder, cx.sourceFolder)
+      if subfolder == '.':
+        subfolder = ''
+    else:
+      # Otherwise... do our best approximation and use a replica of the source
+      # folder path. This is not ideal since we could have a collision, if for
+      # example we compile:
+      #   toplevel/module1/crab.cc -> toplevel/toplevel.so/module1/crab.o
+      #   module1/crab.cc          -> toplevel/toplevel.so/module1/crab.o
+      #
+      # This is bad organization on the project's part, so hopefully we don't
+      # have to make a workaround for it.
+      subfolder = module.context.sourceFolder
+
+    # Local is relative to the context of the module. buildFolder is relative
+    # to the build root.
+    localFolder = os.path.normpath(os.path.join(self.localFolder, subfolder))
+    buildFolder = os.path.normpath(os.path.join(buildBase, subfolder))
+    buildPath = os.path.normpath(os.path.join(buildPath, subfolder))
+    return localFolder, buildFolder, buildPath
+
+  def finish(self, cx):
+    # Wrap sources into an initial module.
+    root = Module(cx, self.compiler, 'root')
+    root.sources = self.sources
+    self.modules_.insert(0, root)
+
+    # Prep shared outputs.
+    self.shared_cc_outputs = []
+    if self.compiler.symbol_files and self.compiler.family == 'msvc':
+      self.shared_cc_outputs += [self.compiler.vendor.shared_pdb_name]
+
+    # Prep outputs.
+    self.objects = []
+
+    # Compute source file argvs.
+    self.buildModules(cx)
+
+    if self.used_cxx_:
       self.linker_argv_ = self.compiler.cxx_argv
     else:
       self.linker_argv_ = self.compiler.cc_argv
     self.linker_ = self.compiler.vendor
 
-    files = [out.outputFile for out in self.objects]
+    # Translate object file paths relative to the link build context. This
+    # should never result in ../ appearing in the object path.
+    files = []
+    localBuildFolder = self.getBuildFolder(cx)
+    for obj in self.objects:
+      objPath = os.path.join(obj.folderNode.path, obj.outputFile)
+      files.append(os.path.relpath(objPath, localBuildFolder))
+
     self.argv = self.generateBinary(cx, files)
     self.linker_outputs = [self.outputFile]
     self.debug_entry = None

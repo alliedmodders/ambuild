@@ -20,14 +20,16 @@ from optparse import OptionParser
 from ambuild2 import util
 from ambuild2.context import Context
 
+DEFAULT_API = '2.1'
+
 SampleScript = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
-builder.DetectCompilers()
-builder.compiler.cflags += [
+builder.DetectCxx()
+builder.cxx.cflags += [
   '-Wall',
   '-Werror'
 ]
 
-program = builder.compiler.Program('sample')
+program = builder.cxx.Program('sample')
 program.sources += [
   'main.cpp',
 ]
@@ -35,12 +37,21 @@ builder.Add(program)
 """
 
 SampleConfigure = """# vim: set sts=2 ts=8 sw=2 tw=99 et:
-import sys
-from ambuild2 import run
+API_VERSION = '{DEFAULT_API}'
 
-builder = run.BuildParser(sourcePath = sys.path[0], api="2.0")
+import sys
+try:
+  from ambuild2 import run
+  if not run.HasAPI(API_VERSION):
+    raise Exception()
+except:
+  sys.stderr.write('AMBuild {{0}} must be installed to build this project.\\n'.format(API_VERSION))
+  sys.stderr.write('http://www.alliedmods.net/ambuild\\n')
+  sys.exit(1)
+
+builder = run.BuildParser(sourcePath = sys.path[0], api=API_VERSION)
 builder.Configure()
-"""
+""".format(DEFAULT_API = DEFAULT_API)
 
 def BuildOptions():
   parser = OptionParser("usage: %prog [options] [path]")

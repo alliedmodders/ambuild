@@ -1,0 +1,15 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+
+program = builder.cxx.Program('sample')
+program.sources += [
+  'main.cc',
+]
+
+m1 = program.Module(builder, 'm1')
+m1.sources += [
+  'main2.cc',
+]
+
+builder.Build('m2/AMBuild', { 'program': program })
+
+builder.Add(program)
