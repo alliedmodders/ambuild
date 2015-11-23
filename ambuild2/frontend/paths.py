@@ -48,3 +48,8 @@ def Join(*nodes):
     else:
       paths.append(node.path)
   return os.path.join(*paths)
+
+def IsSubPath(other, folder):
+  folder = os.path.normpath(folder) + os.sep
+  other = os.path.normpath(other) + os.sep
+  return other.startswith(folder)

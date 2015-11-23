@@ -1,0 +1,9 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+builder.DetectCompilers()
+if builder.compiler.family == 'gcc':
+  builder.compiler.cflags += [
+    '-Wall',
+    '-Werror'
+  ]
+
+builder.RunBuildScript('helper/helper.ambuild')

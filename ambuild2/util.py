@@ -3,6 +3,7 @@ import errno
 import subprocess
 import re, os, sys, locale
 import uuid
+import platform
 from tempfile import NamedTemporaryFile
 
 try:
@@ -13,6 +14,18 @@ try:
   import cPickle as pickle
 except ImportError:
   import pickle
+
+def NormalizeArchString(arch):
+  # We normalize platforms across different operating systems.
+  if arch in ['x86_64', 'AMD64', 'x64', 'amd64']:
+    return 'x86_64'
+  if arch in ['x86', 'i386', 'i686', 'x32', 'ia32']:
+    return 'x86'
+  if not arch:
+    return 'unknown'
+  return arch
+
+Architecture = NormalizeArchString(platform.machine())
 
 def Platform():
   if IsWindows():
@@ -226,6 +239,8 @@ def ParseMSVCDeps(vars, out):
     pattern = vars['cc_inclusion_pattern']
   elif 'cxx_inclusion_pattern' in vars:
     pattern = vars['cxx_inclusion_pattern']
+  elif 'msvc_inclusion_pattern' in vars:
+    pattern = vars['msvc_inclusion_pattern']
   else:
     pattern = 'Note: including file:\s+(.+)$'
 
@@ -360,12 +375,8 @@ LambdaType = type(lambda: None)
 def IsLambda(v):
   return type(v) == LambdaType
 
-if str == bytes:
-  def IsString(v):
-    return type(v) == str or type(v) == unicode
-else:
-  def IsString(v):
-    return type(v) == str
+def IsString(v):
+  return isinstance(v, basestring)
 
 class Expando(object):
   pass

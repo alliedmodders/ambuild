@@ -1,0 +1,6 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+program = builder.compiler.Program('sample')
+program.sources += [
+  'main.cpp',
+]
+builder.Add(program)

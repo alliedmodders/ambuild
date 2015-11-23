@@ -99,6 +99,8 @@ class Context(object):
 
     if api_version == '2.0':
       from ambuild2.frontend.v2_0.amb2.gen import Generator
+    elif api_version == '2.1':
+      from ambuild2.frontend.v2_1.amb2 import Generator
 
     gen = Generator.FromVars(self.vars, self.db, self.options.refactor)
     try:

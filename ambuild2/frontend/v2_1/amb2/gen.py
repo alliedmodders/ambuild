@@ -19,9 +19,9 @@ from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2 import database
 from ambuild2.frontend import paths
-from ambuild2.frontend.v2_0 import cpp
-from ambuild2.frontend.v2_0.cpp import detect
-from ambuild2.frontend.v2_0.base import BaseGenerator
+from ambuild2.frontend.v2_1 import cpp
+from ambuild2.frontend.v2_1.cpp import detect
+from ambuild2.frontend.v2_1.base import BaseGenerator
 
 class Generator(BaseGenerator):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args, db=None, refactoring=False):
@@ -81,7 +81,7 @@ class Generator(BaseGenerator):
     self.db.query_scripts(lambda id,path,stamp: self.old_scripts_.add(path))
     self.db.query_mkdir(lambda entry: self.old_folders_.add(entry))
     self.db.query_commands(lambda entry: self.old_commands_.add(entry))
-    self.db.set_var('api_version', '2.0')
+    self.db.set_var('api_version', '2.1')
 
   def cleanup(self):
     for path in self.rm_list_:
@@ -181,14 +181,9 @@ class Generator(BaseGenerator):
           env[key] = os.environ[key]
 
       # Save any extra compiler info that must be communicated to the backend.
-      compilers = [
-        ('cc', self.compiler.cc),
-        ('cxx', self.compiler.cxx),
-      ]
-      for prefix, comp in compilers:
-        for prop_name in comp.extra_props:
-          key = '{0}_{1}'.format(prefix, prop_name)
-          vars[key] = comp.extra_props[prop_name]
+      for prop_name in self.compiler.vendor.extra_props:
+        key = '{0}_{1}'.format(self.compiler.vendor.name, prop_name)
+        vars[key] = self.compiler.vendor.extra_props[prop_name]
 
     vars['env'] = env
 
@@ -198,20 +193,15 @@ class Generator(BaseGenerator):
   def detectCompilers(self):
     if not self.compiler:
       with util.FolderChanger(self.cacheFolder):
-        self.base_compiler = detect.DetectCxx(os.environ, self.options)
+        self.base_compiler = detect.DetectCxx(self.target, os.environ)
         self.compiler = self.base_compiler.clone()
 
     return self.compiler
 
   def getLocalFolder(self, context):
-    if type(context.localFolder_) is nodetypes.Entry or context.localFolder_ is None:
-      return context.localFolder_
-
     if len(context.buildFolder):
-      context.localFolder_ = self.generateFolder(None, context.buildFolder)
-    else:
-      context.localFolder_ = None
-    return context.localFolder_
+      return self.generateFolder(None, context.buildFolder)
+    return None
 
   def generateFolder(self, parent, folder):
     parent_path, path = paths.ResolveFolder(parent, folder)
@@ -598,46 +588,53 @@ class Generator(BaseGenerator):
       else:
         inputs.append(item)
 
-  def addCxxTasks(self, cx, binary):
-    folder_node = self.generateFolder(cx.localFolder, binary.localFolder)
+  def addCxxObjTask(self, cx, shared_outputs, folder, obj):
+    cxxData = {
+      'argv': obj.argv,
+      'type': obj.behavior
+    }
+    _, (cxxNode,) = self.addCommand(
+      context = cx,
+      weak_inputs = obj.sourcedeps,
+      inputs = [obj.sourceFile],
+      outputs = [obj.outputFile],
+      node_type = nodetypes.Cxx,
+      folder = folder,
+      data = cxxData,
+      shared_outputs = shared_outputs)
+    return cxxNode
 
+  def addCxxRcTask(self, cx, folder, obj):
+    rcData = {
+      'cl_argv': obj.cl_argv,
+      'rc_argv': obj.rc_argv,
+    }
+    _, (_, rcNode) = self.addCommand(
+      context = cx,
+      weak_inputs = obj.sourcedeps,
+      inputs = [obj.sourceFile],
+      outputs = [obj.preprocFile, obj.outputFile],
+      node_type = nodetypes.Rc,
+      folder = folder,
+      data = rcData
+    )
+    return rcNode
+
+  def addCxxTasks(self, cx, binary):
     # Find dependencies
     inputs = []
     self.parseCxxDeps(cx, binary, inputs, binary.compiler.linkflags)
     self.parseCxxDeps(cx, binary, inputs, binary.compiler.postlink)
 
-    for objfile in binary.objects:
-      cxxData = {
-        'argv': objfile.argv,
-        'type': binary.linker.behavior
-      }
-      cxxCmd, (cxxNode,) = self.addCommand(
-        context = cx,
-        weak_inputs = binary.compiler.sourcedeps,
-        inputs = [objfile.sourceFile],
-        outputs = [objfile.outputFile],
-        node_type = nodetypes.Cxx,
-        folder = folder_node,
-        data = cxxData,
-        shared_outputs = objfile.sharedOutputs
-      )
-      inputs.append(cxxNode)
-    for rcfile in binary.resources:
-      rcData = {
-        'cl_argv': rcfile.cl_argv,
-        'rc_argv': rcfile.rc_argv,
-      }
-      rcCmd, (preprocNode, rcNode) = self.addCommand(
-        context = cx,
-        weak_inputs = binary.compiler.sourcedeps,
-        inputs = [rcfile.sourceFile],
-        outputs = [rcfile.preprocFile, rcfile.outputFile],
-        node_type = nodetypes.Rc,
-        folder = folder_node,
-        data = rcData
-      )
-      inputs.append(rcNode)
+    # Add object files.
+    for obj in binary.objects:
+      if obj.type == 'object':
+        inputs.append(self.addCxxObjTask(cx, binary.shared_cc_outputs, obj.folderNode, obj))
+      elif obj.type == 'resource':
+        inputs.append(self.addCxxRcTask(cx, obj.folderNode, obj))
 
+    # Add the link step.
+    folder_node = self.generateFolder(cx.localFolder, binary.localFolder)
     output_file, debug_file = binary.link(
       context = cx,
       folder = folder_node,
@@ -760,7 +757,7 @@ class Generator(BaseGenerator):
     )
 
   def addConfigureFile(self, context, path):
-    if not os.path.isabs(path):
+    if not os.path.isabs(path) and context is not None:
       path = os.path.join(context.currentSourcePath, path)
     path = os.path.normpath(path)
 

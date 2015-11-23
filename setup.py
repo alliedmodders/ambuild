@@ -36,6 +36,11 @@ setup(
     'ambuild2.frontend.v2_0.base',
     'ambuild2.frontend.v2_0.cpp',
     'ambuild2.frontend.v2_0.vs',
+    'ambuild2.frontend.v2_1',
+    'ambuild2.frontend.v2_1.amb2',
+    'ambuild2.frontend.v2_1.base',
+    'ambuild2.frontend.v2_1.cpp',
+    'ambuild2.frontend.v2_1.vs',
   ],
   scripts = scripts
 )

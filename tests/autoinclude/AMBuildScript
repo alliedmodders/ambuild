@@ -23,7 +23,7 @@ cmd_node, (output_header,) = builder.AddCommand(
   outputs = outputs
 )
 
-program = builder.compiler.Program("hello")
+program = builder.compiler.Library("hello")
 program.compiler.includes += [builder.buildPath]
 program.compiler.sourcedeps += [output_header]
 program.sources = [
