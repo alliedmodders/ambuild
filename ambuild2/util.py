@@ -376,7 +376,7 @@ def IsLambda(v):
   return type(v) == LambdaType
 
 def IsString(v):
-  return isinstance(v, basestring)
+  return isinstance(v, str)
 
 class Expando(object):
   pass
