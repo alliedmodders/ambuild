@@ -408,6 +408,7 @@ class BinaryBuilder(object):
       argv = self.argv,
       outputs = self.linker_outputs,
       folder = folder,
+      weak_inputs = self.compiler.weaklinkdeps,
       shared_outputs = shared_outputs
     )
     if not self.debug_entry and self.compiler.symbol_files:
