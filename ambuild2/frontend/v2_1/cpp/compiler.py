@@ -46,6 +46,10 @@ class Compiler(object):
     # An array of nodes which should be weak dependencies on each source
     # compilation command.
     'sourcedeps',
+
+    # An array of nodes which should be weak dependencies on each linker
+    # command.
+    'weaklinkdeps',
   ]
 
   def __init__(self, vendor):
