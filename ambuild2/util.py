@@ -209,7 +209,7 @@ def ParseGCCDeps(text):
   state = sReadIncludes
   for line in re.split('\n+', text):
     if state == sReadIncludes:
-      m = re.match('\.+\s+(.+)\s*$', line)
+      m = re.match('[\.!x]\.*\s+(.+)\s*$', line)
       if m == None:
         state = sLookForIncludeGuard
       else:
