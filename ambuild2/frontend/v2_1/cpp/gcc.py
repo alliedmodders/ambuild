@@ -35,6 +35,10 @@ class GCCLookalike(Vendor):
     return '.o'
 
   @property
+  def pchSuffix(self):
+    return '.gch'
+
+  @property
   def debugInfoArgv(self):
     return []
 
@@ -47,8 +51,14 @@ class GCCLookalike(Vendor):
   def preprocessArgs(self, sourceFile, outFile):
     return ['-I', os.path.normpath(includePath)]
 
+  def pchCArgs(self, headerFile, pchFile):
+    return ['-MP', '-fpch-deps', '-x', 'c-header', headerFile, '-o', pchFile]
+
+  def pchCxxArgs(self, headerFile, pchFile):
+    return ['-MP', '-fpch-deps', '-x', 'c++-header', headerFile, '-o', pchFile]
+
   def objectArgs(self, sourceFile, objFile):
-    return ['-H', '-c', sourceFile, '-o', objFile]
+    return ['-MP', '-fpch-deps', '-c', sourceFile, '-o', objFile]
 
   def staticLinkArgv(self, files, outputFile):
     return ['ar', 'rcs', outputFile] + files

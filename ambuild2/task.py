@@ -1,9 +1,10 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
 import errno
 import shutil
-import os, sys
+import os, sys, fcntl
 import traceback
 import multiprocessing as mp
+import tempfile
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.ipc import ParentProcessListener, ChildProcessListener
@@ -197,17 +198,35 @@ class WorkerChild(ChildProcessListener):
     argv = task_data['argv']
 
     with util.FolderChanger(task_folder):
-      p, out, err = util.Execute(argv)
-      if cc_type == 'gcc':
-        err, deps = util.ParseGCCDeps(err)
-      elif cc_type == 'msvc':
-        out, deps = util.ParseMSVCDeps(self.vars, out)
-      elif cc_type == 'sun':
-        err, deps = util.ParseSunDeps(err)
-      else:
-        raise Exception('unknown compiler type')
+        env = None
 
-      paths = self.rewriteDeps(deps)
+        if cc_type == 'gcc':
+          d_path = tempfile.mktemp()
+          os.mkfifo(d_path)
+          env = os.environ.copy()
+          env['SUNPRO_DEPENDENCIES'] = d_path
+          d_file = open(d_path, 'r+')
+          fcntl.fcntl(d_file, fcntl.F_SETFL, os.O_NONBLOCK)
+
+        p, out, err = util.Execute(argv, env=env)
+        if cc_type == 'gcc':
+          d_str = ''
+          try:
+            d_str = d_file.read()
+          except IOError as e:
+            if e.errno != errno.EWOULDBLOCK:
+              raise
+          deps = util.ParseGCCDeps(d_str)
+          d_file.close()
+          os.unlink(d_path)
+        elif cc_type == 'msvc':
+          out, deps = util.ParseMSVCDeps(self.vars, out)
+        elif cc_type == 'sun':
+          err, deps = util.ParseSunDeps(err)
+        else:
+          raise Exception('unknown compiler type')
+
+        paths = self.rewriteDeps(deps)
 
     reply = {
       'ok': p.returncode == 0,

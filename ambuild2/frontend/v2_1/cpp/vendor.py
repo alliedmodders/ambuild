@@ -67,6 +67,10 @@ class Vendor(object):
     raise Exception("Must be implemented")
 
   @property
+  def pchSuffix(self):
+    raise Exception("Must be implemented")
+
+  @property
   def debugInfoArgv(self):
     raise Exception("Must be implemented")
 
@@ -74,6 +78,12 @@ class Vendor(object):
     raise Exception("Must be implemented")
 
   def formatInclude(self, outputPath, includePath):
+    raise Exception("Must be implemented")
+
+  def pchCArgs(self, headerFile, pchFile):
+    raise Exception("Must be implemented")
+
+  def pchCxxArgs(self, headerFile, pchFile):
     raise Exception("Must be implemented")
 
   def objectArgs(self, sourceFile, objFile):

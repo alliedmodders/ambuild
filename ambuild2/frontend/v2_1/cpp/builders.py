@@ -109,6 +109,16 @@ class ObjectFileBase(object):
   def type(self):
     raise Exception("Must be implemented!")
 
+class PCHFile(ObjectFileBase):
+  def __init__(self, folderNode, compiler, headerFile, outputFile, argv):
+    super(PCHFile, self).__init__(folderNode, compiler, headerFile, outputFile)
+    self.argv = argv
+    self.behavior = compiler.vendor.behavior
+
+  @property
+  def type(self):
+    return 'pch'
+
 class ObjectFile(ObjectFileBase):
   def __init__(self, folderNode, compiler, sourceFile, outputFile, argv):
     super(ObjectFile, self).__init__(folderNode, compiler, sourceFile, outputFile)
@@ -155,6 +165,7 @@ class ObjectArgvBuilder(object):
 
     # Set up the C compiler argv.
     self.cc_argv = compiler.cc_argv[:]
+    self.cc_argv += self.vendor.formatInclude(self.outputPath, 'pch_c')
     self.cc_argv += compiler.cflags
     if compiler.symbol_files is not None:
       self.cc_argv += self.vendor.debugInfoArgv
@@ -165,6 +176,7 @@ class ObjectArgvBuilder(object):
 
     # Set up the C++ compiler argv.
     self.cxx_argv = compiler.cxx_argv[:]
+    self.cxx_argv += self.vendor.formatInclude(self.outputPath, 'pch_cxx')
     self.cxx_argv += compiler.cflags
     if compiler.symbol_files is not None:
       self.cxx_argv += self.vendor.debugInfoArgv
@@ -174,13 +186,31 @@ class ObjectArgvBuilder(object):
     for include in compiler.includes + compiler.cxxincludes:
       self.cxx_argv += self.vendor.formatInclude(self.outputPath, include)
 
-  def buildItem(self, sourceName, sourceFile):
+  def buildItem(self, sourceName, sourceFile, cx):
     sourceNameSansExtension, extension = os.path.splitext(sourceName)
     encodedName = NameForObjectFile(sourceNameSansExtension)
 
     if extension == '.rc':
       return self.buildRcItem(sourceFile, encodedName)
+    if extension == '.h' or extension == '.hpp':
+      return self.buildPchItem(sourceFile, sourceName, cx)
     return self.buildCxxItem(sourceFile, encodedName, extension)
+
+  def buildPchItem(self, headerFile, headerFileShort, cx):
+    pchFile = os.path.basename(headerFileShort) + self.vendor.pchSuffix
+
+    cx.AddFolder(os.path.join(self.outputFolder, 'pch_c'))
+    cx.AddFolder(os.path.join(self.outputFolder, 'pch_cxx'))
+
+    output_c = os.path.join('pch_c', pchFile)
+    argv_c = self.cc_argv[:] + self.vendor.pchCArgs(headerFile, output_c)
+    pch_c = PCHFile(self.localFolderNode, self.compiler, headerFile, output_c, argv_c)
+
+    output_cxx = os.path.join('pch_cxx', pchFile)
+    argv_cxx = self.cxx_argv[:] + self.vendor.pchCxxArgs(headerFile, output_cxx)
+    pch_cxx = PCHFile(self.localFolderNode, self.compiler, headerFile, output_cxx, argv_cxx)
+
+    return [pch_c, pch_cxx]
 
   def buildCxxItem(self, sourceFile, encodedName, extension):
     if extension == '.c':
@@ -191,7 +221,7 @@ class ObjectArgvBuilder(object):
     objectFile = encodedName + self.vendor.objSuffix
 
     argv += self.vendor.objectArgs(sourceFile, objectFile)
-    return ObjectFile(self.localFolderNode, self.compiler, sourceFile, objectFile, argv)
+    return [ObjectFile(self.localFolderNode, self.compiler, sourceFile, objectFile, argv)]
 
   def buildRcItem(self, sourceFile, encodedName):
     objectFile = encodedName + '.res'
@@ -209,8 +239,8 @@ class ObjectArgvBuilder(object):
       rc_argv += ['/i', self.vendor.IncludePath(objectFile, include)]
     rc_argv += ['/fo' + objectFile, sourceFile]
 
-    return RCFile(self.localFolderNode, self.compiler, sourceFile, encodedName + '.i', objectFile,
-                  cl_argv, rc_argv)
+    return [RCFile(self.localFolderNode, self.compiler, sourceFile, encodedName + '.i', objectFile,
+                  cl_argv, rc_argv)]
 
 class Module(object):
   def __init__(self, context, compiler, name):
@@ -289,7 +319,7 @@ class BinaryBuilder(object):
         sourceFile = os.path.join(module.context.currentSourcePath, item)
       sourceFile = os.path.normpath(sourceFile)
 
-      self.objects.append(builder.buildItem(item, sourceFile))
+      self.objects.extend(builder.buildItem(item, sourceFile, cx))
 
     if builder.used_cxx:
       self.used_cxx_ = True
@@ -352,8 +382,9 @@ class BinaryBuilder(object):
     files = []
     localBuildFolder = self.getBuildFolder(cx)
     for obj in self.objects:
-      objPath = os.path.join(obj.folderNode.path, obj.outputFile)
-      files.append(os.path.relpath(objPath, localBuildFolder))
+      if obj.type != 'pch':
+        objPath = os.path.join(obj.folderNode.path, obj.outputFile)
+        files.append(os.path.relpath(objPath, localBuildFolder))
 
     self.argv = self.generateBinary(cx, files)
     self.linker_outputs = [self.outputFile]

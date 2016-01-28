@@ -156,12 +156,13 @@ class Guard:
   def __exit__(self, type, value, traceback):
     self.obj.close()
 
-def Execute(argv, shell=False):
+def Execute(argv, shell=False, env=None):
   p = subprocess.Popen(
       args=argv,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
-      shell=shell
+      shell=shell,
+      env=env
   )
   stdout, stderr = p.communicate()
   out = DecodeConsoleText(sys.stdout, stdout)
@@ -197,42 +198,31 @@ def str2b(s):
     return s
   return bytes(s, 'utf8')
 
-sReadIncludes = 0
-sLookForIncludeGuard = 1
-sFoundIncludeGuard = 2
-sIgnoring = 3
+# combine multiple lines that end with a backslash (continuation character)
+def decontinuate(text):
+  lines = []
+  for line in text.splitlines():
+    line = line.rstrip()
+    if line.endswith('\\'):
+      lines.append(line[:-1])
+    else:
+      yield ''.join(lines) + line
+      lines = []
+  if lines: yield ''.join(lines)
+
 def ParseGCCDeps(text):
   deps = set()
-  strip = False
-  new_text = ''
 
-  state = sReadIncludes
-  for line in re.split('\n+', text):
-    if state == sReadIncludes:
-      m = re.match('\.+\s+(.+)\s*$', line)
-      if m == None:
-        state = sLookForIncludeGuard
-      else:
-        name = m.groups()[0]
-        if os.path.exists(name):
-          strip = True
-          deps.add(name)
-        else:
-          state = sLookForIncludeGuard
-    if state == sLookForIncludeGuard:
-      if line.startswith('Multiple include guards may be useful for:'):
-        state = sFoundIncludeGuard
-        strip = True
-      else:
-        state = sReadIncludes
-        strip = False
-    elif state == sFoundIncludeGuard:
-      if not line in deps:
-        strip = False
-        state = sIgnoring
-    if not strip and len(line):
-      new_text += line + '\n'
-  return new_text, deps
+  lines = decontinuate(text)
+  for line in lines:
+    if len(line) > 0:
+      m = re.match('^(.*):$', line)
+      if m != None:
+        file = m.groups()[0]
+        if os.path.exists(file):
+          deps.add(file)
+
+  return deps
 
 def ParseMSVCDeps(vars, out):
   if 'cc_inclusion_pattern' in vars:
