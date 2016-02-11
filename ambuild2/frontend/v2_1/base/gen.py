@@ -29,11 +29,6 @@ class ConfigureException(Exception):
   def __init__(self, *args, **kwargs):
     super(ConfigureException, self).__init__(*args, **kwargs)
 
-try:
-  stringType = basestring
-except NameError: #Python 3, basestring causes NameError
-  stringType = str
-
 class BaseGenerator(object):
   def __init__(self, sourcePath, buildPath, originalCwd, options, args):
     super(BaseGenerator, self).__init__()
@@ -68,7 +63,7 @@ class BaseGenerator(object):
     self.contextStack_.pop()
 
   def importScript(self, context, path, vars={}):
-    if not isinstance(path, stringType):
+    if not isinstance(path, util.StringType()):
       for item in path:
         self.importScriptImpl(context, item, vars)
       return None
@@ -79,14 +74,14 @@ class BaseGenerator(object):
     return obj.get('rvalue', None)
 
   def runBuildScript(self, context, path, vars={}):
-    if not isinstance(path, stringType):
+    if not isinstance(path, util.StringType()):
       for item in path:
         self.runBuildScriptImpl(context, item, vars)
       return None
     return self.runBuildScriptImpl(context, path, vars)
 
   def importScriptImpl(self, parent, path, vars):
-    assert isinstance(path, stringType)
+    assert isinstance(path, util.StringType())
 
     sourceFolder, _, scriptFile = self.computeScriptPaths(parent, path)
 
@@ -106,7 +101,7 @@ class BaseGenerator(object):
     return obj
 
   def runBuildScriptImpl(self, parent, path, vars):
-    assert isinstance(path, stringType)
+    assert isinstance(path, util.StringType())
 
     if parent is not self.contextStack_[-1]:
       raise Exception('Can only create child build contexts of the currently active context')
