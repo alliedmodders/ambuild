@@ -375,8 +375,13 @@ LambdaType = type(lambda: None)
 def IsLambda(v):
   return type(v) == LambdaType
 
+try:
+  stringType = basestring
+except NameError: #Python 3, basestring causes NameError
+  stringType = str
+
 def IsString(v):
-  return isinstance(v, basestring)
+  return isinstance(v, stringType)
 
 class Expando(object):
   pass
