@@ -40,8 +40,8 @@ def StaticLibPrefix():
 
 def WaitForProcess(process):
 	out, err = process.communicate()
-	process.stdoutText = out.decode()
-	process.stderrText = err.decode()
+	process.stdoutText = out.decode(sys.stdout.encoding)
+	process.stderrText = err.decode(sys.stderr.encoding)
 	return process.returncode
 
 def CreateProcess(argv, executable = None):
