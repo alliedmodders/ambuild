@@ -310,7 +310,7 @@ class CompileCommand(command.Command):
 			self.stderr = ''
 			temp = ''
 			for line in p.stdout:
-				line = line.decode()
+				line = osutil.DecodeConsoleText(sys.stdout, line)
 				m = re.match('Note: including file:\s+(.+)$', line)
 				if m != None:
 					file = m.groups()[0].strip()
