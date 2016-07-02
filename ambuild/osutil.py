@@ -1,6 +1,7 @@
 # vim: set ts=2 sw=2 tw=99 noet: 
 import os
 import sys
+import locale
 import subprocess
 import multiprocessing
 
@@ -38,10 +39,22 @@ def StaticLibPrefix():
 	else:
 		return 'lib'
 
+def DecodeConsoleText(origin, text):
+	try:
+		if origin.encoding:
+			return text.decode(origin.encoding, 'replace')
+	except:
+		pass
+	try:
+		return text.decode(locale.getpreferredencoding(), 'replace')
+	except:
+		pass
+	return text.decode('utf8', 'replace')
+
 def WaitForProcess(process):
 	out, err = process.communicate()
-	process.stdoutText = out.decode(sys.stdout.encoding)
-	process.stderrText = err.decode(sys.stderr.encoding)
+	process.stdoutText = DecodeConsoleText(sys.stdout, out)
+	process.stderrText = DecodeConsoleText(sys.stderr, err)
 	return process.returncode
 
 def CreateProcess(argv, executable = None):
