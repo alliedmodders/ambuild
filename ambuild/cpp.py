@@ -305,21 +305,22 @@ class CompileCommand(command.Command):
 		elif isinstance(self.vendor, MSVC):
 			runner.PrintOut(' '.join([i for i in self.argv]))
 			p = subprocess.Popen(self.argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+			out, err = p.communicate()
+			if p.returncode != 0:
+				self.stderr = osutil.DecodeConsoleText(sys.stderr, err)
+				raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
+			out = osutil.DecodeConsoleText(sys.stdout, out)
 			deps = []
 			self.stdout = ''
 			self.stderr = ''
 			temp = ''
-			for line in p.stdout:
-				line = osutil.DecodeConsoleText(sys.stdout, line)
+			for line in out.split('\n'):
 				m = re.match('Note: including file:\s+(.+)$', line)
 				if m != None:
 					file = m.groups()[0].strip()
 					deps.append(file)
 				else:
 					temp += line
-			if p.wait() != 0:
-				self.stderr = temp
-				raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
 		job.CacheVariable(self.objFile, deps)
 	
 	def ParseDepsGCC(self):
