@@ -86,9 +86,8 @@ def IsCommand(type):
 def HasAutoDependencies(type):
   return type == CopyFolder or type == Cxx
 
-NotDirty = 0
-KnownDirty = (1 << 0)   # Node was known to be dirty.
-NewDirty = (1 << 1)     # Node was just computed to be dirty.
+NOT_DIRTY = 0
+DIRTY = 1
 
 # The basic properties of a node as it exists in the database.
 class Entry(object):
@@ -118,9 +117,7 @@ class Entry(object):
     # Last modification time.
     self.stamp = stamp
 
-    # 0 if the node was not dirty in the database.
-    # 1 if the node was dirty in the database.
-    # 2 if the node has become dirty in the meantime.
+    # See the DIRTY values above.
     self.dirty = dirty
 
     #########################################
@@ -135,6 +132,10 @@ class Entry(object):
     self.weak_inputs = None
 
     self.outgoing = None
+
+    # True if the node was not dirty when originally pulled from the DB, but is
+    # now actually dirty.
+    self.newlyDirty = False
     
   def isCommand(self):
     return IsCommand(self.type)
