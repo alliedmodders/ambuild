@@ -139,7 +139,8 @@ class Builder(object):
     # not modified in between being used as dependencies and the build
     # finishing; otherwise, the DAG state will be incoherent.
     for entry in self.update_set:
-      self.cx.db.unmark_dirty(entry)
+      if entry.dirty != nodetypes.ALWAYS_DIRTY:
+        self.cx.db.unmark_dirty(entry)
     self.cx.db.commit()
 
   def addDiscoveredSource(self, path):
@@ -304,15 +305,16 @@ class Builder(object):
       if not self.mergeDependencies(node, message['deps']):
         return False
 
-    for incoming in self.cx.db.query_strong_inputs(node.entry):
-      self.lazyUpdateEntry(incoming)
-    for incoming in self.cx.db.query_dynamic_inputs(node.entry):
-      self.lazyUpdateEntry(incoming)
+    if node.entry.dirty != nodetypes.ALWAYS_DIRTY:
+      for incoming in self.cx.db.query_strong_inputs(node.entry):
+        self.lazyUpdateEntry(incoming)
+      for incoming in self.cx.db.query_dynamic_inputs(node.entry):
+        self.lazyUpdateEntry(incoming)
 
-    for path, stamp in updates:
-      entry = self.cx.db.query_path(path)
-      self.cx.db.unmark_dirty(entry, stamp)
-    self.cx.db.unmark_dirty(node.entry)
+      for path, stamp in updates:
+        entry = self.cx.db.query_path(path)
+        self.cx.db.unmark_dirty(entry, stamp)
+      self.cx.db.unmark_dirty(node.entry)
 
     self.num_completed_tasks += 1
     return True

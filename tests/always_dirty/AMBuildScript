@@ -1,0 +1,8 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+_, outputs = builder.AddCommand(
+  inputs = builder.ALWAYS_DIRTY,
+  outputs = ['sample.h'],
+  argv = ['python', os.path.join(builder.sourcePath, 'generate.py')]
+)
