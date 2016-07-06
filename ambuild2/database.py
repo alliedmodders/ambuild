@@ -319,11 +319,11 @@ class Database(object):
         dirty = ?
       where id = ?
     """
-    self.cn.execute(query, (type, folder_id, blob, 1, entry.id))
+    self.cn.execute(query, (type, folder_id, blob, nodetypes.DIRTY, entry.id))
     entry.type = type
     entry.folder = folder
     entry.blob = blob
-    entry.dirty = True
+    entry.dirty = nodetypes.DIRTY
     return True
 
   def add_command(self, type, folder, data):
@@ -337,7 +337,7 @@ class Database(object):
       folder_id = folder.id
 
     query = "insert into nodes (type, folder, data, dirty) values (?, ?, ?, ?)"
-    cursor = self.cn.execute(query, (type, folder_id, blob, 1))
+    cursor = self.cn.execute(query, (type, folder_id, blob, nodetypes.DIRTY))
 
     entry = Entry(
       id=cursor.lastrowid,
@@ -346,7 +346,7 @@ class Database(object):
       blob=data,
       folder=folder,
       stamp=0,
-      dirty=True
+      dirty=nodetypes.DIRTY
     )
     self.node_cache_[entry.id] = entry
     return entry
@@ -550,12 +550,12 @@ class Database(object):
     return node.dynamic_inputs
 
   def mark_dirty(self, entry):
-    query = "update nodes set dirty = 1 where id = ?"
-    self.cn.execute(query, (entry.id,))
-    entry.dirty |= nodetypes.KnownDirty
+    query = "update nodes set dirty = ? where id = ?"
+    self.cn.execute(query, (nodetypes.DIRTY, entry.id))
+    entry.dirty = nodetypes.DIRTY
 
   def unmark_dirty(self, entry, stamp=None):
-    query = "update nodes set dirty = 0, stamp = ? where id = ?"
+    query = "update nodes set dirty = ?, stamp = ? where id = ?"
     if not stamp:
       if entry.isCommand():
         stamp = 0.0
@@ -571,8 +571,8 @@ class Database(object):
           )
           return
 
-    self.cn.execute(query, (stamp, entry.id))
-    entry.dirty = False
+    self.cn.execute(query, (nodetypes.NOT_DIRTY, stamp, entry.id))
+    entry.dirty = nodetypes.NOT_DIRTY
     entry.stamp = stamp
 
   # Query all mkdir nodes.
@@ -592,9 +592,9 @@ class Database(object):
     query = """
       select type, stamp, dirty, path, folder, data, id
       from nodes
-      where dirty = 1
+      where dirty = {0}
       and type != 'mkd'
-    """
+    """.format(nodetypes.DIRTY)
     for row in self.cn.execute(query):
       id = row[6]
       node = self.import_node(id, row)
@@ -606,9 +606,9 @@ class Database(object):
     query = """
       select type, stamp, dirty, path, folder, data, id
       from nodes
-      where dirty = 0
+      where dirty = {0}
       and (type == 'src' or type == 'out' or type == 'cpa')
-    """
+    """.format(nodetypes.NOT_DIRTY)
     for row in self.cn.execute(query):
       id = row[6]
       node = self.import_node(id, row)
