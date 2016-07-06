@@ -283,13 +283,16 @@ class Database(object):
       row=row
     )
 
-  def update_command(self, entry, type, folder, data, refactoring):
+  def update_command(self, entry, type, folder, data, dirty, refactoring):
     if not data:
       blob = None
     else:
       blob = util.BlobType(util.CompatPickle(data))
 
-    if entry.type == type and entry.folder == folder and entry.blob == data:
+    if entry.type == type and \
+       entry.folder == folder and \
+       entry.blob == data and \
+       (dirty == nodetypes.ALWAYS_DIRTY) == (entry.dirty == nodetypes.ALWAYS_DIRTY):
       return False
 
     if refactoring:
@@ -319,14 +322,14 @@ class Database(object):
         dirty = ?
       where id = ?
     """
-    self.cn.execute(query, (type, folder_id, blob, nodetypes.DIRTY, entry.id))
+    self.cn.execute(query, (type, folder_id, blob, dirty, entry.id))
     entry.type = type
     entry.folder = folder
     entry.blob = blob
-    entry.dirty = nodetypes.DIRTY
+    entry.dirty = dirty
     return True
 
-  def add_command(self, type, folder, data):
+  def add_command(self, type, folder, data, dirty):
     if not data:
       blob = None
     else:
@@ -337,7 +340,7 @@ class Database(object):
       folder_id = folder.id
 
     query = "insert into nodes (type, folder, data, dirty) values (?, ?, ?, ?)"
-    cursor = self.cn.execute(query, (type, folder_id, blob, nodetypes.DIRTY))
+    cursor = self.cn.execute(query, (type, folder_id, blob, dirty))
 
     entry = Entry(
       id=cursor.lastrowid,
@@ -550,11 +553,15 @@ class Database(object):
     return node.dynamic_inputs
 
   def mark_dirty(self, entry):
+    assert entry.dirty != nodetypes.ALWAYS_DIRTY
+
     query = "update nodes set dirty = ? where id = ?"
     self.cn.execute(query, (nodetypes.DIRTY, entry.id))
     entry.dirty = nodetypes.DIRTY
 
   def unmark_dirty(self, entry, stamp=None):
+    assert entry.dirty != nodetypes.ALWAYS_DIRTY
+
     query = "update nodes set dirty = ?, stamp = ? where id = ?"
     if not stamp:
       if entry.isCommand():
@@ -575,6 +582,13 @@ class Database(object):
     entry.dirty = nodetypes.NOT_DIRTY
     entry.stamp = stamp
 
+  def set_dirty_type(self, entry, dirtyType):
+    if entry.dirty == dirtyType:
+      return
+    query = "update nodes set dirty = ? where id = ?"
+    self.cn.execute(query, (dirtyType, entry.id))
+    entry.dirty = dirtyType
+
   # Query all mkdir nodes.
   def query_mkdir(self, aggregate):
     query = """
@@ -592,9 +606,9 @@ class Database(object):
     query = """
       select type, stamp, dirty, path, folder, data, id
       from nodes
-      where dirty = {0}
+      where dirty <> {0}
       and type != 'mkd'
-    """.format(nodetypes.DIRTY)
+    """.format(nodetypes.NOT_DIRTY)
     for row in self.cn.execute(query):
       id = row[6]
       node = self.import_node(id, row)
