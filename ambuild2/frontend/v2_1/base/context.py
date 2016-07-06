@@ -93,6 +93,9 @@ class EmptyContext(BaseContext):
 
 # Access to input- and output-oriented API.
 class BuildContext(BaseContext):
+  # This nonce is an input flag to AddCommand.
+  ALWAYS_DIRTY = object()
+
   def __init__(self, generator, parent, vars, script, sourceFolder, buildFolder):
     super(BuildContext, self).__init__(generator, parent, vars, script)
     self.localFolder_ = None

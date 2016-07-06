@@ -47,12 +47,8 @@ def ComputeDirty(node):
     dirty = ComputeSourceDirty(node)
   elif node.type == nodetypes.Output:
     dirty = ComputeOutputDirty(node)
-  elif node.type == nodetypes.CopyFolder:
-    dirty = ComputeCopyFolderDirty(node)
   else:
     raise Exception('cannot compute dirty bit for node type: ' + node.type)
-  if dirty == nodetypes.DIRTY:
-    node.newlyDirty = True
   return dirty
 
 def ComputeDamageGraph(database, only_changed = False):
@@ -69,6 +65,7 @@ def ComputeDamageGraph(database, only_changed = False):
 
   def maybe_dirty(node):
     if ComputeDirty(node):
+      node.newlyDirty = True
       dirty.append(node)
 
   database.query_known_dirty(known_dirty)

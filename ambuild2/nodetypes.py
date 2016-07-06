@@ -88,6 +88,7 @@ def HasAutoDependencies(type):
 
 NOT_DIRTY = 0
 DIRTY = 1
+ALWAYS_DIRTY = 2
 
 # The basic properties of a node as it exists in the database.
 class Entry(object):
