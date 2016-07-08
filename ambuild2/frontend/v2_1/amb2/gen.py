@@ -425,6 +425,16 @@ class Generator(BaseGenerator):
                  weak_inputs=[], shared_outputs=[]):
     assert not folder or isinstance(folder, nodetypes.Entry)
 
+    if inputs is context.ALWAYS_DIRTY:
+      if len(weak_inputs) != 0:
+        message = "Always-dirty commands cannot have weak inputs"
+        util.con_err(util.ConsoleRed, "{0}.".format(message), util.ConsoleNormal)
+        raise Exception(message)
+      if node_type != nodetypes.Command:
+        message = "Node type {0} cannot be always-dirty".format(node_type)
+        util.con_err(util.ConsoleRed, "{0}.".format(message), util.ConsoleNormal)
+        raise Exception(message)
+
     # Build the set of weak links.
     weak_links = set()
     for weak_input in weak_inputs:
@@ -434,9 +444,10 @@ class Generator(BaseGenerator):
 
     # Build the set of strong links.
     strong_links = set()
-    for strong_input in inputs:
-      strong_input = self.parseInput(context, strong_input)
-      strong_links.add(strong_input)
+    if inputs is not context.ALWAYS_DIRTY:
+      for strong_input in inputs:
+        strong_input = self.parseInput(context, strong_input)
+        strong_links.add(strong_input)
 
     # Build the list of outputs.
     cmd_entry = None
@@ -487,9 +498,13 @@ class Generator(BaseGenerator):
                    util.ConsoleNormal)
       raise Exception('An output has been duplicated as a shared output.')
 
+    dirty = nodetypes.DIRTY
+    if inputs == context.ALWAYS_DIRTY:
+      dirty = nodetypes.ALWAYS_DIRTY
+
     if cmd_entry:
       # Update the entry in the database.
-      self.db.update_command(cmd_entry, node_type, folder, data, self.refactoring)
+      self.db.update_command(cmd_entry, node_type, folder, data, dirty, self.refactoring)
 
       # Disconnect any outputs that are no longer connected to this output.
       # It's okay to use output_links since there should never be duplicate
@@ -514,7 +529,7 @@ class Generator(BaseGenerator):
     else:
       # Note that if there are no outputs, we will always add a new command,
       # and the old (identical) command will be deleted.
-      cmd_entry = self.db.add_command(node_type, folder, data)
+      cmd_entry = self.db.add_command(node_type, folder, data, dirty)
 
     # Local helper function to warn about refactoring problems.
     def refactoring_error(node):
@@ -564,7 +579,7 @@ class Generator(BaseGenerator):
 
     # If we got new outputs or inputs, we need to re-run the command.
     changed = len(output_links) + len(strong_added) + len(weak_added)
-    if changed and not cmd_entry.dirty:
+    if changed and cmd_entry.dirty == nodetypes.NOT_DIRTY:
       self.db.mark_dirty(cmd_entry)
 
     return cmd_entry, output_nodes

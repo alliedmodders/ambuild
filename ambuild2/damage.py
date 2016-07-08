@@ -47,12 +47,8 @@ def ComputeDirty(node):
     dirty = ComputeSourceDirty(node)
   elif node.type == nodetypes.Output:
     dirty = ComputeOutputDirty(node)
-  elif node.type == nodetypes.CopyFolder:
-    dirty = ComputeCopyFolderDirty(node)
   else:
     raise Exception('cannot compute dirty bit for node type: ' + node.type)
-  if dirty:
-    node.dirty |= nodetypes.NewDirty
   return dirty
 
 def ComputeDamageGraph(database, only_changed = False):
@@ -69,6 +65,7 @@ def ComputeDamageGraph(database, only_changed = False):
 
   def maybe_dirty(node):
     if ComputeDirty(node):
+      node.newlyDirty = True
       dirty.append(node)
 
   database.query_known_dirty(known_dirty)
@@ -78,7 +75,7 @@ def ComputeDamageGraph(database, only_changed = False):
     return dirty
 
   def add_dirty(entry):
-    if entry.dirty == nodetypes.NewDirty:
+    if entry.newlyDirty:
       # Mark this node as dirty in the DB so we don't have to check the
       # filesystem next time.
       database.mark_dirty(entry)
@@ -86,7 +83,7 @@ def ComputeDamageGraph(database, only_changed = False):
     graph.addEntry(entry)
 
   for entry in dirty:
-    if (entry.type == nodetypes.Output) and (entry.dirty == nodetypes.NewDirty):
+    if (entry.type == nodetypes.Output) and entry.newlyDirty:
       # Ensure that our command has been marked as dirty.
       incoming = database.query_strong_inputs(entry)
       incoming |= database.query_dynamic_inputs(entry)
@@ -107,7 +104,7 @@ def ComputeDamageGraph(database, only_changed = False):
   # Find all leaf commands in the graph and mark them as dirty. This ensures
   # that we'll include them in the next damage graph.
   def finish_mark_dirty(entry):
-    if entry.dirty == nodetypes.NotDirty:
+    if entry.dirty == nodetypes.NOT_DIRTY:
       # Mark this node as dirty in the DB so we don't have to check the
       # filesystem next time.
       database.mark_dirty(entry)
