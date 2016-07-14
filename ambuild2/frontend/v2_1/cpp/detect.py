@@ -95,7 +95,7 @@ def TryVerifyCompiler(env, mode, cmd, assumed_family):
       util.ConsoleHeader,
       'Compiler {0} for {1} failed: '.format(cmd, mode),
       util.ConsoleRed,
-      e.message,
+      str(e),
       util.ConsoleNormal
     )
     return None

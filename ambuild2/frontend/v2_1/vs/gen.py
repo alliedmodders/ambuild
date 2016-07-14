@@ -22,6 +22,7 @@ from ambuild2.frontend import paths
 from ambuild2.frontend.v2_1.vs import cxx
 from ambuild2.frontend.v2_1.vs import nodes
 from ambuild2.frontend.v2_1.base import BaseGenerator
+from ambuild2.frontend.v2_1.cpp.msvc import MSVC
 
 SupportedVersions = ['10', '11', '12']
 YearMap = {
@@ -95,7 +96,7 @@ class Generator(BaseGenerator):
   # Overridden.
   def detectCompilers(self):
     if not self.compiler:
-      self.base_compiler = cxx.Compiler(cxx.Compiler.GetVersionFromVS(self.vs_version))
+      self.base_compiler = cxx.Compiler(MSVC(cxx.Compiler.GetVersionFromVS(self.vs_version)))
       self.compiler = self.base_compiler.clone()
     return self.compiler
 
@@ -118,7 +119,7 @@ class Generator(BaseGenerator):
 
   # Overridden.
   def getLocalFolder(self, context):
-    if type(context.localFolder_) is nodes.FolderNode or context.localFolder_ is None:
+    if type(context.localFolder_) is nodes.FolderNode:
       return context.localFolder_
 
     if not len(context.buildFolder):
