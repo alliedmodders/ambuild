@@ -209,7 +209,7 @@ class ObjectArgvBuilder(object):
       rc_argv += ['/i', self.vendor.IncludePath(objectFile, include)]
     rc_argv += ['/fo' + objectFile, sourceFile]
 
-    return RCFile(self.localFolderNode, self.compiler, sourceFile, encodedName + '.i', objectFile,
+    return RCFile(self.localFolderNode, sourceFile, encodedName + '.i', objectFile,
                   cl_argv, rc_argv)
 
 class Module(object):
