@@ -30,8 +30,10 @@ def export_fp(node, fp):
   version = node.project.compiler.version 
   if version >= 1600 and version < 1800:
     toolsVersion = '4.0'
-  elif version >= 1800:
+  elif version >= 1800 and version < 2000:
     toolsVersion = '12.0'
+  elif version >= 2000:
+    toolsVersion = '14.0'
 
   scope = xml.block('Project',
     DefaultTargets = 'Build',
@@ -97,8 +99,10 @@ def export_configuration_properties(node, xml):
       version = builder.compiler.version
       if version >= 1700 and version < 1800:
         xml.tag('PlatformToolset', 'v110')
-      elif version >= 1800:
+      elif version >= 1800 and version < 2000:
         xml.tag('PlatformToolset', 'v120')
+      elif version >= 2000:
+        xml.tag('PlatformToolset', 'v140')
 
 def export_configuration_user_props(node, xml):
   for builder in node.project.builders_:
