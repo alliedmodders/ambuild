@@ -39,6 +39,17 @@ class Vendor(object):
   def nameForStaticLibrary(self, name):
     return util.StaticLibPrefix + name + util.StaticLibSuffix
 
+  @property
+  def pchSuffix(self):
+    raise Exception("Must be implemented")
+
+  def pchCArgs(self, headerFile, pchFile):
+    raise Exception("Must be implemented")
+
+  def pchCxxArgs(self, headerFile, pchFile):
+    raise Exception("Must be implemented")
+
+
 class MSVC(Vendor):
   def __init__(self, command, version):
     super(MSVC, self).__init__('msvc', version, 'msvc', command, '.obj')
@@ -90,7 +101,7 @@ class CompatGCC(Vendor):
     return ['-I', os.path.normpath(includePath)]
 
   def objectArgs(self, sourceFile, objFile):
-    return ['-H', '-c', sourceFile, '-o', objFile]
+    return ['-MP', '-fpch-deps', '-c', sourceFile, '-o', objFile]
 
   def parse_debuginfo(self, debuginfo):
     return debuginfo
@@ -102,6 +113,17 @@ class GCC(CompatGCC):
 
   def like(self, name):
     return name == 'gcc'
+
+  @property
+  def pchSuffix(self):
+    return '.gch'
+
+  def pchCArgs(self, headerFile, pchFile):
+    return ['-MP', '-fpch-deps', '-x', 'c-header', headerFile, '-o', pchFile]
+
+  def pchCxxArgs(self, headerFile, pchFile):
+    return ['-MP', '-fpch-deps', '-x', 'c++-header', headerFile, '-o', pchFile]
+
 
 class Clang(CompatGCC):
   def __init__(self, vendor_name, command, version):

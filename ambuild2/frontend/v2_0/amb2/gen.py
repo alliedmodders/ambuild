@@ -608,14 +608,21 @@ class Generator(BaseGenerator):
     self.parseCxxDeps(cx, binary, inputs, binary.compiler.linkflags)
     self.parseCxxDeps(cx, binary, inputs, binary.compiler.postlink)
 
+    pch_nodes = []
+    for obj in binary.objects:
+      if obj.type == 'pch':
+        pch_nodes.append(self.addCxxObjTask(cx, binary.shared_cc_outputs, obj.folderNode, obj))
+
     for objfile in binary.objects:
       cxxData = {
         'argv': objfile.argv,
         'type': binary.linker.behavior
       }
+      sourcedeps = binary.compiler.sourcedeps
+      sourcedeps += pch_nodes
       cxxCmd, (cxxNode,) = self.addCommand(
         context = cx,
-        weak_inputs = binary.compiler.sourcedeps,
+        weak_inputs = sourcedeps,
         inputs = [objfile.sourceFile],
         outputs = [objfile.outputFile],
         node_type = nodetypes.Cxx,

@@ -102,6 +102,10 @@ class Project(object):
 class ArgBuilder(object):
   def __init__(self, outputPath, config, compiler):
     args = compiler.command.split(' ')
+    if compiler == config.cxx:
+      args += compiler.formatInclude(outputPath, 'pch_cxx')
+    else:
+      args += compiler.formatInclude(outputPath, 'pch_c')
     args += config.cflags
     if config.debug_symbols:
       args += compiler.debuginfo_argv
@@ -123,12 +127,27 @@ class ArgBuilder(object):
 def NameForObjectFile(file):
   return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
 
+class PCHFile(object):
+  def __init__(self, headerFile, outputFile, argv, sharedOutputs):
+    self.headerFile = headerFile
+    self.outputFile = outputFile
+    self.argv = argv
+    self.sharedOutputs = sharedOutputs
+
+  @property
+  def type(self):
+    return 'pch'
+
 class ObjectFile(object):
   def __init__(self, sourceFile, outputFile, argv, sharedOutputs):
     self.sourceFile = sourceFile
     self.outputFile = outputFile
     self.argv = argv
     self.sharedOutputs = sharedOutputs
+
+  @property
+  def type(self):
+    return 'object'
 
 class RCFile(object):
   def __init__(self, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
@@ -137,6 +156,10 @@ class RCFile(object):
     self.outputFile = outputFile
     self.cl_argv = cl_argv 
     self.rc_argv = rc_argv
+
+  @property
+  def type(self):
+    return 'resource'
 
 class BinaryBuilder(object):
   def __init__(self, compiler, name):
@@ -204,40 +227,59 @@ class BinaryBuilder(object):
       filename, extension = os.path.splitext(item)
       encname = NameForObjectFile(filename)
 
-      if extension == '.rc':
+      if extension == '.h' or extension == '.hpp':
         cenv = self.default_c_env
-        objectFile = encname + '.res'
+        
+        pchFile = encname + cenv.compiler.pchSuffix
+        
+        cx.AddFolder(os.path.join(self.outputFolder, 'pch_c'))
+        cx.AddFolder(os.path.join(self.outputFolder, 'pch_cxx'))
+        
+        output_c = os.path.join('pch_c', pchFile)
+        argv_c = self.default_c_env[:] + cenv.compiler.pchCArgs(headerFile, output_c)
+        pch_c = PCHFile(headerFile, output_c, argv_c, [])
+        
+        output_cxx = os.path.join('pch_cxx', pchFile)
+        argv_cxx = self.default_cxx_env[:] + cenv.compiler.pchCxxArgs(headerFile, output_cxx)
+        pch_cxx = PCHFile(headerFile, output_cxx, argv_cxx, [])
+        
+        self.objects.append(pch_c)
+        self.objects.append(pch_cxx)
       else:
-        if extension == '.c':
+        if extension == '.rc':
           cenv = self.default_c_env
+          objectFile = encname + '.res'
         else:
-          cenv = self.default_cxx_env
-          self.used_cxx_ = True
-        objectFile = encname + cenv.compiler.objSuffix
+          if extension == '.c':
+            cenv = self.default_c_env
+          else:
+            cenv = self.default_cxx_env
+            self.used_cxx_ = True
+          objectFile = encname + cenv.compiler.objSuffix
 
-      if extension == '.rc':
-        # This is only relevant on Windows.
-        vendor = cenv.compiler
-        defines = self.compiler.defines + self.compiler.cxxdefines + self.compiler.rcdefines
-        cl_argv = vendor.command.split(' ')
-        cl_argv += [vendor.definePrefix + define for define in defines]
-        for include in (self.compiler.includes + self.compiler.cxxincludes):
-          cl_argv += vendor.formatInclude(objectFile, include)
-        cl_argv += vendor.preprocessArgs(sourceFile, encname + '.i')
+        if extension == '.rc':
+          # This is only relevant on Windows.
+          vendor = cenv.compiler
+          defines = self.compiler.defines + self.compiler.cxxdefines + self.compiler.rcdefines
+          cl_argv = vendor.command.split(' ')
+          cl_argv += [vendor.definePrefix + define for define in defines]
+          for include in (self.compiler.includes + self.compiler.cxxincludes):
+            cl_argv += vendor.formatInclude(objectFile, include)
+          cl_argv += vendor.preprocessArgs(sourceFile, encname + '.i')
 
-        rc_argv = ['rc', '/nologo']
-        for define in defines:
-          rc_argv.extend(['/d', define])
-        for include in (self.compiler.includes + self.compiler.cxxincludes):
-          rc_argv.extend(['/i', MSVC.IncludePath(objectFile, include)])
-        rc_argv.append('/fo' + objectFile)
-        rc_argv.append(sourceFile)
+          rc_argv = ['rc', '/nologo']
+          for define in defines:
+            rc_argv.extend(['/d', define])
+          for include in (self.compiler.includes + self.compiler.cxxincludes):
+            rc_argv.extend(['/i', MSVC.IncludePath(objectFile, include)])
+          rc_argv.append('/fo' + objectFile)
+          rc_argv.append(sourceFile)
 
-        self.resources.append(RCFile(sourceFile, encname + '.i', objectFile, cl_argv, rc_argv))
-      else:
-        argv = cenv.argv + cenv.compiler.objectArgs(sourceFile, objectFile)
-        obj = ObjectFile(sourceFile, objectFile, argv, shared_cc_outputs)
-        self.objects.append(obj)
+          self.resources.append(RCFile(sourceFile, encname + '.i', objectFile, cl_argv, rc_argv))
+        else:
+          argv = cenv.argv + cenv.compiler.objectArgs(sourceFile, objectFile)
+          obj = ObjectFile(sourceFile, objectFile, argv, shared_cc_outputs)
+          self.objects.append(obj)
 
     if not self.linker_:
       if self.used_cxx_:
@@ -245,7 +287,11 @@ class BinaryBuilder(object):
       else:
         self.linker_ = self.compiler.cc
 
-    files = [out.outputFile for out in self.objects + self.resources]
+    files = []
+    for obj in self.objects:
+      if obj.type != 'pch':
+        files.append(obj.outputFile)
+    #files = [out.outputFile for out in self.objects + self.resources]
     self.argv = self.generateBinary(cx, files)
     self.linker_outputs = [self.outputFile]
     self.debug_entry = None
