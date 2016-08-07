@@ -656,7 +656,7 @@ class Generator(BaseGenerator):
       inputs = inputs
     )
 
-    return cpp.CppNodes(output_file, debug_file)
+    return cpp.CppNodes(output_file, debug_file, binary.type)
 
   def addFileOp(self, cmd, context, source, output_path):
     # Try to detect if our output_path is actually a folder, via trailing
