@@ -26,6 +26,7 @@ class Preparer(object):
     self.buildPath = buildPath
     self.host = System.Host
     self.target_arch = None
+    self.default_arch = None
 
     self.options = OptionParser("usage: %prog [options]")
     self.options.add_option("-g", "--gen", type="string", dest="generator", default="ambuild2",
@@ -65,10 +66,17 @@ class Preparer(object):
         continue
       setattr(options, attr, getattr(v_options, attr))
 
-    # Propagate the overridden architecture.
     if self.target_arch is not None:
+      # Configure.py has hardcoded arch.
       assert getattr(options, 'target_arch', None) is None
       options.target_arch = self.target_arch
+    elif options.target_arch is None and self.default_arch is not None:
+      # Configure.py has default arch, user specified no arch.
+      options.target_arch = self.default_arch
+      self.target_arch = self.default_arch
+    else:
+      # Take any user specified arch.
+      self.target_arch = options.target_arch
 
     if options.list_gen:
       print('Available build system generators:')

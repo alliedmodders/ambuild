@@ -80,7 +80,7 @@ class Project(object):
       pdbFile = paths.Join(tag_folder, builder.name_ + '.pdb')
       objNode = generator.addOutput(cx, objFile, node)
       pdbNode = generator.addOutput(cx, pdbFile, node)
-      outputs.append(CppNodes(objNode, pdbNode))
+      outputs.append(CppNodes(objNode, pdbNode, builder.type))
     generator.addProjectNode(cx, node)
     return outputs
 

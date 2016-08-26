@@ -120,8 +120,8 @@ class ObjectFile(ObjectFileBase):
     return 'object'
 
 class RCFile(ObjectFileBase):
-  def __init__(self, folderNode, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
-    super(ObjectFile, self).__init__(folderNode, sourceFile, outputFile)
+  def __init__(self, folderNode, compiler, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
+    super(RCFile, self).__init__(folderNode, compiler, sourceFile, outputFile)
     self.preprocFile = preprocFile
     self.cl_argv = cl_argv 
     self.rc_argv = rc_argv
@@ -204,12 +204,14 @@ class ObjectArgvBuilder(object):
     cl_argv += self.vendor.preprocessArgv(sourceFile, encodedName + '.i')
 
     rc_argv = ['rc', '/nologo']
-    rc_argv += [['/d', define] for define in defines]
+    for define in defines:
+      rc_argv += ['/d', define]
     for include in (self.compiler.includes + self.compiler.cxxincludes):
       rc_argv += ['/i', self.vendor.IncludePath(objectFile, include)]
     rc_argv += ['/fo' + objectFile, sourceFile]
 
-    return RCFile(self.localFolderNode, self.compiler, sourceFile, encodedName + '.i', objectFile,
+    return RCFile(self.localFolderNode, self.compiler,
+                  sourceFile, encodedName + '.i', objectFile,
                   cl_argv, rc_argv)
 
 class Module(object):

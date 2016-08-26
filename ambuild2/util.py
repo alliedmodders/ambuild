@@ -208,6 +208,7 @@ def ParseGCCDeps(text):
 
   state = sReadIncludes
   for line in re.split('\n+', text):
+    line = line.replace('\r', '')
     if state == sReadIncludes:
       m = re.match('[\.!x]\.*\s+(.+)\s*$', line)
       if m == None:
