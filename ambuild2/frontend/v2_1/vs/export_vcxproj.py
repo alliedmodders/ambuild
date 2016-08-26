@@ -28,9 +28,9 @@ def export_fp(node, fp):
   xml = XmlBuilder(fp)
 
   version = node.project.compiler.version 
-  if version >= 1600 and version < 1800:
+  if version >= 'msvc-1600' and version < 'msvc-1800':
     toolsVersion = '4.0'
-  elif version >= 1800:
+  elif version >= 'msvc-1800':
     toolsVersion = '12.0'
 
   scope = xml.block('Project',
@@ -95,9 +95,9 @@ def export_configuration_properties(node, xml):
         xml.tag('WholeProgramOptimization', 'true')
       
       version = builder.compiler.version
-      if version >= 1700 and version < 1800:
+      if version >= 'msvc-1700' and version < 'msvc-1800':
         xml.tag('PlatformToolset', 'v110')
-      elif version >= 1800:
+      elif version >= 'msvc-1800':
         xml.tag('PlatformToolset', 'v120')
 
 def export_configuration_user_props(node, xml):
@@ -113,8 +113,8 @@ def export_configuration_user_props(node, xml):
 def export_configuration_paths(node, xml):
   for builder in node.project.builders_:
     condition = condition_for(builder)
-    xml.tag('OutDir', "$(Configuration)\\", Condition = condition)
-    xml.tag('IntDir', "$(Configuration)\\", Condition = condition)
+    xml.tag('OutDir', "$(ProjectName) - $(Configuration)\\", Condition = condition)
+    xml.tag('IntDir', "$(ProjectName) - $(Configuration)\\", Condition = condition)
     if '/INCREMENTAL:NO' not in builder.compiler.linkflags and '/INCREMENTAL:NO' not in builder.compiler.postlink:
       xml.tag('LinkIncremental', 'true', Condition = condition)
     xml.tag('TargetName', builder.name_, Condition = condition)
@@ -209,6 +209,9 @@ def export_configuration_options(node, xml, builder):
     elif '/W4' in flags:
       xml.tag('WarningLevel', 'Level4')
 
+    if '/WX' in flags:
+      xml.tag('TreatWarningAsError', 'true')
+
     if '/Od' in flags:
       xml.tag('DebugInformationFormat', 'EditAndContinue')
     else:
@@ -261,7 +264,7 @@ def export_configuration_options(node, xml, builder):
     xml.tag('AdditionalDependencies', ';'.join(libs))
     xml.tag('OutputFile', '$(OutDir)$(TargetFileName)')
     xml.tag('IgnoreSpecificDefaultLibraries', ';'.join(ignore_libs))
-    if compiler.debuginfo is None:
+    if compiler.symbol_files is None:
       xml.tag('GenerateDebugInformation', 'false')
     else:
       xml.tag('GenerateDebugInformation', 'true')

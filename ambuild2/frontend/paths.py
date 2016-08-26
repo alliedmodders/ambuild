@@ -52,4 +52,11 @@ def Join(*nodes):
 def IsSubPath(other, folder):
   folder = os.path.normpath(folder) + os.sep
   other = os.path.normpath(other) + os.sep
-  return other.startswith(folder)
+  # if other starts with '..', we immediately assume it's not longer a subpath.
+  # Cases of <x number of '..'>/<path back to where we just were>/<subpath> is just dumb, so we just False it.
+  if other.startswith('..'):
+    return False
+  elif other.startswith(folder):
+    return True
+  elif folder == '.' + os.sep and not os.path.isabs(other):
+    return True

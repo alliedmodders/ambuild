@@ -20,8 +20,9 @@ from ambuild2.frontend import paths
 from ambuild2.frontend.version import Version
 from ambuild2.frontend.v2_1.vs import nodes
 from ambuild2.frontend.v2_1.vs import export_vcxproj
-from ambuild2.frontend.v2_1.cpp import compilers
+from ambuild2.frontend.v2_1.cpp import compiler
 from ambuild2.frontend.v2_1.cpp import Dep, CppNodes
+from ambuild2.frontend.v2_1.cpp.msvc import MSVC
 
 class CompilerShell(object):
   def __init__(self, version):
@@ -71,7 +72,7 @@ class Project(object):
 
   def generate_combined(self, generator, cx):
     outputs = []
-    proj_path = paths.Join(cx.localFolder, self.name_ + self.compiler.projectFileSuffix)
+    proj_path = paths.Join(cx.buildFolder, self.name_ + self.compiler.projectFileSuffix)
     node = nodes.ProjectNode(cx, proj_path, self)
     for builder in self.builders_:
       tag_folder = generator.addFolder(cx, builder.localFolder)
@@ -86,37 +87,34 @@ class Project(object):
   def export(self, node):
     export_vcxproj.export(node)
 
-class Compiler(compilers.Compiler):
-  def __init__(self, version):
-    super(Compiler, self).__init__()
-    self.version_ = version
+class Compiler(compiler.Compiler):
+  def __init__(self, vendor):
+    if not isinstance(vendor, MSVC):
+      raise ValueError('VS Project generator only accepts MSVC vendors')
+    super(Compiler, self).__init__(vendor)
 
     # For compatibility with older build scripts.
-    self.cc = CompilerShell(version)
-    self.cxx = CompilerShell(version)
+    self.cc = CompilerShell(int(self.vendor.version_string))
+    self.cxx = CompilerShell(int(self.vendor.version_string))
 
   def clone(self):
-    cc = Compiler(self.version)
+    cc = Compiler(self.vendor)
     cc.inherit(self)
     return cc
 
   @property
   def projectFileSuffix(self):
     # Assume the compiler version is related to the IDE version.
-    if self.version >= 1600:
+    if self.version >= 'msvc-1600':
       return '.vcxproj'
-    if self.version >= 1300:
+    if self.version >= 'msvc-1300':
       return '.vcproj'
     # lol whatevs
     return '.dsp'
 
-  @property
-  def version(self):
-    return self.version_
-
   @staticmethod
   def GetVersionFromVS(vs_version):
-    return Version((vs_version * 100) + 600)
+    return str((vs_version * 100) + 600)
 
   def ProgramProject(self, name):
     return Project(Program, self, name)
@@ -135,13 +133,6 @@ class Compiler(compilers.Compiler):
 
   def StaticLibrary(self, name):
     return Project(StaticLibrary, self, name).default()
-
-  def like(self, name):
-    return name == 'msvc'
-
-  @property
-  def vendor(self):
-    return 'msvc'
 
 class BinaryBuilder(object):
   def __init__(self, project, compiler, name, tag):
