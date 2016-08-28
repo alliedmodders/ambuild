@@ -123,8 +123,8 @@ def export_configuration_user_props(node, xml):
 def export_configuration_paths(node, xml):
   for builder in node.project.builders_:
     condition = condition_for(builder)
-    xml.tag('OutDir', "$(Configuration)\\", Condition = condition)
-    xml.tag('IntDir', "$(Configuration)\\", Condition = condition)
+    xml.tag('OutDir', "$(ProjectName) - $(Configuration)\\", Condition = condition)
+    xml.tag('IntDir', "$(ProjectName) - $(Configuration)\\", Condition = condition)
     if '/INCREMENTAL:NO' not in builder.compiler.linkflags and '/INCREMENTAL:NO' not in builder.compiler.postlink:
       xml.tag('LinkIncremental', 'true', Condition = condition)
     xml.tag('TargetName', builder.name_, Condition = condition)
@@ -219,6 +219,9 @@ def export_configuration_options(node, xml, builder):
     elif '/W4' in flags:
       xml.tag('WarningLevel', 'Level4')
 
+    if '/WX' in flags:
+      xml.tag('TreatWarningAsError', 'true')
+
     if '/Od' in flags:
       xml.tag('DebugInformationFormat', 'EditAndContinue')
     else:
@@ -268,8 +271,8 @@ def export_configuration_options(node, xml, builder):
       else:
         libs.append(Dep.resolve(node.context, builder, flag))
 
-    if '/WX' in flags:
-      xml.tag('TreatWarningsAsError', 'true')
+    if '/WX' in link_flags:
+      xml.tag('TreatLinkerWarningAsErrors', 'true')
 
     xml.tag('AdditionalDependencies', ';'.join(libs))
     xml.tag('OutputFile', '$(OutDir)$(TargetFileName)')

@@ -50,6 +50,13 @@ def Join(*nodes):
   return os.path.join(*paths)
 
 def IsSubPath(other, folder):
-  folder = os.path.normpath(folder) + os.sep
-  other = os.path.normpath(other) + os.sep
-  return other.startswith(folder)
+  other = os.path.abspath(other)
+  folder = os.path.abspath(folder)
+  relative = os.path.relpath(other, folder)
+  
+  if relative == os.curdir or relative.startswith(os.curdir + os.sep):
+    return True
+  elif relative == os.pardir or relative.startswith(os.pardir + os.sep):
+    return False
+  else:
+    return other.startswith(folder)
