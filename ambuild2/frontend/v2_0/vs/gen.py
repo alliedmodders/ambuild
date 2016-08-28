@@ -23,11 +23,12 @@ from ambuild2.frontend.v2_0.vs import cxx
 from ambuild2.frontend.v2_0.vs import nodes
 from ambuild2.frontend.v2_0.base import BaseGenerator
 
-SupportedVersions = ['10', '11', '12']
+SupportedVersions = ['10', '11', '12', '14']
 YearMap = {
   '2010': 10,
   '2012': 11,
   '2013': 12,
+  '2015': 14,
 }
 
 class Generator(BaseGenerator):

@@ -84,7 +84,7 @@ class Preparer(object):
       print('  {0:24} - Visual Studio'.format('vs'))
       print('')
       print('Extra options:')
-      print('  --vs-version=N        Visual Studio: IDE version (2010 or 10 default)')
+      print('  --vs-version=N        Visual Studio: IDE version (2015 or 14 default)')
       print('  --vs-split            Visual Studio: generate one project file per configuration')
       sys.exit(0)
 

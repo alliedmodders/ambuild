@@ -28,10 +28,12 @@ def export_fp(node, fp):
   xml = XmlBuilder(fp)
 
   version = node.project.compiler.version 
-  if version >= 1600 and version < 1800:
-    toolsVersion = '4.0'
-  elif version >= 1800:
+  if version >= 'msvc-1900':
+    toolsVersion = '14.0'
+  elif version >= 'msvc-1800':
     toolsVersion = '12.0'
+  elif version >= 'msvc-1600':
+    toolsVersion = '4.0'
 
   scope = xml.block('Project',
     DefaultTargets = 'Build',
@@ -95,10 +97,12 @@ def export_configuration_properties(node, xml):
         xml.tag('WholeProgramOptimization', 'true')
       
       version = builder.compiler.version
-      if version >= 1700 and version < 1800:
-        xml.tag('PlatformToolset', 'v110')
-      elif version >= 1800:
+      if version >= 'msvc-1900':
+        xml.tag('PlatformToolset', 'v140')
+      elif version >= 'msvc-1800':
         xml.tag('PlatformToolset', 'v120')
+      elif version >= 'msvc-1700':
+        xml.tag('PlatformToolset', 'v110')
 
 def export_configuration_user_props(node, xml):
   for builder in node.project.builders_:
@@ -258,10 +262,13 @@ def export_configuration_options(node, xml, builder):
       else:
         libs.append(Dep.resolve(node.context, builder, flag))
 
+    if '/WX' in flags:
+      xml.tag('TreatWarningsAsError', 'true')
+
     xml.tag('AdditionalDependencies', ';'.join(libs))
     xml.tag('OutputFile', '$(OutDir)$(TargetFileName)')
     xml.tag('IgnoreSpecificDefaultLibraries', ';'.join(ignore_libs))
-    if compiler.debuginfo is None:
+    if compiler.symbol_files is None:
       xml.tag('GenerateDebugInformation', 'false')
     else:
       xml.tag('GenerateDebugInformation', 'true')
@@ -280,10 +287,7 @@ def export_source_files(node, xml):
   all_builders = set()
   for builder in node.project.builders_:
     for source in builder.sources:
-      file = os.path.relpath(
-        paths.Join(node.context.currentSourcePath, source),
-        node.context.buildFolder
-      )
+      file = os.path.join(node.context.currentSourcePath, source)
       builders = files.setdefault(file, set())
       builders.add(builder)
     all_builders.add(builder)
