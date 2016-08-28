@@ -84,7 +84,7 @@ class Preparer(object):
       print('  {0:24} - Visual Studio'.format('vs'))
       print('')
       print('Extra options:')
-      print('  --vs-version=N        Visual Studio: IDE version (2010 or 10 default)')
+      print('  --vs-version=N        Visual Studio: IDE version (2015 or 14 default)')
       print('  --vs-split            Visual Studio: generate one project file per configuration')
       sys.exit(0)
 
@@ -107,7 +107,7 @@ class Preparer(object):
       )
       if os.path.exists(os.path.join(new_buildpath)):
         has_amb2 = os.path.exists(os.path.join(new_buildpath, '.ambuild2'))
-        if not has_amb2 and len(os.listdir(new_buildpath)):
+        if not has_amb2 and len(os.listdir(new_buildpath)) and options.generator == 'ambuild2':
           util.con_err(util.ConsoleRed, 'Tried to use ',
                        util.ConsoleBlue, objfolder,
                        util.ConsoleRed, ' as a build folder, but it is not empty!',

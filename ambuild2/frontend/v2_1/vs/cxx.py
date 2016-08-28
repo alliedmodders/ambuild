@@ -20,8 +20,9 @@ from ambuild2.frontend import paths
 from ambuild2.frontend.version import Version
 from ambuild2.frontend.v2_1.vs import nodes
 from ambuild2.frontend.v2_1.vs import export_vcxproj
-from ambuild2.frontend.v2_1.cpp import compilers
+from ambuild2.frontend.v2_1.cpp import compiler
 from ambuild2.frontend.v2_1.cpp import Dep, CppNodes
+from ambuild2.frontend.v2_1.cpp.msvc import MSVC
 
 class CompilerShell(object):
   def __init__(self, version):
@@ -86,37 +87,40 @@ class Project(object):
   def export(self, node):
     export_vcxproj.export(node)
 
-class Compiler(compilers.Compiler):
+class VisualStudio(MSVC):
   def __init__(self, version):
-    super(Compiler, self).__init__()
-    self.version_ = version
+    super(MSVC, self).__init__(version)
 
-    # For compatibility with older build scripts.
-    self.cc = CompilerShell(version)
-    self.cxx = CompilerShell(version)
+  def like(self, name):
+    return name == 'vs' or name == 'msvc'
+
+class Compiler(compiler.Compiler):
+  def __init__(self, vendor):
+    super(Compiler, self).__init__(vendor)
 
   def clone(self):
-    cc = Compiler(self.version)
+    cc = Compiler(self.vendor)
     cc.inherit(self)
     return cc
 
   @property
   def projectFileSuffix(self):
     # Assume the compiler version is related to the IDE version.
-    if self.version >= 1600:
+    if self.version >= 'msvc-1600':
       return '.vcxproj'
-    if self.version >= 1300:
+    if self.version >= 'msvc-1300':
       return '.vcproj'
-    # lol whatevs
-    return '.dsp'
-
-  @property
-  def version(self):
-    return self.version_
+    raise Exception('Unhandled version: {0}'.format(self.version))
 
   @staticmethod
   def GetVersionFromVS(vs_version):
-    return Version((vs_version * 100) + 600)
+    vs_version = int(vs_version)
+    msvc_version = (vs_version * 100) + 600
+
+    # Microsoft skipped version 13, of course.
+    if vs_version >= 14:
+      msvc_version -= 100
+    return msvc_version
 
   def ProgramProject(self, name):
     return Project(Program, self, name)
@@ -138,10 +142,6 @@ class Compiler(compilers.Compiler):
 
   def like(self, name):
     return name == 'msvc'
-
-  @property
-  def vendor(self):
-    return 'msvc'
 
 class BinaryBuilder(object):
   def __init__(self, project, compiler, name, tag):

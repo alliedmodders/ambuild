@@ -117,6 +117,8 @@ class Compiler(compilers.Compiler):
 
   @staticmethod
   def GetVersionFromVS(vs_version):
+    if vs_version >= 14:
+      return Version((vs_version * 100) + 500)
     return Version((vs_version * 100) + 600)
 
   def ProgramProject(self, name):
