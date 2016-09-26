@@ -41,6 +41,7 @@ setup(
     'ambuild2.frontend.v2_1.base',
     'ambuild2.frontend.v2_1.cpp',
     'ambuild2.frontend.v2_1.vs',
+    'ambuild2.frontend.v2_1.tools',
   ],
   scripts = scripts
 )
