@@ -611,7 +611,7 @@ class Generator(BaseGenerator):
     _, (cxxNode,) = self.addCommand(
       context = cx,
       weak_inputs = obj.sourcedeps,
-      inputs = [obj.sourceFile],
+      inputs = [obj.inputObj],
       outputs = [obj.outputFile],
       node_type = nodetypes.Cxx,
       folder = folder,
@@ -627,7 +627,7 @@ class Generator(BaseGenerator):
     _, (_, rcNode) = self.addCommand(
       context = cx,
       weak_inputs = obj.sourcedeps,
-      inputs = [obj.sourceFile],
+      inputs = [obj.inputObj],
       outputs = [obj.preprocFile, obj.outputFile],
       node_type = nodetypes.Rc,
       folder = folder,
@@ -759,6 +759,9 @@ class Generator(BaseGenerator):
         'type': dep_type,
         'argv': argv,
       }
+
+    if argv is None:
+      raise Exception('argv cannot be None')
 
     return self.addCommand(
       context = context,
