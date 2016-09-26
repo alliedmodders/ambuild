@@ -67,7 +67,6 @@ class FxcTool(object):
 
     sourceFile = cmd.ComputeSourcePath(source)
 
-    inputs = [sourceFile]
     argv = [
       'fxc',
       '/T', profile,
@@ -82,7 +81,7 @@ class FxcTool(object):
     folder = cmd.localFolderNode
 
     _, (output_node,) = cmd.context.AddCommand(
-      inputs = [source],
+      inputs = [sourceFile],
       argv = argv,
       outputs = [output_file],
       folder = cmd.localFolderNode,
