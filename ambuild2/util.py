@@ -479,3 +479,25 @@ else:
   class Orderable(CmpOrderable):
     pass
   compare = lambda a, b: (a > b) - (a < b)
+
+# Return the relative path from prefix_path to search_path, if search_path
+# begins with prefix_path.
+def RelPathIfCommon(search_path, prefix_path):
+  search_path = os.path.normpath(search_path)
+  prefix_path = os.path.normpath(prefix_path)
+
+  # relpath will assert on Windows if the drives don't match.
+  search_drive = os.path.splitdrive(search_path)[0]
+  prefix_drive = os.path.splitdrive(prefix_path)[0]
+  if search_drive.lower() != prefix_drive.lower():
+    # Different drives, can't possibly be in the same path.
+    return None
+
+  # If the relative path from prefix to search starts with a .., then we know
+  # there is no common folder because we had to leave the prefix path.
+  rel_path = os.path.relpath(search_path, prefix_path)
+  if rel_path.startswith('..'):
+    return None
+
+  assert not os.path.isabs(rel_path)
+  return rel_path
