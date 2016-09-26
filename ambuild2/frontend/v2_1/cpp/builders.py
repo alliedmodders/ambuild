@@ -153,7 +153,7 @@ class ObjectArgvBuilder(object):
     self.outputPath = outputPath
     self.localFolderNode = localFolderNode
 
-  def setCompiler(self, compiler):
+  def setCompiler(self, compiler, addl_include_dirs, addl_source_deps):
     self.vendor = compiler.vendor
     self.compiler = compiler
 
@@ -164,7 +164,7 @@ class ObjectArgvBuilder(object):
       self.cc_argv += self.vendor.debugInfoArgv
     self.cc_argv += compiler.c_only_flags
     self.cc_argv += [self.vendor.definePrefix + define for define in compiler.defines]
-    for include in compiler.includes:
+    for include in compiler.includes + addl_include_dirs:
       self.cc_argv += self.vendor.formatInclude(self.outputPath, include)
 
     # Set up the C++ compiler argv.
@@ -175,11 +175,11 @@ class ObjectArgvBuilder(object):
     self.cxx_argv += compiler.cxxflags
     self.cxx_argv += [self.vendor.definePrefix + define for define in compiler.defines]
     self.cxx_argv += [self.vendor.definePrefix + define for define in compiler.cxxdefines]
-    for include in compiler.includes + compiler.cxxincludes:
+    for include in compiler.includes + compiler.cxxincludes + addl_include_dirs:
       self.cxx_argv += self.vendor.formatInclude(self.outputPath, include)
 
     # Set up source dependencies.
-    self.sourcedeps += compiler.sourcedeps
+    self.sourcedeps += compiler.sourcedeps + addl_source_deps
 
   def buildItem(self, inputObj, sourceName, sourceFile):
     sourceNameSansExtension, extension = os.path.splitext(sourceName)
@@ -332,13 +332,10 @@ class BinaryBuilder(object):
     localFolder, outputFolder, outputPath = self.computeModuleFolders(cx, module)
     localFolderNode = cx.AddFolder(localFolder)
 
-    builder = ObjectArgvBuilder()
-    builder.setOutputs(localFolderNode, outputFolder, outputPath)
-    builder.setCompiler(module.compiler)
-
-    sources = module.sources[:]
+    must_include_builddir = False
 
     # Run custom tools attached to this module.
+    addl_source_deps = []
     for custom in module.custom:
       cmd = CustomToolCommand(
         cx = cx,
@@ -348,11 +345,25 @@ class BinaryBuilder(object):
       custom.tool.evaluate(cmd)
 
       # Integrate any additional outputs.
-      sources += cmd.sources
-      builder.sourcedeps += cmd.sourcedeps
+      module.sources += cmd.sources
+      if cmd.sourcedeps:
+        addl_source_deps += cmd.sourcedeps
+        must_include_builddir = True
+
+    # If custom tools run, they may place new headers in the objdir. For now
+    # we put them implicitly in the include path. We might need to make this
+    # explicit (or the path customizable) later.
+    if must_include_builddir:
+      addl_include_dirs = [outputPath]
+    else:
+      addl_include_dirs = []
+
+    builder = ObjectArgvBuilder()
+    builder.setOutputs(localFolderNode, outputFolder, outputPath)
+    builder.setCompiler(module.compiler, addl_include_dirs, addl_source_deps)
 
     # Parse all source file entries.
-    for entry in sources:
+    for entry in module.sources:
       if isinstance(entry, CustomSource):
         item = entry.source
         extra_weak_deps = entry.weak_deps

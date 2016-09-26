@@ -1,0 +1,25 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+builder.DetectCxx()
+
+shaders = builder.tools.FXC('shaders', 'my::stuff')
+shaders.listDefineName = 'SHADER_MAP'
+shaders.shaders += [
+  {
+    'source': 'code/image_vs.hlsl',
+    'variable': 'sImageVS',
+    'profile': 'vs_4_0',
+  },
+  {
+    'source': 'code/image_ps.hlsl',
+    'variable': 'sImagePS',
+    'profile': 'ps_4_0',
+  },
+]
+
+program = builder.cxx.Program('sample')
+program.sources += [
+  'code/include-shaders.cc',
+]
+program.custom += [shaders]
+builder.Add(program)

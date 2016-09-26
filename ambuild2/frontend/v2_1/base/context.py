@@ -16,6 +16,7 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
 import sys, copy
+from ambuild2.frontend.v2_1 import tools
 
 # AMBuild 2 scripts are parsed recursively. Each script is supplied with a
 # "builder" object, which maps to a Context object. Each script gets its own
@@ -95,6 +96,9 @@ class EmptyContext(BaseContext):
 class BuildContext(BaseContext):
   # This nonce is an input flag to AddCommand.
   ALWAYS_DIRTY = object()
+
+  # Provide an accessor so users don't have to import the v2_1 namespace.
+  tools = tools
 
   def __init__(self, generator, parent, vars, script, sourceFolder, buildFolder):
     super(BuildContext, self).__init__(generator, parent, vars, script)
