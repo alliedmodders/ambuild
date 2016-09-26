@@ -204,6 +204,8 @@ class WorkerChild(ChildProcessListener):
         out, deps = util.ParseMSVCDeps(self.vars, out)
       elif cc_type == 'sun':
         err, deps = util.ParseSunDeps(err)
+      elif cc_type == 'fxc':
+        out, deps = util.ParseFXCDeps(out)
       else:
         raise Exception('unknown compiler type')
 

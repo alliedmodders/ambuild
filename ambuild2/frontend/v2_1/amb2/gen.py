@@ -750,7 +750,7 @@ class Generator(BaseGenerator):
       data = argv
     else:
       node_type = nodetypes.Cxx
-      if dep_type not in ['gcc', 'msvc', 'sun']:
+      if dep_type not in ['gcc', 'msvc', 'sun', 'fxc']:
         util.con_err(util.ConsoleRed, 'Invalid dependency spew type: ',
                      util.ConsoleBlue, dep_type,
                      util.ConsoleNormal)

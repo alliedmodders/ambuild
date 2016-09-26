@@ -258,6 +258,28 @@ def ParseMSVCDeps(vars, out):
       new_text += line + '\n'
   return new_text, deps
 
+def ParseFXCDeps(out):
+  out = out.replace('\r\n', '\n')
+  out = out.replace('\r', '\n')
+
+  deps = []
+  new_text = ''
+  for line in out.split('\n'):
+    # The inclusion pattern is probably translated, but for now we ignore this possibilty.
+    m = re.match('Opening file \[.*\], stack top \[.*\]', line)
+    if m is not None:
+      continue
+    m = re.match('Current working dir \[.*\]', line)
+    if m is not None:
+      continue
+    m = re.match('Resolved to \[(.+)\]', line)
+    if m is not None:
+      deps.append(m.group(1).strip())
+      continue
+    new_text += line + '\n'
+
+  return new_text, deps
+
 def ParseSunDeps(text):
   deps = set()
   new_text = ''
