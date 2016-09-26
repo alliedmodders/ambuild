@@ -46,6 +46,7 @@ class BuilderProxy(object):
   def __init__(self, builder, compiler, name):
     self.constructor_ = builder.constructor_
     self.sources = builder.sources[:]
+    self.custom = builder.custom[:]
     self.compiler = compiler
     self.name_ = name
 
@@ -62,7 +63,7 @@ class BuilderProxy(object):
     return self.constructor_.type
 
   @staticmethod
-  def Dep(text, node=None): 
+  def Dep(text, node=None):
     return Dep(text, node)
 
 class Project(object):
@@ -74,11 +75,13 @@ class Project(object):
     self.sources = []
     self.proxies_ = []
     self.builders_ = []
+    self.custom = []
 
   def finish(self, cx):
     for task in self.proxies_:
       builder = task.constructor_(task.compiler, task.name_)
       builder.sources = task.sources
+      builder.custom = task.custom
       builder.finish(cx)
       self.builders_.append(builder)
 
@@ -98,32 +101,32 @@ def NameForObjectFile(file):
   return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
 
 class ObjectFileBase(object):
-  def __init__(self, folderNode, compiler, sourceFile, outputFile):
+  def __init__(self, parent, inputObj, outputFile):
     super(ObjectFileBase, self).__init__()
-    self.folderNode = folderNode
-    self.sourceFile = sourceFile
+    self.folderNode = parent.localFolderNode
+    self.inputObj = inputObj
     self.outputFile = outputFile
-    self.sourcedeps = compiler.sourcedeps
+    self.sourcedeps = parent.sourcedeps
 
   @property
   def type(self):
     raise Exception("Must be implemented!")
 
 class ObjectFile(ObjectFileBase):
-  def __init__(self, folderNode, compiler, sourceFile, outputFile, argv):
-    super(ObjectFile, self).__init__(folderNode, compiler, sourceFile, outputFile)
+  def __init__(self, parent, inputObj, outputFile, argv):
+    super(ObjectFile, self).__init__(parent, inputObj, outputFile)
     self.argv = argv
-    self.behavior = compiler.vendor.behavior
+    self.behavior = parent.compiler.vendor.behavior
 
   @property
   def type(self):
     return 'object'
 
 class RCFile(ObjectFileBase):
-  def __init__(self, folderNode, compiler, sourceFile, preprocFile, outputFile, cl_argv, rc_argv):
-    super(RCFile, self).__init__(folderNode, compiler, sourceFile, outputFile)
+  def __init__(self, parent, inputObj, preprocFile, outputFile, cl_argv, rc_argv):
+    super(RCFile, self).__init__(parent, inputObj, outputFile)
     self.preprocFile = preprocFile
-    self.cl_argv = cl_argv 
+    self.cl_argv = cl_argv
     self.rc_argv = rc_argv
 
   @property
@@ -143,6 +146,7 @@ class ObjectArgvBuilder(object):
     self.objects = []
     self.resources = []
     self.used_cxx = False
+    self.sourcedeps = []
 
   def setOutputs(self, localFolderNode, outputFolder, outputPath):
     self.outputFolder = outputFolder
@@ -174,15 +178,18 @@ class ObjectArgvBuilder(object):
     for include in compiler.includes + compiler.cxxincludes:
       self.cxx_argv += self.vendor.formatInclude(self.outputPath, include)
 
-  def buildItem(self, sourceName, sourceFile):
+    # Set up source dependencies.
+    self.sourcedeps += compiler.sourcedeps
+
+  def buildItem(self, inputObj, sourceName, sourceFile):
     sourceNameSansExtension, extension = os.path.splitext(sourceName)
     encodedName = NameForObjectFile(sourceNameSansExtension)
 
     if extension == '.rc':
-      return self.buildRcItem(sourceFile, encodedName)
-    return self.buildCxxItem(sourceFile, encodedName, extension)
+      return self.buildRcItem(inputObj, sourceFile, encodedName)
+    return self.buildCxxItem(inputObj, sourceFile, encodedName, extension)
 
-  def buildCxxItem(self, sourceFile, encodedName, extension):
+  def buildCxxItem(self, inputObj, sourceFile, encodedName, extension):
     if extension == '.c':
       argv = self.cc_argv[:]
     else:
@@ -191,9 +198,9 @@ class ObjectArgvBuilder(object):
     objectFile = encodedName + self.vendor.objSuffix
 
     argv += self.vendor.objectArgs(sourceFile, objectFile)
-    return ObjectFile(self.localFolderNode, self.compiler, sourceFile, objectFile, argv)
+    return ObjectFile(self, inputObj, objectFile, argv)
 
-  def buildRcItem(self, sourceFile, encodedName):
+  def buildRcItem(self, inputObj, sourceFile, encodedName):
     objectFile = encodedName + '.res'
 
     defines = self.compiler.defines + self.compiler.cxxdefines + self.compiler.rcdefines
@@ -210,9 +217,52 @@ class ObjectArgvBuilder(object):
       rc_argv += ['/i', self.vendor.IncludePath(objectFile, include)]
     rc_argv += ['/fo' + objectFile, sourceFile]
 
-    return RCFile(self.localFolderNode, self.compiler,
-                  sourceFile, encodedName + '.i', objectFile,
+    return RCFile(self,
+                  inputObj, encodedName + '.i', objectFile,
                   cl_argv, rc_argv)
+
+def ComputeSourcePath(context, localFolderNode, item):
+  # This is a path into the source tree.
+  if util.IsString(item):
+    if os.path.isabs(item):
+      sourceFile = item
+    else:
+      sourceFile = os.path.join(context.currentSourcePath, item)
+    return os.path.normpath(sourceFile)
+
+  # This is a node computed by a previous step. Compute a relative path.
+  return os.path.relpath(item.path, localFolderNode.path)
+
+class CustomSource(object):
+  def __init__(self, source, weak_deps=[]):
+    super(CustomSource, self).__init__()
+    self.source = source
+    self.weak_deps = weak_deps
+
+class CustomToolCommand(object):
+  def __init__(self, cx, module, localFolderNode, data):
+    super(CustomToolCommand, self).__init__()
+    self.context = cx
+    self.module_ = module
+    self.localFolderNode = localFolderNode
+    self.data = data
+    self.sources = []
+    self.sourcedeps = []
+
+  @property
+  def compiler(self):
+    return self.module_.compiler
+
+  @staticmethod
+  def NameForObjectFile(path):
+    return NameForObjectFile(path)
+
+  def ComputeSourcePath(self, path):
+    return ComputeSourcePath(self.module_.context, self.localFolderNode, path)
+
+  @staticmethod
+  def CustomSource(source, weak_deps = []):
+    return CustomSource(source, weak_deps)
 
 class Module(object):
   def __init__(self, context, compiler, name):
@@ -221,12 +271,14 @@ class Module(object):
     self.compiler = compiler
     self.name = name
     self.sources = []
+    self.custom = []
 
 class BinaryBuilder(object):
   def __init__(self, compiler, name):
     super(BinaryBuilder, self).__init__()
     self.compiler = compiler
     self.sources = []
+    self.custom = []
     self.name_ = name
     self.used_cxx_ = False
     self.linker_ = None
@@ -241,7 +293,7 @@ class BinaryBuilder(object):
 
   # Make an item that can be passed into linkflags/postlink but has an attached
   # dependency.
-  def Dep(self, text, node=None): 
+  def Dep(self, text, node=None):
     return Dep(text, node)
 
   # Create a sub-component of the binary.
@@ -284,15 +336,55 @@ class BinaryBuilder(object):
     builder.setOutputs(localFolderNode, outputFolder, outputPath)
     builder.setCompiler(module.compiler)
 
-    for item in module.sources:
-      if os.path.isabs(item):
-        sourceFile = item
+    sources = module.sources[:]
+
+    # Run custom tools attached to this module.
+    for custom in module.custom:
+      cmd = CustomToolCommand(
+        cx = cx,
+        module = module,
+        localFolderNode = localFolderNode,
+        data = custom)
+      custom.tool.evaluate(cmd)
+
+      # Integrate any additional outputs.
+      sources += cmd.sources
+      builder.sourcedeps += cmd.sourcedeps
+
+    # Parse all source file entries.
+    for entry in sources:
+      if isinstance(entry, CustomSource):
+        item = entry.source
+        extra_weak_deps = entry.weak_deps
       else:
-        sourceFile = os.path.join(module.context.currentSourcePath, item)
-      sourceFile = os.path.normpath(sourceFile)
+        item = entry
+        extra_weak_deps = None
 
-      self.objects.append(builder.buildItem(item, sourceFile))
+      sourceFile = ComputeSourcePath(module.context, localFolderNode, item)
 
+      # If the item is a string, use the computed source path as the dependent
+      # item. Otherwise, use the raw item, since it's probably an output from
+      # a precursor step.
+      #
+      # For the short-form name, which is used to compute an object file name,
+      # we use the given source string. If the item is a dependent step then
+      # use the path to its output.
+      if util.IsString(item):
+        inputObj = sourceFile
+        sourceName = item
+      else:
+        inputObj = item
+        sourceName = sourceFile
+
+      # Build the object we pass to the generator. Include any extra source deps
+      # if the file has extended requirements.
+      obj_item = builder.buildItem(inputObj, sourceName, sourceFile)
+      if extra_weak_deps is not None:
+        obj_item.sourcedeps += extra_weak_deps
+
+      self.objects.append(obj_item)
+
+    # Propagate the used_cxx bit.
     if builder.used_cxx:
       self.used_cxx_ = True
 
@@ -330,6 +422,7 @@ class BinaryBuilder(object):
     # Wrap sources into an initial module.
     root = Module(cx, self.compiler, 'root')
     root.sources = self.sources
+    root.custom = self.custom
     self.modules_.insert(0, root)
 
     # Prep shared outputs.
