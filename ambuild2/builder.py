@@ -161,6 +161,31 @@ class Builder(object):
         util.ConsoleNormal
       )
       return None
+
+    rel_to_objdir = util.RelPathIfCommon(path, self.cx.buildPath)
+    if rel_to_objdir:
+      entry = self.cx.db.query_path(rel_to_objdir)
+      if not entry:
+        util.con_err(
+          util.ConsoleRed,
+          'Encountered an error while computing new dependencies: ',
+          'A new dependent file was discovered, but it exists in the output folder, and ',
+          'no corresponding command creates this file. One of the followeing might have ',
+          'occurred: \n',
+          ' (1) The file was created outside of AMBuild, which is not supported.\n',
+          ' (2) The file was created by a custom AMBuild command, but was not specified as an output.\n',
+          util.ConsoleNormal
+        )
+        util.con_err(
+          util.ConsoleRed,
+          'Path: ',
+          util.ConsoleBlue,
+          rel_to_objdir,
+          util.ConsoleNormal
+        )
+        return None
+      return entry
+
     return self.cx.db.add_source(path)
 
   def discoverEntries(self, discovered_paths):
