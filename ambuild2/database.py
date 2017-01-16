@@ -107,7 +107,8 @@ class Database(object):
   def connect(self):
     assert not self.cn
     self.cn = sqlite3.connect(self.path)
-    self.cn.execute("PRAGMA journal_mode = WAL;")
+    with IsolationChange(self.cn, None):
+      self.cn.execute("PRAGMA journal_mode = WAL;")
     self.check_upgrade()
 
   def close(self):
@@ -765,7 +766,8 @@ class Database(object):
     entry.type = kind
 
   def vacuum(self):
-    self.cn.execute("vacuum")
+    with IsolationChange(self.cn, None):
+      self.cn.execute("vacuum")
 
   def printGraph(self):
     # Find all mkdir nodes.
@@ -785,3 +787,16 @@ class Database(object):
       self.printGraphNode(incoming, indent + 1)
     for incoming in self.query_dynamic_inputs(node):
       self.printGraphNode(incoming, indent + 1)
+
+# Helper for Python 3.6 compatibility changes.
+class IsolationChange(object):
+  def __init__(self, cn, level):
+    self.cn = cn
+    self.level = level
+
+  def __enter__(self):
+    self.old_level = self.cn.isolation_level
+    self.cn.isolation_level = self.level
+
+  def __exit__(self, type, value, traceback):
+    self.cn.isolation_level = self.old_level
