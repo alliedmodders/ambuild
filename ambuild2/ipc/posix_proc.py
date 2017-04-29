@@ -41,7 +41,10 @@ def Align(n, a):
   return (n + a - 1) & ~(a - 1)
 
 if util.IsMac():
-  sLibC = ctypes.CDLL('libc.dylib', use_errno=True)
+  try:
+    sLibC = ctypes.CDLL('libc.dylib', use_errno=True)
+  except:
+    sLibC = ctypes.CDLL('/usr/lib/libc.dylib', use_errno=True)
 
   posix_spawn_file_actions_t = ctypes.c_void_p
   pid_t = ctypes.c_int
