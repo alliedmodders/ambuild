@@ -110,7 +110,7 @@ def DetectEmscripten(env, var):
   # Run emcc -dM -E on a blank file to get preprocessor definitions.
   with tempfile.NamedTemporaryFile(suffix = suffix, delete = True) as fp:
     argv = cmd.split() + ['-dM', '-E', fp.name]
-    output = subprocess.check_output(args = argv)
+    output = subprocess.check_output(args = argv, universal_newlines = True)
   output = output.replace('\r', '')
   lines = output.split('\n')
 
