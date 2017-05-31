@@ -20,7 +20,7 @@ from ambuild2 import util
 
 # Poor abstraction - vendor object should encapsulate logic to avoid instanceof
 # checks. For now, we just import the name.
-from ambuild2.frontend.v2_0.cpp.vendors import MSVC, CompatGCC
+from ambuild2.frontend.v2_0.cpp.vendors import MSVC, CompatGCC, Emscripten
 
 class Dep(object):
   def __init__(self, text, node):
@@ -392,6 +392,8 @@ class StaticLibrary(BinaryBuilder):
   def generateBinary(self, cx, files):
     if isinstance(self.linker_, MSVC):
       argv = ['lib.exe', '/OUT:' + self.outputFile]
+    elif isinstance(self.linker_, Emscripten):
+      argv = ['llvm-ar', 'rcs', self.outputFile]
     else:
       argv = ['ar', 'rcs', self.outputFile]
     argv += files
