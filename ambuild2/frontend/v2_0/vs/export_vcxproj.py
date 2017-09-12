@@ -1,17 +1,17 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
 #
 # This file is part of AMBuild.
-# 
+#
 # AMBuild is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # AMBuild is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os, re
@@ -27,7 +27,7 @@ def export(node):
 def export_fp(node, fp):
   xml = XmlBuilder(fp)
 
-  version = node.project.compiler.version 
+  version = node.project.compiler.version
   if version >= 1900:
     toolsVersion = '14.0'
   elif version >= 1800:
@@ -95,7 +95,7 @@ def export_configuration_properties(node, xml):
       xml.tag('CharacterSet', 'MultiByte')
       if '/GL' in builder.compiler.cxxflags:
         xml.tag('WholeProgramOptimization', 'true')
-      
+
       version = builder.compiler.version
       if version >= 1900:
         xml.tag('PlatformToolset', 'v140')
@@ -113,7 +113,7 @@ def export_configuration_user_props(node, xml):
         Condition = "exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')",
         Label = "LocalAppDataPlatform"
       )
-      
+
 def export_configuration_paths(node, xml):
   for builder in node.project.builders_:
     condition = condition_for(builder)
@@ -292,6 +292,15 @@ def export_source_files(node, xml):
       builders.add(builder)
     all_builders.add(builder)
 
+  headers = {}
+  if hasattr(node.project, 'headers'):
+    for header in node.project.headers:
+      file = os.path.relpath(
+        paths.Join(node.context.currentSourcePath, header),
+        node.context.buildFolder
+      )
+      headers.setdefault(file, set())
+
   def emit(file, kind):
     builders = files[file]
     excluded = all_builders - builders
@@ -316,3 +325,7 @@ def export_source_files(node, xml):
       _, ext = os.path.splitext(file)
       if ext == '.rc':
         emit(file, 'ResourceCompile')
+
+  with xml.block('ItemGroup'):
+    for header in headers:
+      xml.tag('ClInclude', Include = header)
