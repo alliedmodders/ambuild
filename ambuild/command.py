@@ -1,7 +1,9 @@
 # vim: set ts=2 sw=2 tw=99 noet: 
 import os
+import sys
 import shutil
 import subprocess
+import ambuild.osutil as osutil
 
 class Command:
 	def __init__(self):
@@ -42,8 +44,8 @@ class ShellCommand(Command):
 			       'shell':  True }
 		p = subprocess.Popen(**args)
 		stdout, stderr = p.communicate()
-		self.stdout = stdout.decode()
-		self.stderr = stderr.decode()
+		self.stdout = osutil.DecodeConsoleText(sys.stdout, stdout)
+		self.stderr = osutil.DecodeConsoleText(sys.stderr, stderr)
 		if p.returncode != 0:
 			raise Exception('terminated with non-zero exitcode {0}'.format(p.returncode))
 
@@ -66,8 +68,8 @@ class DirectCommand(Command):
 			args['executable'] = self.exe
 		p = subprocess.Popen(**args)
 		stdout, stderr = p.communicate()
-		self.stdout = stdout.decode()
-		self.stderr = stderr.decode()
+		self.stdout = osutil.DecodeConsoleText(sys.stdout, stdout)
+		self.stderr = osutil.DecodeConsoleText(sys.stderr, stderr)
 		if p.returncode != 0:
 			raise Exception('failure: program terminated with non-zero exitcode {0}'.format(p.returncode))
 
@@ -81,8 +83,8 @@ def RunDirectCommand(runner, argv, exe = None):
 		argv['executable'] = exe
 	p = subprocess.Popen(**args)
 	stdout, stderr = p.communicate()
-	p.stdoutText = stdout.decode()
-	p.stderrText = stderr.decode()
+	p.stdoutText = osutil.DecodeConsoleText(sys.stdout, stdout)
+	p.stderrText = osutil.DecodeConsoleText(sys.stderr, stderr)
 	p.realout = stdout
 	p.realerr = stderr
 	return p
