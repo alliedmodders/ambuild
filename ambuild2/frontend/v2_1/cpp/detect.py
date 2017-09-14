@@ -200,7 +200,7 @@ int main()
   if vendor == 'gcc':
     v = GCC(version)
   elif vendor == 'apple-clang':
-    v = Clang(version, 'apple-clang')
+    v = Clang(version, 'apple')
   elif vendor == 'clang':
     v = Clang(version)
   elif vendor == 'msvc':
