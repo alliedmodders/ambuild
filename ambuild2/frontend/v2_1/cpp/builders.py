@@ -49,14 +49,11 @@ class BuilderProxy(object):
     self.custom = builder.custom[:]
     self.compiler = compiler
     self.name_ = name
+    self.localFolder = name
 
   @property
   def outputFile(self):
     return self.constructor_.buildName(self.compiler, self.name_)
-
-  @property
-  def localFolder(self):
-    return self.name_
 
   @property
   def type(self):
@@ -283,6 +280,7 @@ class BinaryBuilder(object):
     self.used_cxx_ = False
     self.linker_ = None
     self.modules_ = []
+    self.localFolder = name
 
   @property
   def outputFile(self):
@@ -304,11 +302,6 @@ class BinaryBuilder(object):
       name = name)
     self.modules_.append(module)
     return module
-
-  # The folder we'll be in, relative to our build context.
-  @property
-  def localFolder(self):
-    return self.name_
 
   # Exposed only for frontends.
   @property
