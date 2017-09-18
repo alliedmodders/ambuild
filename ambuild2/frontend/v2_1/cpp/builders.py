@@ -77,6 +77,7 @@ class Project(object):
   def finish(self, cx):
     for task in self.proxies_:
       builder = task.constructor_(task.compiler, task.name_)
+      builder.localFolder = task.localFolder
       builder.sources = task.sources
       builder.custom = task.custom
       builder.finish(cx)
