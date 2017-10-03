@@ -50,7 +50,7 @@ CompilerSearch = {
   }
 }
 
-def DetectCxx(target, env):
+def DetectCxx(target, env, options):
   cc = DetectCxxCompiler(env, 'CC')
   cxx = DetectCxxCompiler(env, 'CXX')
 
@@ -70,7 +70,7 @@ def DetectCxx(target, env):
   # :TODO: Check that the arch is == to target. We don't do this yet since
   # on Windows we can't use platform.architecture().
 
-  return compiler.CliCompiler(cxx.vendor, cc.argv, cxx.argv)
+  return compiler.CliCompiler(cxx.vendor, cc.argv, cxx.argv, options)
 
 def DetectCxxCompiler(env, var):
   if var in env:
