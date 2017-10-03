@@ -52,11 +52,14 @@ class Compiler(object):
     'weaklinkdeps',
   ]
 
-  def __init__(self, vendor):
+  def __init__(self, vendor, options = None):
     self.vendor = vendor
     for attr in self.attrs_:
       setattr(self, attr, [])
-    self.symbol_files = 'bundled'
+    if getattr(options, 'symbol_files', False):
+      self.symbol_files = 'separate'
+    else:
+      self.symbol_files = 'bundled'
 
   def inherit(self, other):
     for attr in self.attrs_:
@@ -135,8 +138,8 @@ class Compiler(object):
     return builders.Dep(text, node)
 
 class CliCompiler(Compiler):
-  def __init__(self, vendor, cc_argv, cxx_argv):
-    super(CliCompiler, self).__init__(vendor)
+  def __init__(self, vendor, cc_argv, cxx_argv, options = None):
+    super(CliCompiler, self).__init__(vendor, options)
     self.cc_argv = cc_argv
     self.cxx_argv = cxx_argv
     self.found_pkg_config_ = False
