@@ -24,11 +24,6 @@ from ambuild2.frontend.v2_1.cpp import compiler
 from ambuild2.frontend.v2_1.cpp import Dep, CppNodes
 from ambuild2.frontend.v2_1.cpp.msvc import MSVC
 
-class CompilerShell(object):
-  def __init__(self, version):
-    self.version = version
-    self.name = 'msvc'
-
 class Project(object):
   def __init__(self, ctor, compiler, name):
     self.ctor_ = ctor
