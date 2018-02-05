@@ -29,6 +29,9 @@ class CompilerShell(object):
     self.behavior = 'msvc'
     self.name = 'msvc'
 
+  def like(self, name):
+    return name == self.name
+
 class Project(object):
   def __init__(self, ctor, compiler, name):
     self.ctor_ = ctor
