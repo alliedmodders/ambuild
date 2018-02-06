@@ -31,6 +31,10 @@ class CommandAndVendor(object):
     self.arch = None
 
 def FindCompiler(env, mode, cmd):
+  if "EMSCRIPTEN" in os.environ and cmd[:2] == 'em':
+    result = TryVerifyCompiler(env, mode, cmd, 'emscripten')
+    if result is not None:
+      return result
   if util.IsWindows():
     result = TryVerifyCompiler(env, mode, cmd, 'msvc')
     if result is not None:
@@ -153,10 +157,15 @@ int main()
 }
 """)
   file.close()
-  if mode == 'CC':
-    executable = 'test' + util.ExecutableSuffix
-  elif mode == 'CXX':
-    executable = 'testp' + util.ExecutableSuffix
+
+  executable = 'test'
+  if mode == 'CXX':
+    executable += 'p'
+  if assumed_family == 'emscripten':
+    argv += ['-s', 'NO_EXIT_RUNTIME=0']
+    executable += '.js'
+  else:
+    util.ExecutableSuffix
 
   # Make sure the exe is gone.
   if os.path.exists(executable):
@@ -186,8 +195,14 @@ int main()
   if assumed_family == 'msvc':
     inclusion_pattern = MSVC.DetectInclusionPattern(p.stdoutText)
 
-  exe = util.MakePath('.', executable)
-  p = util.CreateProcess([executable], executable = exe)
+  executable_argv = [executable]
+  if assumed_family == 'emscripten':
+    exe = 'node'
+    executable_argv[0:0] = [exe]
+  else:
+    exe = util.MakePath('.', executable)
+
+  p = util.CreateProcess(executable_argv, executable = exe)
   if p == None:
     raise Exception('failed to create executable with {0}'.format(cmd))
   if util.WaitForProcess(p) != 0:
