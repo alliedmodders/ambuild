@@ -21,7 +21,7 @@ import subprocess
 from ambuild2 import util
 from ambuild2.frontend.v2_1.cpp import vendor, compiler
 from ambuild2.frontend.v2_1.cpp.msvc import MSVC
-from ambuild2.frontend.v2_1.cpp.gcc import GCC, Clang
+from ambuild2.frontend.v2_1.cpp.gcc import GCC, Clang, Emscripten
 from ambuild2.frontend.v2_1.cpp.sunpro import SunPro
 
 class CommandAndVendor(object):
@@ -119,6 +119,8 @@ int main()
 {
 #if defined __ICC
   printf("icc %d\\n", __ICC);
+#elif defined(__EMSCRIPTEN__)
+  printf("emscripten %d.%d\\n", __clang_major__, __clang_minor__);
 #elif defined __clang__
 # if defined(__clang_major__) && defined(__clang_minor__)
 #  if defined(__apple_build_version__)
@@ -199,6 +201,8 @@ int main()
   vendor, version = lines[0].split(' ')
   if vendor == 'gcc':
     v = GCC(version)
+  elif vendor == 'emscripten':
+    v = Emscripten(version)
   elif vendor == 'apple-clang':
     v = Clang(version, 'apple')
   elif vendor == 'clang':
