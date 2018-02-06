@@ -21,7 +21,7 @@ import subprocess
 from ambuild2 import util
 from ambuild2.frontend.v2_1.cpp import vendor, compiler
 from ambuild2.frontend.v2_1.cpp.msvc import MSVC
-from ambuild2.frontend.v2_1.cpp.gcc import GCC, Clang
+from ambuild2.frontend.v2_1.cpp.gcc import GCC, Clang, Emscripten
 from ambuild2.frontend.v2_1.cpp.sunpro import SunPro
 
 class CommandAndVendor(object):
@@ -31,6 +31,10 @@ class CommandAndVendor(object):
     self.arch = None
 
 def FindCompiler(env, mode, cmd):
+  if "EMSCRIPTEN" in os.environ and cmd[:2] == 'em':
+    result = TryVerifyCompiler(env, mode, cmd, 'emscripten')
+    if result is not None:
+      return result
   if util.IsWindows():
     result = TryVerifyCompiler(env, mode, cmd, 'msvc')
     if result is not None:
@@ -119,6 +123,8 @@ int main()
 {
 #if defined __ICC
   printf("icc %d\\n", __ICC);
+#elif defined(__EMSCRIPTEN__)
+  printf("emscripten %d.%d\\n", __clang_major__, __clang_minor__);
 #elif defined __clang__
 # if defined(__clang_major__) && defined(__clang_minor__)
 #  if defined(__apple_build_version__)
@@ -151,10 +157,15 @@ int main()
 }
 """)
   file.close()
-  if mode == 'CC':
-    executable = 'test' + util.ExecutableSuffix
-  elif mode == 'CXX':
-    executable = 'testp' + util.ExecutableSuffix
+
+  executable = 'test'
+  if mode == 'CXX':
+    executable += 'p'
+  if assumed_family == 'emscripten':
+    argv += ['-s', 'NO_EXIT_RUNTIME=0']
+    executable += '.js'
+  else:
+    executable += util.ExecutableSuffix
 
   # Make sure the exe is gone.
   if os.path.exists(executable):
@@ -184,8 +195,14 @@ int main()
   if assumed_family == 'msvc':
     inclusion_pattern = MSVC.DetectInclusionPattern(p.stdoutText)
 
-  exe = util.MakePath('.', executable)
-  p = util.CreateProcess([executable], executable = exe)
+  executable_argv = [executable]
+  if assumed_family == 'emscripten':
+    exe = 'node'
+    executable_argv[0:0] = [exe]
+  else:
+    exe = util.MakePath('.', executable)
+
+  p = util.CreateProcess(executable_argv, executable = exe)
   if p == None:
     raise Exception('failed to create executable with {0}'.format(cmd))
   if util.WaitForProcess(p) != 0:
@@ -199,6 +216,8 @@ int main()
   vendor, version = lines[0].split(' ')
   if vendor == 'gcc':
     v = GCC(version)
+  elif vendor == 'emscripten':
+    v = Emscripten(version)
   elif vendor == 'apple-clang':
     v = Clang(version, 'apple')
   elif vendor == 'clang':

@@ -102,3 +102,35 @@ class Clang(GCCLookalike):
   @property
   def debugInfoArgv(self):
     return ['-g3']
+
+class Emscripten(Clang):
+  def __init__(self, version):
+    # Set this first, since the constructor will need it.
+    super(Emscripten, self).__init__(version, 'emscripten')
+
+  def nameForExecutable(self, name):
+    return name + '.js'
+
+  def nameForSharedLibrary(self, name):
+    return name + '.bc'
+
+  def nameForStaticLibrary(self, name):
+    return util.StaticLibPrefix + name + '.a'
+
+  @property
+  def name(self):
+    return 'emscripten'
+
+  @property
+  def family(self):
+    return 'emscripten'
+
+  def like(self, name):
+    return name == 'gcc' or name == 'clang' or name == 'emscripten-clang' or name == 'emscripten'
+
+  @property
+  def debugInfoArgv(self):
+    return ['-g3']
+
+  def staticLinkArgv(self, files, outputFile):
+    return ['emar', 'rcs', outputFile] + files
