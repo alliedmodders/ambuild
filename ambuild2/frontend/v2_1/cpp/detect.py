@@ -165,7 +165,7 @@ int main()
     argv += ['-s', 'NO_EXIT_RUNTIME=0']
     executable += '.js'
   else:
-    util.ExecutableSuffix
+    executable += util.ExecutableSuffix
 
   # Make sure the exe is gone.
   if os.path.exists(executable):
