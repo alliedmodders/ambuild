@@ -27,8 +27,10 @@ def export(node):
 def export_fp(node, fp):
   xml = XmlBuilder(fp)
 
-  version = node.project.compiler.version 
-  if version >= 'msvc-1900':
+  version = node.project.compiler.version
+  if version >= 'msvc-1910':
+    toolsVersion = '15.0'
+  elif version >= 'msvc-1900':
     toolsVersion = '14.0'
   elif version >= 'msvc-1800':
     toolsVersion = '12.0'
@@ -51,6 +53,8 @@ def export_body(node, xml):
     xml.tag('ProjectGuid', '{{{0}}}'.format(node.uuid))
     xml.tag('RootNamespace', node.project.name_)
     xml.tag('Keyword', 'Win32Proj')
+    if node.project.compiler.version >= 'msvc-1910':
+      xml.tag('WindowsTargetPlatformVersion', os.getenv('WindowsSDKVersion', None).rstrip('\\'))
 
   xml.tag('Import', Project = '$(VCTargetsPath)\Microsoft.Cpp.Default.props')
   export_configuration_properties(node, xml)
@@ -97,7 +101,9 @@ def export_configuration_properties(node, xml):
         xml.tag('WholeProgramOptimization', 'true')
       
       version = builder.compiler.version
-      if version >= 'msvc-1900':
+      if version >= 'msvc-1910':
+        xml.tag('PlatformToolset', 'v141')
+      elif version >= 'msvc-1900':
         xml.tag('PlatformToolset', 'v140')
       elif version >= 'msvc-1800':
         xml.tag('PlatformToolset', 'v120')
