@@ -115,6 +115,9 @@ class Compiler(compiler.Compiler):
     # Microsoft skipped version 13, of course.
     if vs_version >= 14:
       msvc_version -= 100
+    # In VS 2017, the numbering continues from 1910
+    if vs_version == 15:
+      msvc_version = 1910
     return msvc_version
 
   def ProgramProject(self, name):
