@@ -295,33 +295,17 @@ class CompileCommand(command.Command):
 		self.vendor = info
 
 	def run(self, runner, job):
+		p = command.RunDirectCommand(runner, self.argv)
+		self.stdout = p.stdoutText
+		self.stderr = p.stderrText
+
 		if isinstance(self.vendor, CompatGCC):
-			p = command.RunDirectCommand(runner, self.argv)
-			self.stdout = p.stdoutText
-			self.stderr = p.stderrText
-			if p.returncode != 0:
-				raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
 			deps = self.ParseDepsGCC()
-
 		elif isinstance(self.vendor, MSVC):
-			runner.PrintOut(' '.join([i for i in self.argv]))
-			p = subprocess.Popen(self.argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-			out, err = p.communicate()
-			out = osutil.DecodeConsoleText(sys.stdout, out)
-			self.stderr = osutil.DecodeConsoleText(sys.stderr, err)
+			deps = self.ParseDepsMSVC()
 
-			deps = []
-			self.stdout = ''
-			for line in out.split('\n'):
-				m = re.match('Note: including file:\s+(.+)$', line)
-				if m != None:
-					file = m.groups()[0].strip()
-					deps.append(file)
-				else:
-					self.stdout += line
-
-			if p.returncode != 0:
-				raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
+		if p.returncode != 0:
+			raise Exception('terminated with non-zero return code {0}'.format(p.returncode))
 
 		job.CacheVariable(self.objFile, deps)
 	
@@ -359,6 +343,20 @@ class CompileCommand(command.Command):
 			if not strip and i != '':
 					newtext += i + '\n'
 		self.stderr = newtext
+		return deps
+
+	def ParseDepsMSVC(self):
+		newtext = ''
+		lines = re.split('\n+', self.stdout)
+		deps = []
+		for i in lines:
+			m = re.match('Note: including file:\s+(.+)$', i)
+			if m != None:
+				file = m.groups()[0].strip()
+				deps.append(file)
+			elif i != '':
+				newtext += i + '\n'
+		self.stdout = newtext
 		return deps
 
 def FileExists(file):
