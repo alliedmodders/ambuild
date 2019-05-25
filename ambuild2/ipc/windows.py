@@ -195,11 +195,12 @@ class NamedPipe(Channel):
 
     messages = []
 
-    message = self.receive_bytes(nbytes)
+    self.input_overflow += self.input_buffer[:nbytes]
+    message = self.process_message()
     if message:
       messages.append(message)
       while True:
-        message = self.seek_remaining_message()
+        message = self.process_message()
         if not message:
           break
         messages.append(message)
@@ -218,55 +219,8 @@ class NamedPipe(Channel):
       return
     self.post_read()
 
-  # Process newly received bytes.
-  def receive_bytes(self, nbytes):
-    total_length = len(self.input_overflow) + nbytes
-
-    # Do we have enough for a message prefix?
-    if total_length < 4:
-      self.input_overflow += self.input_buffer
-      return None
-
-    # Get the message prefix.
-    msg_prefix = self.input_overflow[0:kPrefixLength]
-    if len(msg_prefix) < kPrefixLength:
-      start = len(msg_prefix)
-      end = kPrefixLength - start
-      msg_prefix = self.input_buffer[start:end]
-
-    # See if we have enough bytes to cover the message.
-    msg_size, = struct.unpack('i', bytes(msg_prefix))
-    if total_length - kPrefixLength < msg_size:
-      self.input_overflow += self.input_buffer
-      return None
-
-    # This is a horrible amount of copying... maybe consider using a deque
-    # of bytes or something if it's a performance problem.
-    if not len(self.input_overflow):
-      message = util.pickle.loads(
-          bytes(self.input_buffer[kPrefixLength : kPrefixLength + msg_size])
-      )
-      self.input_overflow += self.input_buffer[kPrefixLength + msg_size : nbytes]
-    else:
-      # Steal remaining bytes from the input buffer, if needed.
-      if len(self.input_overflow) < kPrefixLength + msg_size:
-        msg_remaining = kPrefixLength + msg_size - len(self.input_overflow)
-        self.input_overflow += self.input_buffer[:msg_remaining]
-      else:
-        msg_remaining = 0
-
-      message = util.pickle.loads(
-        bytes(self.input_overflow[kPrefixLength : kPrefixLength + msg_size])
-      )
-
-      # Adjust the input buffer.
-      del self.input_overflow[0 : kPrefixLength + msg_size]
-      self.input_overflow += self.input_buffer[msg_remaining : nbytes]
-
-    return message
-
-  # Process any remaining messages.
-  def seek_remaining_message(self):
+  # Process a message in the overflow buffer
+  def process_message(self):
     if len(self.input_overflow) < kPrefixLength:
       return None
 
