@@ -334,6 +334,10 @@ if IsUnixy():
 elif IsWindows():
   def SwitchColor(fp, color):
     from ambuild2.ipc import winapi
+    
+    # Ensure previously colored text is flushed before changing colors again. Otherwise text may
+    # not be colored as expected
+    fp.flush()
 
     std = None
     if fp == sys.stdout:
