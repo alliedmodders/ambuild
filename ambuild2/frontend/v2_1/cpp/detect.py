@@ -31,7 +31,7 @@ class CommandAndVendor(object):
     self.arch = None
 
 def FindCompiler(env, mode, cmd):
-  if "EMSCRIPTEN" in os.environ and cmd[:2] == 'em':
+  if "EMSDK" in os.environ and cmd[:2] == 'em':
     result = TryVerifyCompiler(env, mode, cmd, 'emscripten')
     if result is not None:
       return result
