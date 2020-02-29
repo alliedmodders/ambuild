@@ -105,11 +105,13 @@ def TryVerifyCompiler(env, mode, cmd, assumed_family):
     return None
 
 def VerifyCompiler(env, mode, cmd, assumed_family):
-  argv = cmd.split()
+  base_argv = cmd.split()
   if 'CFLAGS' in env:
-    argv.extend(env['CFLAGS'].split())
+    base_argv.extend(env['CFLAGS'].split())
   if mode == 'CXX' and 'CXXFLAGS' in env:
-    argv.extend(env['CXXFLAGS'].split())
+    base_argv.extend(env['CXXFLAGS'].split())
+
+  argv = base_argv[:]
   if mode == 'CXX':
     filename = 'test.cpp'
   else:
@@ -236,4 +238,4 @@ int main()
     'found {0} version {1}'.format(vendor, version),
     util.ConsoleNormal
   )
-  return CommandAndVendor(cmd.split(), v)
+  return CommandAndVendor(base_argv, v)
