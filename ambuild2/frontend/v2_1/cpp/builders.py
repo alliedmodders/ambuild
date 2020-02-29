@@ -466,6 +466,12 @@ class BinaryBuilder(object):
         self.linker_outputs += [self.name_ + '.lib']
         self.linker_outputs += [self.name_ + '.exp']
 
+    if self.linker_.like('emscripten'):
+      if isinstance(self, Program):
+        # This might not be correct if the user is actually still using asm.js,
+        # we would need to look for `-s WASM=0` in the linker args to check.
+        self.linker_outputs += [self.name_ + '.wasm']
+
     if self.compiler.symbol_files == 'separate':
       self.perform_symbol_steps(cx)
 

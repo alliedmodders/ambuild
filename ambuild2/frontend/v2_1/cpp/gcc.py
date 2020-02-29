@@ -130,7 +130,7 @@ class Emscripten(Clang):
 
   @property
   def debugInfoArgv(self):
-    return ['-g3']
+    return []
 
   def staticLinkArgv(self, files, outputFile):
     return ['emar', 'rcs', outputFile] + files
