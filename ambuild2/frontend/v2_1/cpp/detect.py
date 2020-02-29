@@ -162,7 +162,6 @@ int main()
   if mode == 'CXX':
     executable += 'p'
   if assumed_family == 'emscripten':
-    argv += ['-s', 'NO_EXIT_RUNTIME=0']
     executable += '.js'
   else:
     executable += util.ExecutableSuffix
