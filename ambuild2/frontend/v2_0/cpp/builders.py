@@ -188,8 +188,10 @@ class BinaryBuilder(object):
 
     shared_cc_outputs = []
     if self.compiler.debug_symbols and self.compiler.cc.behavior == 'msvc':
-      cl_version = int(self.compiler.cc.version) - 600
-      shared_pdb = 'vc{0}.pdb'.format(int(cl_version / 10))
+      cl_version = (int(int(self.compiler.cc.version) / 100) - 6) * 10
+      if cl_version >= 130:
+        cl_version += 10
+      shared_pdb = 'vc{0}.pdb'.format(cl_version)
       shared_cc_outputs += [shared_pdb]
 
     self.objects = []

@@ -126,5 +126,17 @@ class MSVC(Vendor):
   ##
   @property
   def shared_pdb_name(self):
-    cl_version = int(self.version_string) - 600
-    return 'vc{0}.pdb'.format(int(cl_version / 10))
+    cl_version = int(self.version_string)
+
+    # Truncate down to the major version then correct the offset
+    # There is some evidence that the first digit of the minor version can be used for the PDB, but I can't reproduce it
+    cl_version = int(cl_version / 100) - 6
+
+    # Microsoft introduced a discontinuity with vs2015
+    if cl_version >= 13:
+      cl_version += 1
+
+    # Pad it back out again
+    cl_version *= 10
+
+    return 'vc{0}.pdb'.format(cl_version)
