@@ -16,7 +16,9 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import copy
 import subprocess
+import sys
 from ambuild2.frontend.v2_1.cpp import builders
+from ambuild2 import util
 
 # Base compiler object.
 class Compiler(object):
@@ -170,6 +172,7 @@ class CliCompiler(Compiler):
   @staticmethod
   def run_pkg_config(argv):
     output = subprocess.check_output(args = ['pkg-config'] + argv)
+    output = util.DecodeConsoleText(sys.stdout, output)
     return [item.strip() for item in output.strip().split(' ') if item.strip() != '']
 
   # Helper for running pkg-config.
