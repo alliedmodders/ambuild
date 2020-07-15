@@ -133,7 +133,6 @@ def BuildParser(sourcePath, api, buildPath=None):
   Preparer = PreparerForAPI(api)
   return Preparer(sourcePath=sourcePath, buildPath=buildPath)
 
-
 def cli_run():
   options, argv = BuildOptions()
 
