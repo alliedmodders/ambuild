@@ -132,3 +132,23 @@ def BuildParser(sourcePath, api, buildPath=None):
 
   Preparer = PreparerForAPI(api)
   return Preparer(sourcePath=sourcePath, buildPath=buildPath)
+
+
+def cli_run():
+  options, argv = BuildOptions()
+
+  if not len(argv):
+    folder = '.'
+  else:
+    folder = argv[0]
+    if not os.path.exists(folder):
+      sys.stderr.write('Error: path does not exist: {0}\n'.format(folder))
+      sys.exit(1)
+
+  cache_path = os.path.join(folder, '.ambuild2', 'graph')
+  if not os.path.exists(cache_path):
+    sys.stderr.write('Error: folder was not configured for AMBuild.\n')
+    sys.exit(1)
+
+  if not Build(os.path.abspath(folder), options, argv):
+    sys.exit(1)
