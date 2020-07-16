@@ -28,6 +28,7 @@ setup(
       'ambuild = ambuild2.run:cli_run'
     ]
   },
-  scripts=amb_scripts
+  scripts=amb_scripts,
+  zip_safe=False
 )
 
