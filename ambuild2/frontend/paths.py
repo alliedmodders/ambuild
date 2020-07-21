@@ -50,6 +50,13 @@ def Join(*nodes):
   return os.path.join(*paths)
 
 def IsSubPath(other, folder):
-  folder = os.path.normpath(folder) + os.sep
-  other = os.path.normpath(other) + os.sep
-  return other.startswith(folder)
+  other = os.path.abspath(other)
+  folder = os.path.abspath(folder)
+
+  relative = os.path.relpath(other, folder)
+  if relative.startswith(os.pardir): # Short-circuit on '..' -OR- '../', this is always pointing outside of "folder".
+    return False
+  elif relative.startswith(os.curdir): # Short-circuit on '.' -OR- './', this is always pointing to a child item.
+    return True
+
+  return other.startswith(folder) # In most cases, we shouldn't ever arrive to this point.
