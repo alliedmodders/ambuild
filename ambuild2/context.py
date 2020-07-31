@@ -19,7 +19,8 @@ import traceback
 import os, sys, imp
 from ambuild2 import util, database, damage
 from ambuild2.builder import Builder
-from ambuild2.ipc import ProcessManager, MessagePump
+from ambuild2.process_manager import ProcessManager
+from ambuild2.task import Task, TaskMaster
 from optparse import OptionParser
 
 class Context(object):
@@ -52,8 +53,7 @@ class Context(object):
     self.restore_environment()
 
     self.db = database.Database(self.dbpath)
-    self.messagePump = MessagePump()
-    self.procman = ProcessManager(self.messagePump)
+    self.procman = ProcessManager()
     self.db.connect()
 
   def __enter__(self):
@@ -160,17 +160,17 @@ class Context(object):
       builder.printSteps()
       return True
 
-    if not builder.update():
-      util.con_err(
-        util.ConsoleHeader,
-        'Build failed.',
-        util.ConsoleNormal
-      )
+    status = builder.update()
+    if status == TaskMaster.BUILD_FAILED:
+      util.con_err(util.ConsoleHeader, 'Build failed.', util.ConsoleNormal)
       return False
+    if status == TaskMaster.BUILD_INTERRUPTED:
+      util.con_err(util.ConsoleHeader, 'Build cancelled.', util.ConsoleNormal)
+      return False
+    if status == TaskMaster.BUILD_NO_CHANGES:
+      util.con_out(util.ConsoleHeader, 'Build succeeded, no changes.', util.ConsoleNormal)
+      return True
 
-    util.con_out(
-      util.ConsoleHeader,
-      'Build succeeded.',
-      util.ConsoleNormal
-    )
+    assert status == TaskMaster.BUILD_SUCCEEDED
+    util.con_out(util.ConsoleHeader, 'Build succeeded.', util.ConsoleNormal)
     return True
