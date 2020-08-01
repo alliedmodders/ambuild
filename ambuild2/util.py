@@ -15,6 +15,10 @@ try:
 except ImportError:
   import pickle
 
+# When present, we know this was not installed with distutils, because
+# distutils is no longer supported.
+INSTALLED_BY_PIP_OR_SETUPTOOLS = True
+
 def NormalizeArchString(arch):
   # We normalize platforms across different operating systems.
   if arch in ['x86_64', 'AMD64', 'x64', 'amd64']:

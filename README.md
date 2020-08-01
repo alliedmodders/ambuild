@@ -4,6 +4,13 @@ AMBuild requires Python 2.6 or higher, or Python 3.1 or higher.
 
 For more information, see: https://wiki.alliedmods.net/AMBuild
 
+# Installation
+
+```
+git clone https://github.com/alliedmodders/ambuild
+pip install ./ambuild
+```
+
 # AMBuild 2
 
 AMBuild 2 is a highly efficient build system designed to replace ["Alpha"-generation tools][1], such as SCons or Make. It is not a replacement for IDE project files, nor is it a front-end tool for generating other build system files, such as CMake. AMBuild is designed with three features in mind:
