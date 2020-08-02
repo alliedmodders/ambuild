@@ -4,7 +4,6 @@ import multiprocessing as mp
 import shutil
 import os, sys
 import traceback
-from ambuild2 import ipc
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2 import process_manager
