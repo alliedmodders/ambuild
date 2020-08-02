@@ -337,7 +337,10 @@ if IsUnixy():
   ConsoleHeader = lambda fp: fp.write('\033[95m')
 elif IsWindows():
   def SwitchColor(fp, color):
-    from ambuild2.ipc import winapi
+    import ctypes
+
+    STD_OUTPUT_HANDLE = -11
+    STD_ERROR_HANDLE = -12
     
     # Ensure previously colored text is flushed before changing colors again. Otherwise text may
     # not be colored as expected
@@ -345,14 +348,14 @@ elif IsWindows():
 
     std = None
     if fp == sys.stdout:
-      std = winapi.STD_OUTPUT_HANDLE
+      std = STD_OUTPUT_HANDLE
     elif fp == sys.stdin:
-      std = winapi.STD_ERROR_HANDLE
+      std = STD_ERROR_HANDLE
     if std is None:
       return
 
-    handle = winapi.GetStdHandle(std)
-    winapi.SetConsoleTextAttribute(handle, color)
+    handle = ctypes.windll.kernel32.GetStdHandle(std)
+    ctypes.windll.kernel32.SetConsoleTextAttribute(handle, color)
 
   ConsoleGreen = lambda fp: SwitchColor(fp, 0xA)
   ConsoleRed = lambda fp: SwitchColor(fp, 0xC)
