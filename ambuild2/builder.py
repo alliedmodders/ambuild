@@ -5,7 +5,7 @@ import traceback
 from ambuild2 import util
 from ambuild2 import nodetypes
 from collections import deque
-from ambuild2.task import Task, TaskMasterParent
+from ambuild2.task import Task, TaskMaster
 
 # Given the partial command DAG, compute a task tree we can send to the task
 # thread.
@@ -102,31 +102,24 @@ class Builder(object):
       else:
         raise Exception('Unknown entry type: {0}'.format(entry.type))
     if not len(self.leafs):
-      return True
+      return TaskMaster.BUILD_NO_CHANGES
 
-    tm = TaskMasterParent(self.cx, self, self.leafs, self.max_parallel)
-    success = tm.run()
+    tm = TaskMaster(self.cx, self, self.leafs, self.max_parallel)
+    tm.run()
     self.commit()
 
-    if success and len(self.commands) != self.num_completed_tasks:
-      util.con_err(
-        util.ConsoleRed,
-        'Build marked as completed, but some commands were not executed?!\n',
-        'Commands:',
-        util.ConsoleNormal
-      )
+    if tm.succeeded() and len(self.commands) != self.num_completed_tasks:
+      util.con_err(util.ConsoleRed,
+                  'Build marked as completed, but some commands were not executed?!\n',
+                  'Commands:', util.ConsoleNormal)
       for task in self.commands:
         if not task:
           continue
-        util.con_err(
-          util.ConsoleBlue,
-          ' -> ',
-          util.ConsoleRed,
-          '{0}'.format(task.entry.format()),
-          util.ConsoleNormal
-        )
+        util.con_err(util.ConsoleBlue, ' -> ',
+                     util.ConsoleRed, '{0}'.format(task.entry.format()),
+                     util.ConsoleNormal)
 
-    return success
+    return tm.status()
 
   def lazyUpdateEntry(self, entry):
     if entry.type != nodetypes.Source:

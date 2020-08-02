@@ -1,14 +1,13 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
 import errno
+import multiprocessing as mp
 import shutil
 import os, sys
 import traceback
-import multiprocessing as mp
+from ambuild2 import ipc
 from ambuild2 import util
 from ambuild2 import nodetypes
-from ambuild2.ipc import ParentProcessListener, ChildProcessListener
-from ambuild2.ipc import ProcessManager, MessageListener, Error
-from ambuild2.ipc import Channel
+from ambuild2 import process_manager
 
 class Task(object):
   def __init__(self, id, entry, outputs):
@@ -43,29 +42,42 @@ class Task(object):
       return 'cp "{0}" "{1}"'.format(self.data[0], os.path.join(self.folder_name, self.data[1]))
     return (' '.join([arg for arg in self.data]))
 
-class WorkerChild(ChildProcessListener):
-  def __init__(self, pump, channel, vars):
-    super(WorkerChild, self).__init__(pump, channel)
+class TaskWorker(process_manager.MessageReceiver):
+  def __init__(self, channel, vars):
+    super(TaskWorker, self).__init__(channel)
     self.buildPath = vars['buildPath']
     self.pid = os.getpid()
     self.vars = vars
     self.messageMap = {
-      'task': lambda channel, message: self.receiveTask(channel, message)
+      'task': lambda channel, message: self.receive_task(channel, message)
     }
     self.taskMap = {
+      # When updating this, add to task_argv_debug().
       'cxx': lambda message: self.doCompile(message),
       'cmd': lambda message: self.doCommand(message),
       'ln': lambda message: self.doSymlink(message),
       'cp': lambda message: self.doCopy(message),
       'rc': lambda message: self.doResource(message),
+      # When updating this, add to task_argv_debug().
     }
+    self.channel.send({'id': 'spawned'})
 
-    self.channel.send({
-      'id': 'ready',
-      'finished': None
-    })
+  def onShutdown(self):
+    pass
 
-  def receiveTask(self, channel, message):
+  def receive_task(self, channel, message):
+    try:
+      return self.process_task(channel, message)
+    except Exception as e:
+      response = {
+        'ok': False,
+        'cmdline': self.task_argv_debug(message),
+        'stdout': '',
+        'stderr': traceback.format_exc(),
+      }
+      return self.issueResponse(message, response)
+
+  def process_task(self, channel, message):
     task_id = message['task_id']
     task_type = message['task_type']
     task_folder = message['task_folder']
@@ -108,7 +120,6 @@ class WorkerChild(ChildProcessListener):
     # Send a message back to the master process to update the DAG and spew
     # stdout/stderr if needed.
     response['id'] = 'results'
-    response['pid'] = self.pid
     response['task_id'] = message['task_id']
     response['updates'] = new_timestamps
     self.channel.send(response)
@@ -127,7 +138,7 @@ class WorkerChild(ChildProcessListener):
 
     reply = {
       'ok': status,
-      'cmdline': ' '.join([arg for arg in argv]),
+      'cmdline': self.task_argv_debug(message),
       'stdout': stdout,
       'stderr': stderr,
     }
@@ -142,7 +153,7 @@ class WorkerChild(ChildProcessListener):
 
     reply = {
       'ok': rcode == 0,
-      'cmdline': 'ln -s {0} {1}'.format(source_path, output_path),
+      'cmdline': self.task_argv_debug(message),
       'stdout': stdout,
       'stderr': stderr,
     }
@@ -163,7 +174,7 @@ class WorkerChild(ChildProcessListener):
 
     reply = {
       'ok': ok,
-      'cmdline': 'cp "{0}" "{1}"'.format(source_path, os.path.join(task_folder, output_path)),
+      'cmdline': self.task_argv_debug(message),
       'stdout': '',
       'stderr': stderr,
     }
@@ -213,7 +224,7 @@ class WorkerChild(ChildProcessListener):
 
     reply = {
       'ok': p.returncode == 0,
-      'cmdline': ' '.join([arg for arg in argv]),
+      'cmdline': self.task_argv_debug(message),
       'stdout': out,
       'stderr': err,
       'deps': paths,
@@ -237,206 +248,54 @@ class WorkerChild(ChildProcessListener):
         
     reply = {
       'ok': p.returncode == 0,
-      'cmdline': (' '.join([arg for arg in cl_argv]) + ' && ' + ' '.join([arg for arg in rc_argv])),
+      'cmdline': self.task_argv_debug(message),
       'stdout': out,
       'stderr': err,
       'deps': paths,
     }
     return reply
 
+  def task_argv_debug(self, message):
+    task_data = message.get('task_data', None)
+    if message['task_type'] == 'rc':
+      cl_argv = task_data['cl_argv']
+      rc_argv = task_data['rc_argv']
+      return ' '.join([arg for arg in cl_argv]) + ' && ' + ' '.join([arg for arg in rc_argv])
+    elif message['task_type'] == 'cxx':
+      return ' '.join([arg for arg in task_data['argv']])
+    elif message['task_type'] == 'cmd':
+      return ' '.join([arg for arg in task_data])
+    elif message['task_type'] in ['cp', 'ln']:
+      task_folder = message['task_folder']
+      if message['task_type'] == 'cp':
+        cmd = 'cp'
+      elif message['task_type'] == 'ln':
+        cmd = 'ln -s'
+      return '{} "{}" "{}"'.format(cmd, task_data[0], os.path.join(task_folder, task_data[1]))
 
-# The WorkerParent is in the same process as the TaskMasterChild.
-class WorkerParent(ParentProcessListener):
-  def __init__(self, taskMaster):
-    super(WorkerParent, self).__init__('Worker')
-    self.taskMaster = taskMaster
-    self.messageMap = {
-      'ready': lambda child, message: self.receiveReady(child, message),
-      'results': lambda child, message: self.receiveResults(child, message),
-    }
+class TaskMaster(object):
+  BUILD_IN_PROGRESS = 0
+  BUILD_SUCCEEDED = 1
+  BUILD_NO_CHANGES = 2
+  BUILD_FAILED = 3
+  BUILD_INTERRUPTED = 4
 
-  def receiveReady(self, child, message):
-    self.taskMaster.onWorkerReady(child, message)
-
-  def receiveResults(self, child, message):
-    self.taskMaster.onWorkerResults(child, message)
-
-  def receiveError(self, child, error):
-    self.taskMaster.onWorkerDied(child, error)
-
-# The TaskMasterChild is in the same process as the WorkerParent.
-class TaskMasterChild(ChildProcessListener):
-  def __init__(self, pump, channel, task_graph, vars, num_processes):
-    super(TaskMasterChild, self).__init__(pump, channel)
-    self.task_graph = task_graph
-    self.outstanding = {}
-    self.idle = set()
-    self.build_failed = False
-    self.build_completed = False
-    self.messageMap = {
-      'stop': lambda channel, message: self.receiveStop(channel, message)
-    }
-
-    self.procman = ProcessManager(pump)
-    for i in range(num_processes):
-      self.procman.spawn(
-        WorkerParent(self),
-        WorkerChild,
-        args=(vars,)
-      )
-
-    self.channel.send({
-      'id': 'spawned',
-      'pid': os.getpid(),
-      'type': 'taskmaster'
-    })
-
-  def receiveStop(self, channel, message):
-    if not message['ok']:
-      self.terminateBuild()
-    self.close_idle()
-
-  def terminateBuild(self):
-    if self.build_failed:
-      return
-
-    self.build_failed = True
-    self.close_idle()
-
-  def receiveClose(self, channel):
-    self.procman.shutdown()
-    self.pump.cancel()
-
-  def onWorkerResults(self, child, message):
-    # Forward the results to the master process.
-    self.channel.send(message)
-
-    if not message['ok']:
-      self.channel.send({
-        'id': 'completed',
-        'status': 'failed',
-      })
-      self.procman.close(child)
-      self.terminateBuild()
-      return
-
-    task_id = message['task_id']
-    task, child = self.outstanding[task_id]
-    del self.outstanding[task_id]
-
-    # Enqueue any tasks that can be run if this was their last outstanding
-    # dependency.
-    for outgoing in task.outgoing:
-      outgoing.incoming.remove(task)
-      if len(outgoing.incoming) == 0:
-        self.task_graph.append(outgoing)
-
-    self.onWorkerReady(child, None)
-
-    # If more stuff was queued, and we have idle processes, use them.
-    while len(self.task_graph) and len(self.idle):
-      child = self.idle.pop()
-      if not self.onWorkerReady(child, None):
-        break
-
-  def close_idle(self):
-    for child in self.idle:
-      self.procman.close(child)
-    self.idle = set()
-
-  def onWorkerReady(self, child, message):
-    if message and not message['finished']:
-      self.channel.send({
-        'id': 'spawned',
-        'pid': child.pid,
-        'type': 'worker'
-      })
-
-    # If the build failed, ignore the message, and shutdown the process.
-    if self.build_failed:
-      self.procman.close(child)
-      self.maybe_request_shutdown(child)
-      return
-
-    if not len(self.task_graph):
-      if len(self.outstanding):
-        # There are still tasks left to complete, but they're waiting on
-        # others to finish. Mark this process as ready and just ignore the
-        # status change for now.
-        self.idle.add(child)
-      else:
-        # There are no tasks remaining, the worker is not needed.
-        self.build_completed = True
-        self.procman.close(child)
-        self.close_idle()
-        self.channel.send({
-          'id': 'completed',
-          'status': 'ok'
-        })
-      return False
-
-    # Send a task to the worker.
-    task = self.task_graph.pop()
-
-    message = {
-      'id': 'task',
-      'task_id': task.id,
-      'task_type': task.type,
-      'task_data': task.data,
-      'task_folder': task.folder,
-      'task_outputs': task.outputs
-    }
-    child.send(message)
-    self.outstanding[task.id] = (task, child)
-    return True
-
-  def onWorkerCrashed(self, child, task):
-    self.channel.send({
-      'id': 'completed',
-      'status': 'crashed',
-      'task_id': task.id,
-    })
-    self.terminateBuild()
-
-  def onWorkerDied(self, child, error):
-    if error != Error.NormalShutdown:
-      for task_id in self.outstanding.keys():
-        task, task_child = self.outstanding[task_id]
-        if task_child == child:
-          # A worker failed, but crashed, so we have to tell the main process.
-          self.onWorkerCrashed(child, task)
-          break
-
-    self.idle.discard(child)
-    self.maybe_request_shutdown(child)
-
-  def maybe_request_shutdown(self, child):
-    for other_child in self.procman.children:
-      if other_child == child:
-        continue
-      if other_child.is_alive():
-        return
-
-    # If we got here, no other child processes are live, so we can ask for
-    # safe shutdown. This is needed to make sure all our messages arrive,
-    # since closing one end of the pipe destroys any leftover data.
-    self.channel.send({
-      'id': 'done'
-    })
-
-class TaskMasterParent(ParentProcessListener):
   def __init__(self, cx, builder, task_graph, max_parallel):
-    super(TaskMasterParent, self).__init__('TaskMaster')
     self.cx = cx
     self.builder = builder
-    self.build_failed = False
+    self.status_ = TaskMaster.BUILD_IN_PROGRESS
     self.messageMap = {
       'completed': lambda child, message: self.receiveCompleted(child, message),
-      'spawned': lambda child, message: self.receiveSpawned(message),
-      'results': lambda child, message: self.processResults(message),
-      'done': lambda child, message: self.receiveDone(message),
+      'spawned': lambda child, message: self.recvSpawned(child, message),
+      'results': lambda child, message: self.recvTaskComplete(child, message),
+      'done': lambda child, message: self.receiveDone(child, message),
     }
     self.errors_ = []
+    self.task_graph = task_graph
+    self.workers_ = []
+    self.pending_ = {}
+    self.idle_ = set()
+    self.build_completed_ = False
 
     # Figure out how many tasks to create.
     if cx.options.jobs == 0:
@@ -455,17 +314,10 @@ class TaskMasterParent(ParentProcessListener):
     if num_processes > max_parallel:
       num_processes = max_parallel
 
-    # Spawn the task master.
-    self.taskMaster = cx.procman.spawn(
-      self,
-      TaskMasterChild,
-      args=(task_graph, cx.vars, num_processes)
-    )
+    for _ in range(num_processes):
+      self.startWorker()
 
-  def receiveDone(self, message):
-    self.cx.procman.shutdown()
-
-  def spewResult(self, message):
+  def spewResult(self, worker, message):
     if message['ok']:
       color = util.ConsoleGreen
     else:
@@ -477,8 +329,7 @@ class TaskMasterParent(ParentProcessListener):
       ' ',
       color,
       message['cmdline'],
-      util.ConsoleNormal
-    )
+      util.ConsoleNormal)
     sys.stdout.flush()
 
     if len(message['stdout']):
@@ -493,64 +344,113 @@ class TaskMasterParent(ParentProcessListener):
         sys.stderr.write('\n')
       sys.stderr.flush()
 
-  def processResults(self, message):
+  def recvTaskComplete(self, worker, message):
+    message['pid'] = worker.pid
     if not message['ok']:
-      self.errors_.append(message)
-      self.terminateBuild()
+      self.errors_.append((worker, message))
+      self.terminateBuild(TaskMaster.BUILD_FAILED)
       return
 
-    self.spewResult(message)
+    self.spewResult(worker, message)
 
-    task_id = message['task_id']
+    task = self.pending_[worker.pid]
+    del self.pending_[worker.pid]
+    if message['task_id'] != task.id:
+      raise Exception('Worker {} returned wrong task id (got {}, expected {})'.format(
+                      worker.pid, task_id, task.id))
+
     updates = message['updates']
-    if not self.builder.updateGraph(task_id, updates, message):
-      util.con_out(
-        util.ConsoleRed,
-        'Failed to update node!',
-        util.ConsoleNormal
-      )
-      self.terminateBuild()
+    if not self.builder.updateGraph(task.id, updates, message):
+      util.con_out(util.ConsoleRed, 'Failed to update node!', util.ConsoleNormal)
+      self.terminateBuild(TaskMaster.BUILD_FAILED)
 
-  def terminateBuild(self):
-    if self.build_failed:
-      return
-    self.build_failed = True
-    self.taskMaster.send({
-      'id': 'stop',
-      'ok': False
-    })
+    # Enqueue any tasks that can be run if this was their last outstanding
+    # dependency.
+    for outgoing in task.outgoing:
+      outgoing.incoming.remove(task)
+      if len(outgoing.incoming) == 0:
+        self.task_graph.append(outgoing)
 
-  def receiveSpawned(self, message):
+    if not len(self.task_graph) and not len(self.pending_):
+      # There are no tasks remaining.
+      self.status_ = TaskMaster.BUILD_SUCCEEDED
+
+    # Add this process to the idle set.
+    self.idle_.add(worker)
+
+    # If more stuff was queued, and we have idle processes, use them.
+    while len(self.task_graph) and len(self.idle_):
+      worker = self.idle_.pop()
+      self.issue_next_task(worker)
+
+  def terminateBuild(self, status):
+    self.status_ = status
+
+  def startWorker(self):
+    args = (self.cx.vars,)
+    child = self.cx.procman.spawn(TaskWorker, args)
+    self.workers_.append(child)
+
     util.con_out(
       util.ConsoleHeader,
-      'Spawned {0} (pid: {1})'.format(message['type'], message['pid']),
-      util.ConsoleNormal
-    )
-
-  def receiveError(self, child, error):
-    if error != Error.NormalShutdown:
-      sys.stderr.write('Received unexpected error from child process {0}: {1}\n'.format(child.pid, error))
-      self.terminateBuild()
-
-  def receiveCompleted(self, child, message):
-    if message['status'] == 'crashed':
-      task = self.builder.commands[message['task_id']]
-      sys.stderr.write('Crashed trying to perform update:\n')
-      sys.stderr.write('  : {0}\n'.format(task.entry.format()))
-      self.terminateBuild()
-    elif message['status'] == 'failed':
-      self.terminateBuild()
-    else:
-      self.taskMaster.send({
-        'id': 'stop',
-        'ok': True
-      })
+      'Spawned {0} (pid: {1})'.format('worker', child.proc.pid),
+      util.ConsoleNormal)
 
   def run(self):
     try:
-      self.cx.messagePump.pump()
-    except KeyboardInterrupt:
-      self.terminateBuild()
-    for message in self.errors_:
-      self.spewResult(message)
-    return not self.build_failed
+      self.pump()
+    except KeyboardInterrupt: # :TODO: TEST!
+      self.terminateBuild(TaskMaster.BUILD_INTERRUPTED)
+    for worker, message in self.errors_:
+      self.spewResult(worker, message)
+    return self.status_
+
+  def onShutdown(self):
+    return False
+
+  def recvSpawned(self, worker, message):
+    if self.status_ != TaskMaster.BUILD_IN_PROGRESS:
+      return
+
+    if not len(self.task_graph):
+      # If there are still tasks left to complete, they're waiting on others
+      # to finish. Mark this process as ready and just ignore the status
+      # change for now.
+      self.idle_.add(worker)
+      return
+
+    self.issue_next_task(worker)
+
+  def issue_next_task(self, worker):
+    task = self.task_graph.pop()
+    message = {
+      'id': 'task',
+      'task_id': task.id,
+      'task_type': task.type,
+      'task_data': task.data,
+      'task_folder': task.folder,
+      'task_outputs': task.outputs
+    }
+    worker.channel.send(message)
+    self.pending_[worker.pid] = task
+
+  def pump(self):
+    with process_manager.ChannelPoller(self.cx, self.workers_) as poller:
+      while self.status_ == TaskMaster.BUILD_IN_PROGRESS:
+        try:
+          proc, obj = poller.poll()
+          if obj['id'] not in self.messageMap:
+            raise Exception('Unhandled message type: {}'.format(obj['id']))
+          self.messageMap[obj['id']](proc, obj)
+        except EOFError:
+          # The process died. Very sad. Clean up and fail the build.
+          util.con_err(util.ConsoleBlue, '[{0}]'.format(proc.pid), util.ConsoleNormal, ' ',
+                       util.ConsoleRed, 'Worker unexpectedly exited.')
+          self.terminateBuild(TaskMaster.BUILD_FAILED)
+          break
+
+  def status(self):
+    return self.status_
+
+  def succeeded(self):
+    return self.status_ == TaskMaster.BUILD_SUCCEEDED
