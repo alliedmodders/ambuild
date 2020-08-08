@@ -134,10 +134,6 @@ class Entry(object):
 
     self.outgoing = None
 
-    # True if the node was not dirty when originally pulled from the DB, but is
-    # now actually dirty.
-    self.newlyDirty = False
-    
   def isCommand(self):
     return IsCommand(self.type)
 

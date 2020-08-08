@@ -60,30 +60,20 @@ def ComputeDamageGraph(database, only_changed = False):
   database.query_mkdir(maybe_mkdir)
 
   dirty = []
-  def known_dirty(node):
-    dirty.append(node)
 
-  def maybe_dirty(node):
+  def maybe_add_dirty(node):
     if ComputeDirty(node):
-      node.newlyDirty = True
+      database.mark_dirty(node)
       dirty.append(node)
 
-  database.query_known_dirty(known_dirty)
-  database.query_maybe_dirty(maybe_dirty)
+  database.query_known_dirty(lambda node: dirty.append(node))
+  database.query_maybe_dirty(maybe_add_dirty)
 
   if only_changed:
     return dirty
 
-  def add_dirty(entry):
-    if entry.newlyDirty:
-      # Mark this node as dirty in the DB so we don't have to check the
-      # filesystem next time.
-      database.mark_dirty(entry)
-
-    graph.addEntry(entry)
-
   for entry in dirty:
-    if (entry.type == nodetypes.Output) and entry.newlyDirty:
+    if entry.type == nodetypes.Output:
       # Ensure that our command has been marked as dirty.
       incoming = database.query_strong_inputs(entry)
       incoming |= database.query_dynamic_inputs(entry)
@@ -95,14 +85,15 @@ def ComputeDamageGraph(database, only_changed = False):
         return None
 
       for cmd in incoming:
-        add_dirty(cmd)
+        graph.addEntry(cmd)
     else:
-      add_dirty(entry)
+      graph.addEntry(entry)
 
   graph.finish()
 
   # Find all leaf commands in the graph and mark them as dirty. This ensures
-  # that we'll include them in the next damage graph.
+  # that we'll include them in the next damage graph. In theory, all leaf
+  # commands should *already* be dirty, so this is just in case.
   def finish_mark_dirty(entry):
     if entry.dirty == nodetypes.NOT_DIRTY:
       # Mark this node as dirty in the DB so we don't have to check the
