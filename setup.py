@@ -21,8 +21,6 @@ if __name__ == '__main__':
   import os
   import multiprocessing as mp
 
-  print('Checking for distutils installed version of AMBuild')
-
   mp.freeze_support()
   proc = mp.Process(target=detect_distutils)
   proc.start()
@@ -37,14 +35,10 @@ any ambuild folders:
 \n''')
 
     for path in sys.path[1:]:
-      found = False
-      for candidate in ( os.path.join(path, 'ambuild'), os.path.join(path, 'ambuild2') ):
-        if os.path.exists(candidate):
-          found = True
-          break
-
-      if found:
-        sys.stderr.write(path + '\n')
+      for subdir in ['ambuild', 'ambuild2']:
+        subpath = os.path.join(path, subdir)
+        if os.path.exists(subpath):
+          sys.stderr.write('\t{}\n'.format(subpath))
 
     sys.stderr.write('Aborting installation.\n')
     sys.stderr.flush()
