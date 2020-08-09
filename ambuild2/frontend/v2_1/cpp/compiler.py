@@ -66,6 +66,7 @@ class Compiler(object):
   def inherit(self, other):
     for attr in self.attrs_:
       setattr(self, attr, copy.copy(getattr(other, attr)))
+
     self.symbol_files_ = other.symbol_files_
 
   def clone(self):
@@ -140,16 +141,21 @@ class Compiler(object):
     return builders.Dep(text, node)
 
 class CliCompiler(Compiler):
-  def __init__(self, vendor, cc_argv, cxx_argv, options = None):
+  def __init__(self, vendor, cc_argv, cxx_argv, options = None, env_data = None):
     super(CliCompiler, self).__init__(vendor, options)
     self.cc_argv = cc_argv
     self.cxx_argv = cxx_argv
     self.found_pkg_config_ = False
+    self.env_data = env_data
 
   def clone(self):
     cc = CliCompiler(self.vendor, self.cc_argv, self.cxx_argv)
     cc.inherit(self)
     return cc
+
+  def inherit(self, other):
+    super(CliCompiler, self).inherit(other)
+    self.env_data = other.env_data
 
   def Program(self, name):
     return builders.Program(self.clone(), name)

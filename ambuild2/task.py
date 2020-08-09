@@ -20,6 +20,7 @@ class Task(object):
     self.outputs = outputs
     self.outgoing = []
     self.incoming = set()
+    self.tools_env = entry.tools_env
 
   def addOutgoing(self, task):
     self.outgoing.append(task)
@@ -59,7 +60,7 @@ class TaskWorker(process_manager.MessageReceiver):
       'rc': lambda message: self.doResource(message),
       # When updating this, add to task_argv_debug().
     }
-    self.channel.send({'id': 'spawned'})
+    self.try_send({'id': 'spawned'})
 
   def onShutdown(self):
     pass
@@ -121,14 +122,32 @@ class TaskWorker(process_manager.MessageReceiver):
     response['id'] = 'results'
     response['task_id'] = message['task_id']
     response['updates'] = new_timestamps
-    self.channel.send(response)
+    self.try_send(response)
+
+  def try_send(self, message):
+    try:
+      self.channel.send(message)
+    except OSError as e:
+      if getattr(e, 'winerror', 0) == 232:
+        # Parent is dead, so ignore the error.
+        return
+      raise
 
   def doCommand(self, message):
     task_folder = message['task_folder']
+    tools_env = message['task_tools_env']
     argv = message['task_data']
+
+    env = None
+    if tools_env is not None:
+      if tools_env.env_cmds is not None:
+        env = util.BuildEnv(tools_env.env_cmds)
+      if argv[0] in tools_env.tools:
+        argv[0] = tools_env.tools[argv[0]]
+
     with util.FolderChanger(task_folder):
       try:
-        p, stdout, stderr = util.Execute(argv)
+        p, stdout, stderr = util.Execute(argv, env = env)
         status = p.returncode == 0
       except Exception as exn:
         status = False
@@ -203,11 +222,19 @@ class TaskWorker(process_manager.MessageReceiver):
   def doCompile(self, message):
     task_folder = message['task_folder']
     task_data = message['task_data']
+    tools_env = message['task_tools_env']
     cc_type = task_data['type']
     argv = task_data['argv']
 
+    env = None
+    if tools_env is not None:
+      if tools_env.env_cmds is not None:
+        env = util.BuildEnv(tools_env.env_cmds)
+      if 'cl' in tools_env.tools:
+        argv[0] = tools_env.tools['cl']
+
     with util.FolderChanger(task_folder):
-      p, out, err = util.Execute(argv)
+      p, out, err = util.Execute(argv, env = env)
       if cc_type == 'gcc':
         err, deps = util.ParseGCCDeps(err)
       elif cc_type == 'msvc':
@@ -233,17 +260,27 @@ class TaskWorker(process_manager.MessageReceiver):
   def doResource(self, message):
     task_folder = message['task_folder']
     task_data = message['task_data']
+    tools_env = message['task_tools_env']
     cl_argv = task_data['cl_argv']
     rc_argv = task_data['rc_argv']
 
+    env = None
+    if tools_env is not None:
+      if tools_env.env_cmds is not None:
+        env = util.BuildEnv(tools_env.env_cmds)
+      if 'cl' in tools_env.tools:
+        cl_argv[0] = tools_env.tools['cl']
+      if 'rc' in tools_env.tools:
+        rc_argv[0] = tools_env.tools['rc']
+
     with util.FolderChanger(task_folder):
       # Includes go to stderr when we preprocess to stdout.
-      p, out, err = util.Execute(cl_argv)
+      p, out, err = util.Execute(cl_argv, env = env)
       out, deps = util.ParseMSVCDeps(self.vars, err)
       paths = self.rewriteDeps(deps)
 
       if p.returncode == 0:
-        p, out, err = util.Execute(rc_argv)
+        p, out, err = util.Execute(rc_argv, env = env)
         
     reply = {
       'ok': p.returncode == 0,
@@ -428,7 +465,8 @@ class TaskMaster(object):
       'task_type': task.type,
       'task_data': task.data,
       'task_folder': task.folder,
-      'task_outputs': task.outputs
+      'task_outputs': task.outputs,
+      'task_tools_env': task.tools_env,
     }
     worker.channel.send(message)
     self.pending_[worker.pid] = task

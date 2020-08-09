@@ -20,7 +20,7 @@ from optparse import OptionParser
 from ambuild2 import util
 from ambuild2.context import Context
 
-DEFAULT_API = '2.1'
+DEFAULT_API = '2.1.1'
 
 SampleScript = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 builder.DetectCxx()
@@ -112,7 +112,7 @@ def PrepareBuild(sourcePath, buildPath=None):
 def PreparerForAPI(api):
   if api == '2.0':
     from ambuild2.frontend.v2_0.prep import Preparer
-  elif api == '2.1':
+  elif api == '2.1' or api.startswith('2.1.'):
     from ambuild2.frontend.v2_1 import Preparer
   else:
     raise Exception('API version {0} not found'.format(api))

@@ -62,7 +62,7 @@ class MSVC(Vendor):
     return ['/showIncludes', '/nologo', '/c', sourceFile, '/Fo' + objFile]
 
   def staticLinkArgv(self, files, outputFile):
-    return ['lib.exe', '/OUT:' + outputFile] + files
+    return ['lib', '/OUT:' + outputFile] + files
 
   def programLinkArgv(self, cmd_argv, files, linkFlags, symbolFile, outputFile):
     argv = cmd_argv + files

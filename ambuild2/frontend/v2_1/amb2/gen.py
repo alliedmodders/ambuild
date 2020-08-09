@@ -78,6 +78,7 @@ class Generator(BaseGenerator):
 
     self.symlink_support = util.DetectSymlinkSupport()
 
+    self.db.load_environments()
     self.db.query_scripts(lambda id,path,stamp: self.old_scripts_.add(path))
     self.db.query_mkdir(lambda entry: self.old_folders_.add(entry))
     self.db.query_commands(lambda entry: self.old_commands_.add(entry))
@@ -100,6 +101,7 @@ class Generator(BaseGenerator):
 
     self.db.query_dead_sources(lambda e: self.db.drop_source(e))
     self.db.query_dead_shared_outputs(lambda e: self.db.drop_output(e))
+    self.db.drop_unused_environments()
 
     class Node:
       def __init__(self):
@@ -190,10 +192,12 @@ class Generator(BaseGenerator):
     with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
       util.DiskPickle(vars, fp)
 
-  def detectCompilers(self):
+  def detectCompilers(self, options):
     if not self.compiler:
       with util.FolderChanger(self.cacheFolder):
-        self.base_compiler = detect.DetectCxx(self.target, os.environ, self.options)
+        self.base_compiler = detect.AutoDetectCxx(self.target, self.options, options)
+        if self.base_compiler is None:
+          raise Exception('Could not detect a suitable C/C++ compiler')
         self.compiler = self.base_compiler.clone()
 
     return self.compiler
@@ -422,7 +426,7 @@ class Generator(BaseGenerator):
     raise Exception('Tried to use non-file node as a file path')
 
   def addCommand(self, context, node_type, folder, data, inputs, outputs,
-                 weak_inputs=[], shared_outputs=[]):
+                 weak_inputs=[], shared_outputs=[], env_data = None):
     assert not folder or isinstance(folder, nodetypes.Entry)
 
     if inputs is context.ALWAYS_DIRTY:
@@ -504,7 +508,8 @@ class Generator(BaseGenerator):
 
     if cmd_entry:
       # Update the entry in the database.
-      self.db.update_command(cmd_entry, node_type, folder, data, dirty, self.refactoring)
+      self.db.update_command(cmd_entry, node_type, folder, data, dirty, self.refactoring,
+                             env_data)
 
       # Disconnect any outputs that are no longer connected to this output.
       # It's okay to use output_links since there should never be duplicate
@@ -529,7 +534,7 @@ class Generator(BaseGenerator):
     else:
       # Note that if there are no outputs, we will always add a new command,
       # and the old (identical) command will be deleted.
-      cmd_entry = self.db.add_command(node_type, folder, data, dirty)
+      cmd_entry = self.db.add_command(node_type, folder, data, dirty, env_data)
 
     # Local helper function to warn about refactoring problems.
     def refactoring_error(node):
@@ -616,7 +621,8 @@ class Generator(BaseGenerator):
       node_type = nodetypes.Cxx,
       folder = folder,
       data = cxxData,
-      shared_outputs = shared_outputs)
+      shared_outputs = shared_outputs,
+      env_data = obj.env_data)
     return cxxNode
 
   def addCxxRcTask(self, cx, folder, obj):
@@ -631,7 +637,8 @@ class Generator(BaseGenerator):
       outputs = [obj.preprocFile, obj.outputFile],
       node_type = nodetypes.Rc,
       folder = folder,
-      data = rcData
+      data = rcData,
+      env_data = obj.env_data
     )
     return rcNode
 
@@ -653,8 +660,7 @@ class Generator(BaseGenerator):
     output_file, debug_file = binary.link(
       context = cx,
       folder = folder_node,
-      inputs = inputs
-    )
+      inputs = inputs)
 
     return cpp.CppNodes(output_file, debug_file, binary.type)
 
@@ -741,7 +747,8 @@ class Generator(BaseGenerator):
                       folder=-1,
                       dep_type=None,
                       weak_inputs=[],
-                      shared_outputs=[]):
+                      shared_outputs=[],
+                      env_data=None):
     if folder is -1:
       folder = context.localFolder
 
@@ -771,8 +778,8 @@ class Generator(BaseGenerator):
       inputs = inputs,
       outputs = outputs,
       weak_inputs = weak_inputs,
-      shared_outputs = shared_outputs
-    )
+      shared_outputs = shared_outputs,
+      env_data = env_data)
 
   def addConfigureFile(self, context, path):
     if not os.path.isabs(path) and context is not None:

@@ -16,6 +16,7 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os, sys
 import platform
+import traceback
 from ambuild2 import util
 from optparse import OptionParser, Values, SUPPRESS_HELP
 from ambuild2.frontend.system import System
@@ -136,6 +137,10 @@ class Preparer(object):
       sys.exit(1)
 
     with util.FolderChanger(self.buildPath):
-      if not builder.generate():
-        sys.stderr.write('Configure failed.\n')
-        sys.exit(1)
+      try:
+        if not builder.generate():
+          sys.stderr.write('Configure failed.\n')
+          sys.exit(1)
+      except Exception as e:
+        traceback.print_exc()
+        util.con_err(util.ConsoleRed, 'Configure failed: {}'.format(e), util.ConsoleNormal)

@@ -227,7 +227,7 @@ all:
     raise Exception('Must be implemented!')
 
   def addShellCommand(self, context, inputs, argv, outputs, folder=-1, dep_type=None,
-                      weak_inputs=[], shared_outputs=[]):
+                      weak_inputs=[], shared_outputs=[], env_data=None):
     raise Exception('Must be implemented!')
 
   def addConfigureFile(self, context, path):

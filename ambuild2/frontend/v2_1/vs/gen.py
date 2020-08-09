@@ -23,13 +23,14 @@ from ambuild2.frontend.v2_1.vs import cxx
 from ambuild2.frontend.v2_1.vs import nodes
 from ambuild2.frontend.v2_1.base import BaseGenerator
 
-SupportedVersions = ['10', '11', '12', '14', '15']
+SupportedVersions = ['10', '11', '12', '14', '15', '16']
 YearMap = {
   '2010': 10,
   '2012': 11,
   '2013': 12,
   '2015': 14,
   '2017': 15,
+  '2019': 16,
 }
 
 class Generator(BaseGenerator):
@@ -95,7 +96,7 @@ class Generator(BaseGenerator):
     pass
 
   # Overridden.
-  def detectCompilers(self):
+  def detectCompilers(self, options):
     if not self.compiler:
       version = cxx.Compiler.GetVersionFromVS(self.vs_version)
       vendor = cxx.VisualStudio(version)
