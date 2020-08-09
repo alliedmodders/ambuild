@@ -17,6 +17,7 @@
 import os
 import sys, copy
 from ambuild2.frontend.v2_1 import tools
+from ambuild2.frontend.version import Version
 
 # AMBuild 2 scripts are parsed recursively. Each script is supplied with a
 # "builder" object, which maps to a Context object. Each script gets its own
@@ -78,6 +79,10 @@ class BaseContext(object):
   def buildPath(self):
     return self.generator_.buildPath
 
+  @property
+  def apiVersion(self):
+    return Version('2.1.1')
+
   def Import(self, path, vars={}):
     return self.generator_.importScript(self, path, vars)
 
@@ -124,10 +129,12 @@ class BuildContext(BaseContext):
   def Build(self, path, vars={}):
     return self.generator_.runBuildScript(self, path, vars)
 
-  def DetectCxx(self):
+  # Any consumed options will be removed from the given dictionary. Callers
+  # can detect unconsumed options by inspecting the dictionary after.
+  def DetectCxx(self, options = {}):
     # Only the top-level build script should be detecting compilers.
     if self.cxx_ is None and self.parent_ is None:
-      self.cxx_ = self.generator_.detectCompilers().clone()
+      self.cxx_ = self.generator_.detectCompilers(options).clone()
     return self.cxx_
 
   @property
@@ -155,7 +162,7 @@ class BuildContext(BaseContext):
     return self.generator_.addCopy(self, source, output_path)
 
   def AddCommand(self, inputs, argv, outputs, folder=-1, dep_type=None, weak_inputs=[],
-                 shared_outputs=[]):
+                 shared_outputs=[], env_data=None):
     return self.generator_.addShellCommand(
       self,
       inputs,
@@ -164,8 +171,8 @@ class BuildContext(BaseContext):
       folder = folder,
       dep_type = dep_type,
       weak_inputs = weak_inputs,
-      shared_outputs = shared_outputs
-    )
+      shared_outputs = shared_outputs,
+      env_data = env_data)
 
   def Context(self, name):
     return self.generator_.Context(name)

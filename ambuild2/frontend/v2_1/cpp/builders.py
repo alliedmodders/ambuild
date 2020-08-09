@@ -101,6 +101,7 @@ def NameForObjectFile(file):
 class ObjectFileBase(object):
   def __init__(self, parent, inputObj, outputFile):
     super(ObjectFileBase, self).__init__()
+    self.env_data = parent.env_data
     self.folderNode = parent.localFolderNode
     self.inputObj = inputObj
     self.outputFile = outputFile
@@ -145,6 +146,7 @@ class ObjectArgvBuilder(object):
     self.resources = []
     self.used_cxx = False
     self.sourcedeps = []
+    self.env_data = None
 
   def setOutputs(self, localFolderNode, outputFolder, outputPath):
     self.outputFolder = outputFolder
@@ -175,6 +177,8 @@ class ObjectArgvBuilder(object):
     self.cxx_argv += [self.vendor.definePrefix + define for define in compiler.cxxdefines]
     for include in compiler.includes + compiler.cxxincludes + addl_include_dirs:
       self.cxx_argv += self.vendor.formatInclude(self.outputPath, include)
+
+    self.env_data = compiler.env_data
 
     # Set up source dependencies.
     self.sourcedeps += compiler.sourcedeps + addl_source_deps
@@ -515,8 +519,8 @@ class BinaryBuilder(object):
       outputs = self.linker_outputs,
       folder = folder,
       weak_inputs = self.compiler.weaklinkdeps,
-      shared_outputs = shared_outputs
-    )
+      shared_outputs = shared_outputs,
+      env_data = self.compiler.env_data)
     if not self.debug_entry and self.compiler.symbol_files:
       if self.linker_.behavior != 'msvc' and self.compiler.symbol_files == 'bundled':
         self.debug_entry = outputs[0]

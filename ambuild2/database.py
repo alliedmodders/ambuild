@@ -17,6 +17,7 @@
 import errno
 import os, sys
 import sqlite3
+import time
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2.nodetypes import Entry
@@ -32,7 +33,8 @@ def CreateDatabase(path):
       dirty int not null default 0,               \
       path text,                                  \
       folder int,                                 \
-      data blob                                   \
+      data blob,                                  \
+      env_id int default null                     \
     )",
 
     # The edge table stores links that are specified by the build scripts;
@@ -71,7 +73,7 @@ def CreateDatabase(path):
       val varchar(255)                          \
     )",
 
-    "insert into vars (key, val) values ('db_version', '4')",
+    "insert into vars (key, val) values ('db_version', '5')",
 
     "create index if not exists outgoing_edge on edges(outgoing)",
     "create index if not exists incoming_edge on edges(incoming)",
@@ -88,6 +90,21 @@ def CreateDatabase(path):
     )",
     "create index if not exists sho_outgoing_edge on shared_outputs(outgoing)",
     "create index if not exists sho_incoming_edge on shared_outputs(incoming)",
+
+    # The environment object table. Each blob is a (pickled) tuple,
+    # containing (name, object) pairs. Currently, possible pairs:
+    #   env_cmds: A tuple of (command, key, value) tuples to modify the
+    #             environment.
+    #   tools: A tuple of (name, path) tuples, denoting where to find named
+    #          tools.
+    #
+    # This is explicitly not a dictionary. A tuple makes it hashable which is
+    # useful for doing reverse-lookups without hitting the DB. It also makes
+    # it easier to guarantee consistent ordering.
+    "CREATE TABLE IF NOT EXISTS environments(   \
+      env_id INTEGER PRIMARY KEY,               \
+      data BLOB NOT NULL,                       \
+      stamp REAL NOT NULL DEFAULT 0.0)",
   ]
   for query in queries:
     cn.execute(query)
@@ -103,6 +120,8 @@ class Database(object):
     self.cn = None
     self.node_cache_ = {}
     self.path_cache_ = {}
+    self.env_cache_ = {}
+    self.env_reverse_lookup_ = {}
 
   def connect(self):
     assert not self.cn
@@ -141,7 +160,7 @@ class Database(object):
     except:
       version = 1
 
-    latest_version = 4
+    latest_version = 5
     if version == latest_version:
       return
     if version > latest_version:
@@ -161,6 +180,9 @@ class Database(object):
 
     if version == 3:
       version = self.upgrade_to_v4()
+
+    if version == 4:
+      version = self.upgrade_to_v5()
 
   def upgrade_to_v2(self):
     queries = [
@@ -230,6 +252,16 @@ class Database(object):
     self.cn.commit()
     return 4
 
+  def upgrade_to_v5(self):
+    self.cn.execute("ALTER TABLE nodes ADD COLUMN env_id INT DEFAULT NULL")
+    self.cn.execute("CREATE TABLE IF NOT EXISTS environments(   \
+      env_id INTEGER PRIMARY KEY,               \
+      data BLOB NOT NULL,                       \
+      stamp REAL NOT NULL DEFAULT 0.0)")
+    self.cn.execute("INSERT OR REPLACE INTO vars (key, val) VALUES ('db_version', ?)", (5,))
+    self.cn.commit()
+    return 5
+
   def query_var(self, var):
     cursor = self.cn.execute("select val from vars where key = ?", (var,))
     row = cursor.fetchone()
@@ -278,35 +310,57 @@ class Database(object):
     query = "insert into nodes (type, path, folder) values (?, ?, ?)"
 
     cursor = self.cn.execute(query, (type, path, folder_id))
-    row = (type, 0, 1, path, folder_entry, None)
+    row = (type, 0, 1, path, folder_entry, None, None)
     return self.import_node(
       id=cursor.lastrowid,
       row=row
     )
 
-  def update_command(self, entry, type, folder, data, dirty, refactoring):
+  def update_command(self, entry, type, folder, data, dirty, refactoring, env_data):
     if not data:
       blob = None
     else:
       blob = util.BlobType(util.CompatPickle(data))
 
+    # Note: it's a little gross/inconsistent how updates are handled. It seems
+    # like Database should not be detecting refactoring, and then, we would not
+    # need to pass env_id (which is stored in Entry for only this purpose).
+    only_env_differs = False
     if entry.type == type and \
        entry.folder == folder and \
        entry.blob == data and \
        (dirty == nodetypes.ALWAYS_DIRTY) == (entry.dirty == nodetypes.ALWAYS_DIRTY):
-      return False
+      if nodetypes.IsSameEnvData(entry.tools_env, env_data):
+        return False
+      only_env_differs = True
+
+    # Always mark changed nodes as dirty.
+    if dirty != nodetypes.ALWAYS_DIRTY:
+      dirty = nodetypes.DIRTY
+
+    entry.type = type
+    entry.folder = folder
+    entry.blob = data
+    entry.dirty = dirty
+
+    env_id = None
+    if env_data is not None:
+      entry.tools_env = self.add_environment(env_data)
+      env_id = entry.tools_env.env_id
 
     if refactoring:
-      util.con_err(util.ConsoleRed, 'Command changed! \n',
-                   util.ConsoleRed, 'Old: ',
-                   util.ConsoleBlue, entry.format(),
-                   util.ConsoleNormal)
-      entry.type = type
-      entry.folder = folder
-      entry.blob = data
-      util.con_err(util.ConsoleRed, 'New: ',
-                   util.ConsoleBlue, entry.format(),
-                   util.ConsoleNormal)
+      if only_env_differs:
+        util.con_err(util.ConsoleRed, 'Command environment changed!\n',
+                     util.ConsoleBlue, entry.format(),
+                     util.ConsoleNormal)
+      else:
+        util.con_err(util.ConsoleRed, 'Command changed!\n',
+                     util.ConsoleRed, 'Old: ',
+                     util.ConsoleBlue, entry.format(),
+                     util.ConsoleNormal)
+        util.con_err(util.ConsoleRed, 'New: ',
+                     util.ConsoleBlue, entry.format(),
+                     util.ConsoleNormal)
       raise Exception('Refactoring error: command changed')
 
     if not folder:
@@ -320,17 +374,14 @@ class Database(object):
         type = ?,
         folder = ?,
         data = ?,
-        dirty = ?
+        dirty = ?,
+        env_id = ?
       where id = ?
     """
-    self.cn.execute(query, (type, folder_id, blob, dirty, entry.id))
-    entry.type = type
-    entry.folder = folder
-    entry.blob = blob
-    entry.dirty = dirty
+    self.cn.execute(query, (type, folder_id, blob, dirty, env_id, entry.id))
     return True
 
-  def add_command(self, type, folder, data, dirty):
+  def add_command(self, type, folder, data, dirty, env_data):
     if not data:
       blob = None
     else:
@@ -340,18 +391,19 @@ class Database(object):
     else:
       folder_id = folder.id
 
-    query = "insert into nodes (type, folder, data, dirty) values (?, ?, ?, ?)"
-    cursor = self.cn.execute(query, (type, folder_id, blob, dirty))
+    env_id = None
+    tools_env = None
+    if env_data is not None:
+      tools_env = self.add_environment(env_data)
+      env_id = tools_env.env_id
 
-    entry = Entry(
-      id=cursor.lastrowid,
-      type=type,
-      path=None,
-      blob=data,
-      folder=folder,
-      stamp=0,
-      dirty=nodetypes.DIRTY
-    )
+    query = "insert into nodes (type, folder, data, dirty, env_id) values (?, ?, ?, ?, ?)"
+    cursor = self.cn.execute(query, (type, folder_id, blob, dirty, env_id))
+
+    entry = Entry(id = cursor.lastrowid, type = type, path = None, blob = data, folder = folder,
+                  stamp = 0, dirty = nodetypes.DIRTY)
+    entry.tools_env = tools_env
+
     self.node_cache_[entry.id] = entry
     return entry
 
@@ -413,7 +465,7 @@ class Database(object):
     if id in self.node_cache_:
       return self.node_cache_[id]
 
-    query = "select type, stamp, dirty, path, folder, data from nodes where id = ?"
+    query = "select type, stamp, dirty, path, folder, data, env_id from nodes where id = ?"
     cursor = self.cn.execute(query, (id,))
     return self.import_node(id, cursor.fetchone())
 
@@ -422,7 +474,7 @@ class Database(object):
       return self.path_cache_[path]
 
     query = """
-      select type, stamp, dirty, path, folder, data, id
+      select id, type, stamp, dirty, path, folder, data, env_id
       from nodes
       where path = ?
     """
@@ -431,7 +483,7 @@ class Database(object):
     if not row:
       return None
 
-    return self.import_node(row[6], row)
+    return self.import_node(row[0], row[1:])
 
   def import_node(self, id, row):
     assert id not in self.node_cache_
@@ -454,6 +506,10 @@ class Database(object):
                  folder=folder,
                  stamp=row[1],
                  dirty=row[2])
+
+    if row[6]:
+      node.tools_env = self.fetch_environment(row[6])
+
     self.node_cache_[id] = node
     if node.path:
       assert node.path not in self.path_cache_
@@ -553,6 +609,35 @@ class Database(object):
 
     return node.dynamic_inputs
 
+  def fetch_environment(self, env_id):
+    if env_id in self.env_cache_:
+      return self.env_cache_[env_id]
+
+    query = "SELECT data FROM environments WHERE rowid = ?"
+    cursor = self.cn.execute(query, (env_id,))
+    row = cursor.fetchone()
+    if not row:
+      raise Exception('Database error, invalid environment id {}'.format(env_id))
+
+    tools_env = nodetypes.ToolsEnv(env_id, util.Unpickle(row[0]))
+    self.env_cache_[env_id] = tools_env
+    self.env_reverse_lookup_[tools_env.env_data] = tools_env
+    return tools_env
+
+  def add_environment(self, env_data):
+    if env_data in self.env_reverse_lookup_:
+      return self.env_reverse_lookup_[env_data]
+
+    stamp = time.time()
+    blob = util.BlobType(util.CompatPickle(env_data))
+    query = "INSERT INTO environments (stamp, data) VALUES (?, ?)"
+    cursor = self.cn.execute(query, (stamp, blob))
+
+    tools_env = nodetypes.ToolsEnv(cursor.lastrowid, env_data)
+    self.env_cache_[tools_env.env_id] = tools_env
+    self.env_reverse_lookup_[env_data] = tools_env
+    return tools_env
+
   def mark_dirty(self, entry):
     assert entry.dirty != nodetypes.ALWAYS_DIRTY
 
@@ -593,46 +678,44 @@ class Database(object):
   # Query all mkdir nodes.
   def query_mkdir(self, aggregate):
     query = """
-      select type, stamp, dirty, path, folder, data, id
+      select id, type, stamp, dirty, path, folder, data, env_id
       from nodes
       where type == 'mkd'
     """
     for row in self.cn.execute(query):
-      id = row[6]
-      node = self.import_node(id, row)
+      node = self.import_node(row[0], row[1:])
       aggregate(node)
 
   # Intended to be called before any nodes are imported.
   def query_known_dirty(self, aggregate):
     query = """
-      select type, stamp, dirty, path, folder, data, id
+      select id, type, stamp, dirty, path, folder, data, env_id
       from nodes
       where dirty <> {0}
       and type != 'mkd'
     """.format(nodetypes.NOT_DIRTY)
     for row in self.cn.execute(query):
-      id = row[6]
-      node = self.import_node(id, row)
+      node = self.import_node(row[0], row[1:])
       aggregate(node)
 
   # Query all nodes that are not dirty, but need to be checked. Intended to
   # be called after query_dirty, and returns a mutually exclusive list.
   def query_maybe_dirty(self, aggregate):
     query = """
-      select type, stamp, dirty, path, folder, data, id
+      select id, type, stamp, dirty, path, folder, data, env_id
       from nodes
       where dirty = {0}
       and (type == 'src' or type == 'out' or type == 'cpa')
     """.format(nodetypes.NOT_DIRTY)
     for row in self.cn.execute(query):
       id = row[6]
-      node = self.import_node(id, row)
+      node = self.import_node(row[0], row[1:])
       aggregate(node)
 
   # Find the list of commands that generate this shared output.
   def query_commands(self, aggregate):
     query = """
-      select type, stamp, dirty, path, folder, data, id
+      select id, type, stamp, dirty, path, folder, data, env_id
       from nodes
       where (type != 'src' and
              type != 'out' and
@@ -641,9 +724,19 @@ class Database(object):
              type != 'mkd')
     """
     for row in self.cn.execute(query):
-      id = row[6]
-      node = self.import_node(id, row)
+      node = self.import_node(row[0], row[1:])
       aggregate(node)
+
+  # Load all environments into the cache (and reverse lookup cache).
+  def load_environments(self):
+    query = "SELECT rowid, data FROM environments"
+    for row in self.cn.execute(query):
+      # Note, populating the cache is mandatory otherwise. Otherwise, when the
+      # generator populates its cache, it might give us back an env_id that
+      # we've never seen. Another indicaton that Database is misdesigned.
+      tools_env = nodetypes.ToolsEnv(row[0], util.Unpickle(row[1]))
+      self.env_cache_[tools_env.env_id] = tools_env
+      self.env_reverse_lookup_[tools_env.env_data] = tools_env
 
   # Note that this does not update any caches. It should only be called
   # around cleanup.
@@ -752,6 +845,15 @@ class Database(object):
 
   def drop_script(self, path):
     self.cn.execute("delete from reconfigure where path = ?", (path,))
+
+  def drop_unused_environments(self):
+    query = """
+      SELECT rowid FROM environments
+      WHERE rowid NOT IN (
+        SELECT env_id FROM nodes
+        WHERE env_id IS NOT NULL)"""
+    for row in self.cn.execute(query):
+      self.cn.execute("DELETE FROM environments WHERE rowid = ?", (row[0],))
 
   def change_to_folder(self, entry):
     assert entry.type == nodetypes.Output or entry.type == nodetypes.SharedOutput

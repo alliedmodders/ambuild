@@ -25,6 +25,8 @@ def NormalizeArchString(arch):
     return 'x86_64'
   if arch in ['x86', 'i386', 'i686', 'x32', 'ia32']:
     return 'x86'
+  if arch.startswith('arm64') or arch.startswith('armv8') or arch.startswith('aarch64'):
+    return 'arm64'
   if not arch:
     return 'unknown'
   return arch
@@ -108,12 +110,14 @@ def WaitForProcess(process):
   process.stderrText = DecodeConsoleText(sys.stderr, err)
   return process.returncode
 
-def CreateProcess(argv, executable = None):
+def CreateProcess(argv, executable = None, env = None):
   pargs = { 'args': argv }
   pargs['stdout'] = subprocess.PIPE
   pargs['stderr'] = subprocess.PIPE
   if executable != None:
     pargs['executable'] = executable
+  if env != None:
+    pargs['env'] = env
   try:
     process = subprocess.Popen(**pargs)
   except:
@@ -160,12 +164,13 @@ class Guard:
   def __exit__(self, type, value, traceback):
     self.obj.close()
 
-def Execute(argv, shell=False):
+def Execute(argv, shell = False, env = None):
   p = subprocess.Popen(
       args=argv,
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE,
-      shell=shell
+      shell=shell,
+      env=env
   )
   stdout, stderr = p.communicate()
   out = DecodeConsoleText(sys.stdout, stdout)
@@ -512,3 +517,17 @@ def RelPathIfCommon(search_path, prefix_path):
 
   assert not os.path.isabs(rel_path)
   return rel_path
+
+# Build an environment from an iterable of environment commands.
+def BuildEnv(cmds, env = None):
+  if env is None:
+    env = os.environ.copy()
+  for cmd, key, value in cmds:
+    if cmd == 'replace':
+      env[key] = value
+    elif cmd == 'add':
+      if key in env:
+        env[key] += value
+      else:
+        env[key] = value
+  return env

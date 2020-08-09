@@ -121,6 +121,10 @@ class Entry(object):
     # See the DIRTY values above.
     self.dirty = dirty
 
+    # If not None, a ToolsEnv that has environment information for running
+    # commands.
+    self.tools_env = None
+
     #########################################
     # Remaining fields are lazily computed. #
     #########################################
@@ -176,3 +180,30 @@ def combine(a, b):
   if not text_a:
     return text_b
   return os.path.join(text_a, text_b)
+
+# Helper class for reading env_data objects in the database. This cannot modify
+# the underlying environment data.
+class ToolsEnv(object):
+  def __init__(self, env_id, env_data):
+    self.env_id = env_id
+    self.env_data = env_data # Source of truth for equality testing.
+    self.env_cmds = None
+    self.tools = {}
+
+    for name, data in env_data:
+      if name == 'env_cmds':
+        self.env_cmds = data
+      elif name == 'tools':
+        for tool_name, tool_path in data:
+          self.tools[tool_name] = tool_path
+
+# This compares a ToolsEnv to an env_data tuple. Any other combination is not
+# a legal comparison.
+def IsSameEnvData(tools_env, env_data):
+  if tools_env is None:
+    return env_data is None
+  if env_data is None:
+    return tools_env is None
+  if id(tools_env.env_data) == id(env_data):
+    return True
+  return tools_env.env_data == env_data
