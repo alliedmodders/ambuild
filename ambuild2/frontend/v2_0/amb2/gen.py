@@ -501,7 +501,8 @@ class Generator(BaseGenerator):
 
     if cmd_entry:
       # Update the entry in the database.
-      self.db.update_command(cmd_entry, node_type, folder, data, dirty, self.refactoring)
+      self.db.update_command(cmd_entry, node_type, folder, data, dirty, self.refactoring,
+                             None)
 
       # Disconnect any outputs that are no longer connected to this output.
       # It's okay to use output_links since there should never be duplicate
@@ -526,7 +527,7 @@ class Generator(BaseGenerator):
     else:
       # Note that if there are no outputs, we will always add a new command,
       # and the old (identical) command will be deleted.
-      cmd_entry = self.db.add_command(node_type, folder, data, dirty)
+      cmd_entry = self.db.add_command(node_type, folder, data, dirty, None)
 
     # Local helper function to warn about refactoring problems.
     def refactoring_error(node):
