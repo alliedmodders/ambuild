@@ -22,7 +22,7 @@ from optparse import OptionParser, Values, SUPPRESS_HELP
 from ambuild2.frontend.system import System
 
 class Preparer(object):
-  def __init__(self, sourcePath, buildPath):
+  def __init__(self, sourcePath, buildPath, api_version):
     self.sourcePath = sourcePath
     self.buildPath = buildPath
     self.host = System.Host
