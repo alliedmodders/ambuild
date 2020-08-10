@@ -1,6 +1,6 @@
 AMBuild is a lightweight build system designed for performance and accuracy. It is geared toward C/C++ projects which require programmatic flexibility in their builds and precise control over C/C++ compiler flags.
 
-AMBuild requires Python 2.6 or higher, or Python 3.1 or higher.
+AMBuild requires either Python 3 or Python 2.7.
 
 For more information, see: https://wiki.alliedmods.net/AMBuild
 
