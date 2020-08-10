@@ -70,8 +70,8 @@ class BaseGenerator(object):
     return self.importScriptImpl(context, path, vars)
 
   def evalScript(self, context, path, vars={}):
-    obj = self.importScriptImpl(self, context, path, vars)
-    return obj.get('rvalue', None)
+    obj = self.importScriptImpl(context, path, vars)
+    return getattr(obj, 'rvalue', None)
 
   def runBuildScript(self, context, path, vars={}):
     if not isinstance(path, util.StringType()):
