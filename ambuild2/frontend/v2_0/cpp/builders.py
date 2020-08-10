@@ -266,7 +266,7 @@ class BinaryBuilder(object):
     if isinstance(self.linker_, MSVC):
       # Note, pdb is last since we read the pdb as outputs[-1].
       self.linker_outputs += [self.name_ + '.pdb']
-    elif cx.target_platform is 'mac':
+    elif cx.target_platform == 'mac':
       bundle_folder = os.path.join(self.localFolder, self.outputFile + '.dSYM')
       bundle_entry = cx.AddFolder(bundle_folder)
       bundle_layout = [
@@ -282,7 +282,7 @@ class BinaryBuilder(object):
       ]
       self.debug_entry = bundle_entry
       self.argv = ['ambuild_dsymutil_wrapper.sh', self.outputFile] + self.argv
-    elif cx.target_platform is 'linux':
+    elif cx.target_platform == 'linux':
       self.linker_outputs += [
         self.outputFile + '.dbg'
       ]

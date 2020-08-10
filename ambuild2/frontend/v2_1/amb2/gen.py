@@ -749,7 +749,7 @@ class Generator(BaseGenerator):
                       weak_inputs=[],
                       shared_outputs=[],
                       env_data=None):
-    if folder is -1:
+    if folder == -1:
       folder = context.localFolder
 
     if dep_type is None:
