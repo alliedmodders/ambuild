@@ -68,8 +68,8 @@ any ambuild folders:
           setup_requires = ['setuptools-git-versioning>=1.1.5'],
           version_config = {
               'template': '{tag}',
-              'dev_template': '{tag}.{ccount}-git.{sha}',
-              'dirty_template': '{tag}.{ccount}-git.{sha}.dirty',
+              'dev_template': '{tag}.{ccount}+git.{sha}',
+              'dirty_template': '{tag}.{ccount}+git.{sha}.dirty',
               'starting_version': '2.1.1'
           },
           entry_points = {'console_scripts': ['ambuild = ambuild2.run:cli_run']},
