@@ -237,10 +237,10 @@ def ComputeSourcePath(context, localFolderNode, item):
     return os.path.relpath(item.path, localFolderNode.path)
 
 class CustomSource(object):
-    def __init__(self, source, weak_deps = []):
+    def __init__(self, source, weak_deps = None):
         super(CustomSource, self).__init__()
         self.source = source
-        self.weak_deps = weak_deps
+        self.weak_deps = weak_deps or []
 
 class CustomToolCommand(object):
     def __init__(self, cx, module, localFolderNode, data):
@@ -264,8 +264,8 @@ class CustomToolCommand(object):
         return ComputeSourcePath(self.module_.context, self.localFolderNode, path)
 
     @staticmethod
-    def CustomSource(source, weak_deps = []):
-        return CustomSource(source, weak_deps)
+    def CustomSource(source, weak_deps = None):
+        return CustomSource(source, weak_deps or [])
 
 class Module(object):
     def __init__(self, context, compiler, name):

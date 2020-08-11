@@ -62,23 +62,23 @@ class BaseGenerator(object):
     def popContext(self):
         self.contextStack_.pop()
 
-    def importScript(self, context, path, vars = {}):
+    def importScript(self, context, path, vars = None):
         if not isinstance(path, util.StringType()):
             for item in path:
-                self.importScriptImpl(context, item, vars)
+                self.importScriptImpl(context, item, vars or {})
             return None
-        return self.importScriptImpl(context, path, vars)
+        return self.importScriptImpl(context, path, vars or {})
 
-    def evalScript(self, context, path, vars = {}):
-        obj = self.importScriptImpl(context, path, vars)
+    def evalScript(self, context, path, vars = None):
+        obj = self.importScriptImpl(context, path, vars or {})
         return getattr(obj, 'rvalue', None)
 
-    def runBuildScript(self, context, path, vars = {}):
+    def runBuildScript(self, context, path, vars = None):
         if not isinstance(path, util.StringType()):
             for item in path:
-                self.runBuildScriptImpl(context, item, vars)
+                self.runBuildScriptImpl(context, item, vars or {})
             return None
-        return self.runBuildScriptImpl(context, path, vars)
+        return self.runBuildScriptImpl(context, path, vars or {})
 
     def importScriptImpl(self, parent, path, vars):
         assert isinstance(path, util.StringType())

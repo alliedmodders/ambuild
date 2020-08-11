@@ -83,11 +83,11 @@ class BaseContext(object):
     def apiVersion(self):
         return Version('2.1.1')
 
-    def Import(self, path, vars = {}):
-        return self.generator_.importScript(self, path, vars)
+    def Import(self, path, vars = None):
+        return self.generator_.importScript(self, path, vars or {})
 
-    def Eval(self, path, vars = {}):
-        return self.generator_.evalScript(self, path, vars)
+    def Eval(self, path, vars = None):
+        return self.generator_.evalScript(self, path, vars or {})
 
     def AddConfigureFile(self, path):
         return self.generator_.addConfigureFile(self, path)
@@ -126,8 +126,8 @@ class BuildContext(BaseContext):
         if self.buildFolder:
             self.buildFolder = os.path.normpath(self.buildFolder)
 
-    def Build(self, path, vars = {}):
-        return self.generator_.runBuildScript(self, path, vars)
+    def Build(self, path, vars = None):
+        return self.generator_.runBuildScript(self, path, vars or {})
 
     # Any consumed options will be removed from the given dictionary. Callers
     # can detect unconsumed options by inspecting the dictionary after.
