@@ -425,9 +425,12 @@ class Generator(BaseGenerator):
                    data,
                    inputs,
                    outputs,
-                   weak_inputs = [],
-                   shared_outputs = []):
+                   weak_inputs = None,
+                   shared_outputs = None):
         assert not folder or isinstance(folder, nodetypes.Entry)
+
+        weak_inputs = weak_inputs or []
+        shared_outputs = shared_outputs or []
 
         # Build the set of weak links.
         weak_links = set()
@@ -710,10 +713,13 @@ class Generator(BaseGenerator):
                         outputs,
                         folder = -1,
                         dep_type = None,
-                        weak_inputs = [],
-                        shared_outputs = []):
+                        weak_inputs = None,
+                        shared_outputs = None):
         if folder is -1:
             folder = context.localFolder
+
+        weak_inputs = weak_inputs or []
+        shared_outputs = shared_outputs or []
 
         if dep_type is None:
             node_type = nodetypes.Command

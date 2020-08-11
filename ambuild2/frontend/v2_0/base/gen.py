@@ -103,15 +103,15 @@ class Context(object):
             self.compiler = self.generator.detectCompilers().clone()
         return self.compiler
 
-    def ImportScript(self, file, vars = {}):
-        return self.generator.importScript(self, file, vars)
+    def ImportScript(self, file, vars = None):
+        return self.generator.importScript(self, file, vars or {})
 
-    def RunScript(self, file, vars = {}):
-        return self.generator.evalScript(file, vars)
+    def RunScript(self, file, vars = None):
+        return self.generator.evalScript(file, vars or {})
 
-    def RunBuildScripts(self, files, vars = {}):
+    def RunBuildScripts(self, files, vars = None):
         if util.IsString(files):
-            self.generator.evalScript(files, vars)
+            self.generator.evalScript(files, vars or {})
         else:
             for script in files:
                 self.generator.evalScript(script, vars)
@@ -208,11 +208,11 @@ class BaseGenerator(object):
 
             return compile(chars, path, 'exec')
 
-    def importScript(self, context, file, vars = {}):
+    def importScript(self, context, file, vars = None):
         path = os.path.normpath(os.path.join(context.sourcePath, file))
         self.addConfigureFile(context, path)
 
-        new_vars = copy.copy(vars)
+        new_vars = copy.copy(vars or {})
         new_vars['builder'] = context
 
         code = self.compileScript(path)
@@ -226,7 +226,7 @@ class BaseGenerator(object):
     def Context(self, name):
         return AutoContext(self, self.contextStack_[-1], name)
 
-    def evalScript(self, file, vars = {}):
+    def evalScript(self, file, vars = None):
         file = os.path.normpath(file)
 
         cx = Context(self, self.contextStack_[-1], file)
@@ -236,7 +236,7 @@ class BaseGenerator(object):
 
         self.addConfigureFile(cx, full_path)
 
-        new_vars = copy.copy(vars)
+        new_vars = copy.copy(vars or {})
         new_vars['builder'] = cx
 
         # Run it.
