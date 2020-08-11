@@ -1,0 +1,17 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+cxx = builder.DetectCxx()
+binary = cxx.Library('project_name')
+compiler = binary.compiler
+compiler.linkflags += [
+    '/NOENTRY',
+]
+compiler.includes += [
+    os.path.join(builder.currentSourcePath),
+]
+
+binary.sources += [
+    'project_resource.rc',
+]
+
+builder.Add(binary)

@@ -44,9 +44,6 @@ class GCCLookalike(Vendor):
     def formatInclude(self, outputPath, includePath):
         return ['-I', os.path.normpath(includePath)]
 
-    def preprocessArgs(self, sourceFile, outFile):
-        return ['-I', os.path.normpath(includePath)]
-
     def objectArgs(self, sourceFile, objFile):
         return ['-H', '-c', sourceFile, '-o', objFile]
 
@@ -64,6 +61,13 @@ class GCCLookalike(Vendor):
             argv += ['-shared']
         argv += ['-o', outputFile]
         return argv
+
+    def preprocessArgv(self, sourceFile, outFile):
+        return ['-H', '-E', sourceFile, '-o', outFile]
+
+    @staticmethod
+    def IncludePath(outputPath, includePath):
+        return includePath
 
 class GCC(GCCLookalike):
     def __init__(self, version):

@@ -145,6 +145,7 @@ class ObjectArgvBuilder(object):
         self.objects = []
         self.resources = []
         self.used_cxx = False
+        self.has_code = False
         self.sourcedeps = []
         self.env_data = None
 
@@ -192,13 +193,15 @@ class ObjectArgvBuilder(object):
         return self.buildCxxItem(inputObj, sourceFile, encodedName, extension)
 
     def buildCxxItem(self, inputObj, sourceFile, encodedName, extension):
+        self.has_code = True
+
         if extension == '.c':
             argv = self.cc_argv[:]
         else:
             argv = self.cxx_argv[:]
             self.used_cxx = True
-        objectFile = encodedName + self.vendor.objSuffix
 
+        objectFile = encodedName + self.vendor.objSuffix
         argv += self.vendor.objectArgs(sourceFile, objectFile)
         return ObjectFile(self, inputObj, objectFile, argv)
 
@@ -284,6 +287,7 @@ class BinaryBuilder(object):
         self.linker_ = None
         self.modules_ = []
         self.localFolder = name
+        self.has_code_ = False
 
     @property
     def outputFile(self):
@@ -390,6 +394,8 @@ class BinaryBuilder(object):
         # Propagate the used_cxx bit.
         if builder.used_cxx:
             self.used_cxx_ = True
+        if builder.has_code:
+            self.has_code_ = True
 
     def computeModuleFolders(self, cx, module):
         buildBase = self.getBuildFolder(cx)
@@ -458,7 +464,7 @@ class BinaryBuilder(object):
         self.debug_entry = None
 
         if self.linker_.behavior == 'msvc':
-            if isinstance(self, Library):
+            if isinstance(self, Library) and self.has_code_:
                 # In theory, .dlls should have exports, so MSVC will generate these
                 # files. If this turns out not to be true, we may have to get fancier.
                 self.linker_outputs += [self.name_ + '.lib']
