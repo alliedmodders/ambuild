@@ -27,12 +27,11 @@ if __name__ == '__main__':
     proc.join()
 
     if proc.exitcode != 0:
-        sys.stderr.write('''You have an older installation of AMBuild. AMBuild must
-now be installed using pip (see README.md). To prevent
-conflicts, please remove the old distutils version. You can
-do this by inspecting the following paths and removing
-any ambuild folders:
-\n''')
+        sys.stderr.write("You have an older installation of AMBuild. AMBuild must\n")
+        sys.stderr.write("now be installed using pip (see README.md). To prevent\n")
+        sys.stderr.write("conflicts, please remove the old distutils version. You can\n")
+        sys.stderr.write("do this by inspecting the following paths and removing\n")
+        sys.stderr.write("any ambuild folders:\n")
 
         for path in sys.path[1:]:
             for subdir in ['ambuild', 'ambuild2']:
