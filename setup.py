@@ -64,7 +64,14 @@ any ambuild folders:
           author_email = 'dvander@alliedmods.net',
           url = 'http://www.alliedmods.net/ambuild',
           packages = find_packages(),
-          python_requires = '>=2.6',
+          python_requires = '>=2.7',
+          setup_requires = ['setuptools-git-versioning>=1.1.5'],
+          version_config = {
+              'template': '{tag}',
+              'dev_template': '{tag}.{ccount}+git.{sha}',
+              'dirty_template': '{tag}.{ccount}+git.{sha}.dirty',
+              'starting_version': '2.1.1'
+          },
           entry_points = {'console_scripts': ['ambuild = ambuild2.run:cli_run']},
           scripts = amb_scripts,
           zip_safe = False)
