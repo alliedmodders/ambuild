@@ -1,17 +1,17 @@
 # vim: set ts=8 sts=2 sw=2 tw=99 et:
 #
 # This file is part of AMBuild.
-# 
+#
 # AMBuild is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # AMBuild is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import collections
@@ -46,6 +46,7 @@ class MSVCFinder(object):
 
         def sort_by_version(install):
             return install.version
+
         self.installs_.sort(key = sort_by_version, reverse = True)
 
         return self.installs_
@@ -66,9 +67,12 @@ class MSVCFinder(object):
             return
         argv = [
             vswhere,
-            '-format', 'json',
-            '-products', '*',
-            '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+            '-format',
+            'json',
+            '-products',
+            '*',
+            '-requires',
+            'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
         ]
         try:
             output = subprocess.check_output(argv)
@@ -144,7 +148,7 @@ def parse_env(text):
         if first_eq == -1:
             env[line.upper()] = ''
         else:
-            key = line[0 : first_eq]
+            key = line[0:first_eq]
             value = line[first_eq + 1:]
             env[key.upper()] = value
     return env

@@ -30,179 +30,185 @@ from ambuild2.frontend.version import Version
 # scripts change.
 
 class BaseContext(object):
-  def __init__(self, generator, parent, vars, script):
-    super(BaseContext, self).__init__()
-    self.generator_ = generator
-    self.parent_ = parent
-    self.script_ = script
+    def __init__(self, generator, parent, vars, script):
+        super(BaseContext, self).__init__()
+        self.generator_ = generator
+        self.parent_ = parent
+        self.script_ = script
 
-    if parent:
-      self.vars_ = copy.copy(parent.vars_)
-    else:
-      self.vars_ = {}
+        if parent:
+            self.vars_ = copy.copy(parent.vars_)
+        else:
+            self.vars_ = {}
 
-    # Merge.
-    for key in vars:
-      self.vars_[key] = vars[key]
-    self.vars_['builder'] = self
+        # Merge.
+        for key in vars:
+            self.vars_[key] = vars[key]
+        self.vars_['builder'] = self
 
-  @property
-  def parent(self):
-    return self.parent_
+    @property
+    def parent(self):
+        return self.parent_
 
-  # Root source folder.
-  @property
-  def sourcePath(self):
-    return self.generator_.sourcePath
+    # Root source folder.
+    @property
+    def sourcePath(self):
+        return self.generator_.sourcePath
 
-  @property
-  def options(self):
-    return self.generator_.options
+    @property
+    def options(self):
+        return self.generator_.options
 
-  @property
-  def target(self):
-    return self.generator_.target
+    @property
+    def target(self):
+        return self.generator_.target
 
-  @property
-  def host(self):
-    return self.generator_.host
+    @property
+    def host(self):
+        return self.generator_.host
 
-  @property
-  def originalCwd(self):
-    return self.generator_.originalCwd
+    @property
+    def originalCwd(self):
+        return self.generator_.originalCwd
 
-  @property
-  def backend(self):
-    return self.generator_.backend
+    @property
+    def backend(self):
+        return self.generator_.backend
 
-  @property
-  def buildPath(self):
-    return self.generator_.buildPath
+    @property
+    def buildPath(self):
+        return self.generator_.buildPath
 
-  @property
-  def apiVersion(self):
-    return Version('2.1.1')
+    @property
+    def apiVersion(self):
+        return Version('2.1.1')
 
-  def Import(self, path, vars={}):
-    return self.generator_.importScript(self, path, vars)
+    def Import(self, path, vars = {}):
+        return self.generator_.importScript(self, path, vars)
 
-  def Eval(self, path, vars={}):
-    return self.generator_.evalScript(self, path, vars)
+    def Eval(self, path, vars = {}):
+        return self.generator_.evalScript(self, path, vars)
 
-  def AddConfigureFile(self, path):
-    return self.generator_.addConfigureFile(self, path)
+    def AddConfigureFile(self, path):
+        return self.generator_.addConfigureFile(self, path)
 
 # Access to input-oriented API.
 class EmptyContext(BaseContext):
-  def __init__(self, generator, parent, vars, script):
-    super(EmptyContext, self).__init__(generator, parent, vars, script)
+    def __init__(self, generator, parent, vars, script):
+        super(EmptyContext, self).__init__(generator, parent, vars, script)
 
 # Access to input- and output-oriented API.
 class BuildContext(BaseContext):
-  # This nonce is an input flag to AddCommand.
-  ALWAYS_DIRTY = object()
+    # This nonce is an input flag to AddCommand.
+    ALWAYS_DIRTY = object()
 
-  # Provide an accessor so users don't have to import the v2_1 namespace.
-  tools = tools
+    # Provide an accessor so users don't have to import the v2_1 namespace.
+    tools = tools
 
-  def __init__(self, generator, parent, vars, script, sourceFolder, buildFolder):
-    super(BuildContext, self).__init__(generator, parent, vars, script)
-    self.localFolder_ = None
-    self.cxx_ = None
+    def __init__(self, generator, parent, vars, script, sourceFolder, buildFolder):
+        super(BuildContext, self).__init__(generator, parent, vars, script)
+        self.localFolder_ = None
+        self.cxx_ = None
 
-    if parent and parent.cxx_:
-      self.cxx_ = parent.cxx_.clone()
+        if parent and parent.cxx_:
+            self.cxx_ = parent.cxx_.clone()
 
-    self.sourceFolder = sourceFolder
-    self.buildFolder = buildFolder
-    self.currentSourcePath = os.path.join(generator.sourcePath, sourceFolder)
-    self.currentSourceFolder = sourceFolder
-    self.buildFolder = buildFolder
+        self.sourceFolder = sourceFolder
+        self.buildFolder = buildFolder
+        self.currentSourcePath = os.path.join(generator.sourcePath, sourceFolder)
+        self.currentSourceFolder = sourceFolder
+        self.buildFolder = buildFolder
 
-    # Make sure everything is normalized.
-    self.currentSourcePath = os.path.normpath(self.currentSourcePath)
-    if self.currentSourceFolder:
-      self.currentSourceFolder = os.path.normpath(self.currentSourceFolder)
-    if self.buildFolder:
-      self.buildFolder = os.path.normpath(self.buildFolder)
+        # Make sure everything is normalized.
+        self.currentSourcePath = os.path.normpath(self.currentSourcePath)
+        if self.currentSourceFolder:
+            self.currentSourceFolder = os.path.normpath(self.currentSourceFolder)
+        if self.buildFolder:
+            self.buildFolder = os.path.normpath(self.buildFolder)
 
-  def Build(self, path, vars={}):
-    return self.generator_.runBuildScript(self, path, vars)
+    def Build(self, path, vars = {}):
+        return self.generator_.runBuildScript(self, path, vars)
 
-  # Any consumed options will be removed from the given dictionary. Callers
-  # can detect unconsumed options by inspecting the dictionary after.
-  def DetectCxx(self, options = {}):
-    # Only the top-level build script should be detecting compilers.
-    if self.cxx_ is None and self.parent_ is None:
-      self.cxx_ = self.generator_.detectCompilers(options).clone()
-    return self.cxx_
+    # Any consumed options will be removed from the given dictionary. Callers
+    # can detect unconsumed options by inspecting the dictionary after.
+    def DetectCxx(self, options = {}):
+        # Only the top-level build script should be detecting compilers.
+        if self.cxx_ is None and self.parent_ is None:
+            self.cxx_ = self.generator_.detectCompilers(options).clone()
+        return self.cxx_
 
-  @property
-  def cxx(self):
-    return self.cxx_
+    @property
+    def cxx(self):
+        return self.cxx_
 
-  # In build systems with dependency graphs, this can return a node
-  # representing buildFolder. Otherwise, it returns buildFolder.
-  @property
-  def localFolder(self):
-    if self.localFolder_ is None:
-      self.localFolder_ = self.generator_.getLocalFolder(self)
-    return self.localFolder_
+    # In build systems with dependency graphs, this can return a node
+    # representing buildFolder. Otherwise, it returns buildFolder.
+    @property
+    def localFolder(self):
+        if self.localFolder_ is None:
+            self.localFolder_ = self.generator_.getLocalFolder(self)
+        return self.localFolder_
 
-  def AddSource(self, source_path):
-    return self.generator_.addSource(self, source_path)
+    def AddSource(self, source_path):
+        return self.generator_.addSource(self, source_path)
 
-  def AddSymlink(self, source, output_path):
-    return self.generator_.addSymlink(self, source, output_path)
+    def AddSymlink(self, source, output_path):
+        return self.generator_.addSymlink(self, source, output_path)
 
-  def AddFolder(self, folder):
-    return self.generator_.addFolder(self, folder)
+    def AddFolder(self, folder):
+        return self.generator_.addFolder(self, folder)
 
-  def AddCopy(self, source, output_path):
-    return self.generator_.addCopy(self, source, output_path)
+    def AddCopy(self, source, output_path):
+        return self.generator_.addCopy(self, source, output_path)
 
-  def AddCommand(self, inputs, argv, outputs, folder=-1, dep_type=None, weak_inputs=[],
-                 shared_outputs=[], env_data=None):
-    return self.generator_.addShellCommand(
-      self,
-      inputs,
-      argv,
-      outputs,
-      folder = folder,
-      dep_type = dep_type,
-      weak_inputs = weak_inputs,
-      shared_outputs = shared_outputs,
-      env_data = env_data)
+    def AddCommand(self,
+                   inputs,
+                   argv,
+                   outputs,
+                   folder = -1,
+                   dep_type = None,
+                   weak_inputs = [],
+                   shared_outputs = [],
+                   env_data = None):
+        return self.generator_.addShellCommand(self,
+                                               inputs,
+                                               argv,
+                                               outputs,
+                                               folder = folder,
+                                               dep_type = dep_type,
+                                               weak_inputs = weak_inputs,
+                                               shared_outputs = shared_outputs,
+                                               env_data = env_data)
 
-  def Context(self, name):
-    return self.generator_.Context(name)
+    def Context(self, name):
+        return self.generator_.Context(name)
 
-  def Add(self, taskbuilder):
-    taskbuilder.finish(self)
-    return taskbuilder.generate(self.generator_, self)
+    def Add(self, taskbuilder):
+        taskbuilder.finish(self)
+        return taskbuilder.generate(self.generator_, self)
 
-  def SetBuildFolder(self, folder):
-    # Cannot set the local build folder after it has been generated.
-    if self.localFolder_ is not None:
-      raise Exception("Cannot set top-level build folder twice!")
+    def SetBuildFolder(self, folder):
+        # Cannot set the local build folder after it has been generated.
+        if self.localFolder_ is not None:
+            raise Exception("Cannot set top-level build folder twice!")
 
-    if folder == '/' or folder == '.' or folder == './':
-      self.buildFolder = ''
-    else:
-      self.buildFolder = os.path.normpath(folder)
+        if folder == '/' or folder == '.' or folder == './':
+            self.buildFolder = ''
+        else:
+            self.buildFolder = os.path.normpath(folder)
 
 # Access to everything.
 class TopLevelBuildContext(BuildContext):
-  def __init__(self, generator, parent, vars, script, sourceFolder, buildFolder):
-    super(TopLevelBuildContext, self).__init__(generator, parent, vars, script, sourceFolder, buildFolder)
+    def __init__(self, generator, parent, vars, script, sourceFolder, buildFolder):
+        super(TopLevelBuildContext, self).__init__(generator, parent, vars, script, sourceFolder,
+                                                   buildFolder)
 
 # The root build context.
 class RootBuildContext(BuildContext):
-  def __init__(self, generator, vars, script):
-    super(RootBuildContext, self).__init__(
-      generator = generator,
-      parent = None,
-      vars = vars,
-      script = script,
-      sourceFolder = '',
-      buildFolder = '')
+    def __init__(self, generator, vars, script):
+        super(RootBuildContext, self).__init__(generator = generator,
+                                               parent = None,
+                                               vars = vars,
+                                               script = script,
+                                               sourceFolder = '',
+                                               buildFolder = '')

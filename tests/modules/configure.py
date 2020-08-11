@@ -2,5 +2,5 @@
 import sys
 from ambuild2 import run
 
-builder = run.BuildParser(sourcePath = sys.path[0], api="2.1")
+builder = run.BuildParser(sourcePath = sys.path[0], api = "2.1")
 builder.Configure()

@@ -1,4 +1,4 @@
-# vim: set sts=4 ts=8 sw=4 tw=99 et: 
+# vim: set sts=4 ts=8 sw=4 tw=99 et:
 import ntpath
 import unittest
 from ambuild2.frontend import paths
