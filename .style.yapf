@@ -1,0 +1,6 @@
+[style]
+based_on_style = google
+column_limit = 100
+spaces_around_default_or_named_assign = True
+blank_line_before_nested_class_or_def = False
+blank_lines_around_top_level_definition = 1

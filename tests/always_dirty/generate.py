@@ -2,8 +2,8 @@
 import datetime
 
 def main():
-  with open('sample.h', 'w') as fp:
-    fp.write("const char* DATE = {0};\n".format(datetime.datetime.now()))
+    with open('sample.h', 'w') as fp:
+        fp.write("const char* DATE = {0};\n".format(datetime.datetime.now()))
 
 if __name__ == '__main__':
     main()

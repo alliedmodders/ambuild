@@ -27,7 +27,17 @@ Build scripts for AMBuild are parsed once upon configuration, and are responsibl
 # AMBuild 1
 
 AMBuild 1 was intended as a replacement for build systems such as SCons or Make. Its syntax is easier than Make and handles C/C++ dependencies automatically. Like most build systems, it performs a full recursive search for outdated files, which can make it slower for dependency graphs with many edges. It has no multiprocess support. Also unlike AMBuild 2, the dependency graph is not saved in between builds, which greatly reduces its incremental build accuracy and speed.
-
+C
 AMBuild 1 is installed alongside AMBuild 2 for backward compatibility, however it resides in an older namespace and has a completely separate API.
+
+# Contributing
+
+AMBuild is written in Python. All changes must be Python 2.7 compatible, since it is used on some very old machines.
+
+Code is formatted using YAPF. If GitHub tells you there are style issues, you can use "yapf -r -i ." to fix them. You can get YAPF with pip ("pip install yapf").
+
+AlliedModders developers can often be found in IRC (irc.gamesurge.net, #smdevs) if you have questions.
+
+# References
 
 [1]: <http://gittup.org/tup/build_system_rules_and_algorithms.pdf> "Build System Rules and Algorithms by Mike Shal"

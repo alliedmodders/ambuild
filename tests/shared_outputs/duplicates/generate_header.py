@@ -2,7 +2,7 @@
 import sys
 
 with open(sys.argv[1], 'w') as fp:
-  fp.write("""
+    fp.write("""
 #ifndef HELLO_STRING
 # define HELLO_STRING "HELLO!"
 #endif
