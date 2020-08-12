@@ -36,6 +36,8 @@ AMBuild is written in Python. All changes must be Python 2.7 compatible, since i
 
 Code is formatted using YAPF. If GitHub tells you there are style issues, you can use "yapf -r -i ." to fix them. You can get YAPF with pip ("pip install yapf").
 
+Bugfixes are welcome, including to older API versions. New features are only added to the newest API.
+
 AlliedModders developers can often be found in IRC (irc.gamesurge.net, #smdevs) if you have questions.
 
 # References

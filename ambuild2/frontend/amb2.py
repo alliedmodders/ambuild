@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -19,56 +19,30 @@ from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2 import database
 from ambuild2.frontend import paths
-from ambuild2.frontend.v2_1 import cpp
-from ambuild2.frontend.v2_1.cpp import detect
-from ambuild2.frontend.v2_1.base import BaseGenerator
+from ambuild2.frontend.base_generator import BaseGenerator
 
 class Generator(BaseGenerator):
-    def __init__(self,
-                 sourcePath,
-                 buildPath,
-                 originalCwd,
-                 options,
-                 args,
-                 db = None,
-                 refactoring = False):
-        super(Generator, self).__init__(sourcePath, buildPath, originalCwd, options, args)
-        self.cacheFolder = os.path.join(self.buildPath, '.ambuild2')
+    def __init__(self, cm):
+        super(Generator, self).__init__(cm)
+        self.cacheFolder = os.path.join(self.cm.buildPath, '.ambuild2')
         self.old_scripts_ = set()
         self.old_folders_ = set()
         self.old_commands_ = set()
         self.rm_list_ = []
         self.bad_outputs_ = set()
-        self.db = db
-        self.is_bootstrap = not self.db
-        self.refactoring = refactoring
         self.compiler = None
         self.symlink_support = False
         self.had_symlink_fallback = False
+        self.db = cm.db
+        self.is_bootstrap = not self.db
 
     @property
     def backend(self):
         return 'amb2'
 
-    @classmethod
-    def FromVars(cls, vars, db, refactoring):
-        # Backwards compatibility: for an automatic reconfigure on an older build,
-        # just assume the source path is the cwd. If the AMBuildScript suddenly
-        # has decided to depend on originalCwd, then the user may have to manually
-        # run configure.py again, until we remove configure.py entirely.
-        if 'originalCwd' in vars:
-            originalCwd = vars['originalCwd']
-        else:
-            originalCwd = vars['sourcePath']
-
-        gen = cls(sourcePath = vars['sourcePath'],
-                  buildPath = vars['buildPath'],
-                  originalCwd = originalCwd,
-                  options = vars['options'],
-                  args = vars['args'],
-                  db = db,
-                  refactoring = refactoring)
-        return gen
+    @property
+    def refactoring(self):
+        return self.cm.refactoring
 
     def preGenerate(self):
         if not os.path.isdir(self.cacheFolder):
@@ -87,7 +61,7 @@ class Generator(BaseGenerator):
         self.db.query_scripts(lambda id, path, stamp: self.old_scripts_.add(path))
         self.db.query_mkdir(lambda entry: self.old_folders_.add(entry))
         self.db.query_commands(lambda entry: self.old_commands_.add(entry))
-        self.db.set_var('api_version', '2.1')
+        self.db.set_var('api_version', str(self.cm.apiVersion))
 
     def cleanup(self):
         for path in self.rm_list_:
@@ -170,11 +144,11 @@ class Generator(BaseGenerator):
 
     def saveVars(self):
         vars = {
-            'sourcePath': self.sourcePath,
-            'buildPath': self.buildPath,
-            'originalCwd': self.originalCwd,
-            'options': self.options,
-            'args': self.args
+            'sourcePath': self.cm.sourcePath,
+            'buildPath': self.cm.buildPath,
+            'originalCwd': self.cm.originalCwd,
+            'options': self.cm.options,
+            'args': self.cm.args
         }
 
         # Save any environment variables that are relevant to the build.
@@ -187,26 +161,27 @@ class Generator(BaseGenerator):
                     env[key] = os.environ[key]
 
             # Save any extra compiler info that must be communicated to the backend.
-            for prop_name in self.compiler.vendor.extra_props:
-                key = '{0}_{1}'.format(self.compiler.vendor.name, prop_name)
-                vars[key] = self.compiler.vendor.extra_props[prop_name]
+            self.cm.copyCompilerVars(vars, self.compiler)
 
         vars['env'] = env
 
         with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
             util.DiskPickle(vars, fp)
 
-    def detectCompilers(self, options):
-        if not self.compiler:
-            with util.FolderChanger(self.cacheFolder):
-                self.base_compiler = detect.AutoDetectCxx(self.target, self.options, options)
-                if self.base_compiler is None:
-                    raise Exception('Could not detect a suitable C/C++ compiler')
-                self.compiler = self.base_compiler.clone()
-
-        return self.compiler
+    def detectCompilers(self, options = None):
+        raise Exception('Implement me!')
 
     def getLocalFolder(self, context):
+        if self.cm.apiVersion < '2.1':
+            if type(context.localFolder_) is nodetypes.Entry or context.localFolder_ is None:
+                return context.localFolder_
+
+            if len(context.buildFolder):
+                context.localFolder_ = self.generateFolder(None, context.buildFolder)
+            else:
+                context.localFolder_ = None
+            return context.localFolder_
+
         if len(context.buildFolder):
             return self.generateFolder(None, context.buildFolder)
         return None
@@ -427,7 +402,7 @@ class Generator(BaseGenerator):
         weak_inputs = weak_inputs or []
         shared_outputs = shared_outputs or []
 
-        if inputs is context.ALWAYS_DIRTY:
+        if inputs is self.cm.ALWAYS_DIRTY:
             if len(weak_inputs) != 0:
                 message = "Always-dirty commands cannot have weak inputs"
                 util.con_err(util.ConsoleRed, "{0}.".format(message), util.ConsoleNormal)
@@ -446,7 +421,7 @@ class Generator(BaseGenerator):
 
         # Build the set of strong links.
         strong_links = set()
-        if inputs is not context.ALWAYS_DIRTY:
+        if inputs is not context.cm.ALWAYS_DIRTY:
             for strong_input in inputs:
                 strong_input = self.parseInput(context, strong_input)
                 strong_links.add(strong_input)
@@ -500,7 +475,7 @@ class Generator(BaseGenerator):
             raise Exception('An output has been duplicated as a shared output.')
 
         dirty = nodetypes.DIRTY
-        if inputs == context.ALWAYS_DIRTY:
+        if inputs == context.cm.ALWAYS_DIRTY:
             dirty = nodetypes.ALWAYS_DIRTY
 
         if cmd_entry:
@@ -630,25 +605,6 @@ class Generator(BaseGenerator):
                                          data = rcData,
                                          env_data = obj.env_data)
         return rcNode
-
-    def addCxxTasks(self, cx, binary):
-        # Find dependencies
-        inputs = []
-        self.parseCxxDeps(cx, binary, inputs, binary.compiler.linkflags)
-        self.parseCxxDeps(cx, binary, inputs, binary.compiler.postlink)
-
-        # Add object files.
-        for obj in binary.objects:
-            if obj.type == 'object':
-                inputs.append(self.addCxxObjTask(cx, binary.shared_cc_outputs, obj.folderNode, obj))
-            elif obj.type == 'resource':
-                inputs.append(self.addCxxRcTask(cx, obj.folderNode, obj))
-
-        # Add the link step.
-        folder_node = self.generateFolder(cx.localFolder, binary.localFolder)
-        output_file, debug_file = binary.link(context = cx, folder = folder_node, inputs = inputs)
-
-        return cpp.CppNodes(output_file, debug_file, binary.type)
 
     def addFileOp(self, cmd, context, source, output_path):
         # Try to detect if our output_path is actually a folder, via trailing
