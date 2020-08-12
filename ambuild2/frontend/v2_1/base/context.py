@@ -30,10 +30,9 @@ from ambuild2.frontend.version import Version
 # scripts change.
 
 class BaseContext(object):
-    def __init__(self, cm, parent, vars, script):
+    def __init__(self, generator, parent, vars, script):
         super(BaseContext, self).__init__()
-        self.cm = cm
-        self.generator_ = cm.generator
+        self.generator_ = generator
         self.parent_ = parent
         self.script_ = script
 
@@ -54,23 +53,23 @@ class BaseContext(object):
     # Root source folder.
     @property
     def sourcePath(self):
-        return self.cm.sourcePath
+        return self.generator_.sourcePath
 
     @property
     def options(self):
-        return self.cm.options
+        return self.generator_.options
 
     @property
     def target(self):
-        return self.cm.target
+        return self.generator_.target
 
     @property
     def host(self):
-        return self.cm.host
+        return self.generator_.host
 
     @property
     def originalCwd(self):
-        return self.cm.originalCwd
+        return self.generator_.originalCwd
 
     @property
     def backend(self):
@@ -78,17 +77,17 @@ class BaseContext(object):
 
     @property
     def buildPath(self):
-        return self.cm.buildPath
+        return self.generator_.buildPath
 
     @property
     def apiVersion(self):
         return Version('2.1.1')
 
     def Import(self, path, vars = None):
-        return self.cm.importScript(self, path, vars or {})
+        return self.generator_.importScript(self, path, vars or {})
 
     def Eval(self, path, vars = None):
-        return self.cm.evalScript(self, path, vars or {})
+        return self.generator_.evalScript(self, path, vars or {})
 
     def AddConfigureFile(self, path):
         return self.generator_.addConfigureFile(self, path)
@@ -100,11 +99,14 @@ class EmptyContext(BaseContext):
 
 # Access to input- and output-oriented API.
 class BuildContext(BaseContext):
+    # This nonce is an input flag to AddCommand.
+    ALWAYS_DIRTY = object()
+
     # Provide an accessor so users don't have to import the v2_1 namespace.
     tools = tools
 
-    def __init__(self, cm, parent, vars, script, sourceFolder, buildFolder):
-        super(BuildContext, self).__init__(cm, parent, vars, script)
+    def __init__(self, generator, parent, vars, script, sourceFolder, buildFolder):
+        super(BuildContext, self).__init__(generator, parent, vars, script)
         self.localFolder_ = None
         self.cxx_ = None
 
@@ -113,7 +115,7 @@ class BuildContext(BaseContext):
 
         self.sourceFolder = sourceFolder
         self.buildFolder = buildFolder
-        self.currentSourcePath = os.path.join(cm.sourcePath, sourceFolder)
+        self.currentSourcePath = os.path.join(generator.sourcePath, sourceFolder)
         self.currentSourceFolder = sourceFolder
         self.buildFolder = buildFolder
 
@@ -125,7 +127,7 @@ class BuildContext(BaseContext):
             self.buildFolder = os.path.normpath(self.buildFolder)
 
     def Build(self, path, vars = None):
-        return self.cm.runBuildScript(self, path, vars or {})
+        return self.generator_.runBuildScript(self, path, vars or {})
 
     # Any consumed options will be removed from the given dictionary. Callers
     # can detect unconsumed options by inspecting the dictionary after.
@@ -138,10 +140,6 @@ class BuildContext(BaseContext):
     @property
     def cxx(self):
         return self.cxx_
-
-    @property
-    def ALWAYS_DIRTY(self):
-        return self.cm.ALWAYS_DIRTY
 
     # In build systems with dependency graphs, this can return a node
     # representing buildFolder. Otherwise, it returns buildFolder.
@@ -183,7 +181,7 @@ class BuildContext(BaseContext):
                                                env_data = env_data)
 
     def Context(self, name):
-        return self.cm.Context(name)
+        return self.generator_.Context(name)
 
     def Add(self, taskbuilder):
         taskbuilder.finish(self)
@@ -201,14 +199,14 @@ class BuildContext(BaseContext):
 
 # Access to everything.
 class TopLevelBuildContext(BuildContext):
-    def __init__(self, cm, parent, vars, script, sourceFolder, buildFolder):
-        super(TopLevelBuildContext, self).__init__(cm, parent, vars, script, sourceFolder,
+    def __init__(self, generator, parent, vars, script, sourceFolder, buildFolder):
+        super(TopLevelBuildContext, self).__init__(generator, parent, vars, script, sourceFolder,
                                                    buildFolder)
 
 # The root build context.
 class RootBuildContext(BuildContext):
-    def __init__(self, cm, vars, script):
-        super(RootBuildContext, self).__init__(cm = cm,
+    def __init__(self, generator, vars, script):
+        super(RootBuildContext, self).__init__(generator = generator,
                                                parent = None,
                                                vars = vars,
                                                script = script,

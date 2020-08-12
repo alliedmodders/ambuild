@@ -16,9 +16,7 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import subprocess
 import re, os
-from ambuild2 import nodetypes
 from ambuild2 import util
-from ambuild2.frontend.v2_0 import cpp
 
 # Poor abstraction - vendor object should encapsulate logic to avoid instanceof
 # checks. For now, we just import the name.
@@ -154,42 +152,7 @@ class BinaryBuilder(object):
         return self.buildName(self.compiler, self.name_)
 
     def generate(self, generator, cx):
-        folder_node = generator.generateFolder(cx.localFolder, self.localFolder)
-
-        # Find dependencies
-        inputs = []
-        generator.parseCxxDeps(cx, self, inputs, self.compiler.linkflags)
-        generator.parseCxxDeps(cx, self, inputs, self.compiler.postlink)
-
-        for objfile in self.objects:
-            cxxData = {'argv': objfile.argv, 'type': self.linker.behavior}
-            cxxCmd, (cxxNode,) = generator.addCommand(context = cx,
-                                                      weak_inputs = self.compiler.sourcedeps,
-                                                      inputs = [objfile.sourceFile],
-                                                      outputs = [objfile.outputFile],
-                                                      node_type = nodetypes.Cxx,
-                                                      folder = folder_node,
-                                                      data = cxxData,
-                                                      shared_outputs = objfile.sharedOutputs)
-            inputs.append(cxxNode)
-        for rcfile in self.resources:
-            rcData = {
-                'cl_argv': rcfile.cl_argv,
-                'rc_argv': rcfile.rc_argv,
-            }
-            rcCmd, (preprocNode, rcNode) = generator.addCommand(
-                context = cx,
-                weak_inputs = self.compiler.sourcedeps,
-                inputs = [rcfile.sourceFile],
-                outputs = [rcfile.preprocFile, rcfile.outputFile],
-                node_type = nodetypes.Rc,
-                folder = folder_node,
-                data = rcData)
-            inputs.append(rcNode)
-
-        output_file, debug_file = self.link(context = cx, folder = folder_node, inputs = inputs)
-
-        return cpp.CppNodes(output_file, debug_file)
+        return generator.addCxxTasks(cx, self)
 
     # Make an item that can be passed into linkflags/postlink but has an attached
     # dependency.

@@ -33,9 +33,8 @@ class ConfigureException(Exception):
         super(ConfigureException, self).__init__(*args, **kwargs)
 
 class Context(object):
-    def __init__(self, cm, parent, script):
-        self.cm = cm
-        self.generator = cm.generator
+    def __init__(self, generator, parent, script):
+        self.generator = generator
         self.parent = parent
         self.script = script
         self.compiler = None
@@ -51,7 +50,7 @@ class Context(object):
             self.currentSourceFolder = os.path.join(parent.currentSourceFolder, path)
             self.buildFolder = os.path.join(parent.buildFolder, path)
         else:
-            self.currentSourcePath = self.cm.sourcePath
+            self.currentSourcePath = generator.sourcePath
             self.currentSourceFolder = ''
             self.buildFolder = ''
         self.buildScript = os.path.join(self.currentSourceFolder, name)
@@ -60,15 +59,15 @@ class Context(object):
     # Root source folder.
     @property
     def sourcePath(self):
-        return self.cm.sourcePath
+        return self.generator.sourcePath
 
     @property
     def options(self):
-        return self.cm.options
+        return self.generator.options
 
     @property
     def buildPath(self):
-        return self.cm.buildPath
+        return self.generator.buildPath
 
     # In build systems with dependency graphs, this can return a node
     # representing buildFolder. Otherwise, it returns buildFolder.
@@ -78,15 +77,15 @@ class Context(object):
 
     @property
     def target_platform(self):
-        return self.cm.target_platform
+        return self.generator.target_platform
 
     @property
     def host_platform(self):
-        return self.cm.host_platform
+        return self.generator.host_platform
 
     @property
     def originalCwd(self):
-        return self.cm.originalCwd
+        return self.generator.originalCwd
 
     @property
     def backend(self):
@@ -166,3 +165,148 @@ class AutoContext(Context):
 
     def __exit__(self, type, value, traceback):
         self.generator.popContext()
+
+class BaseGenerator(object):
+    def __init__(self, sourcePath, buildPath, originalCwd, options, args):
+        super(BaseGenerator, self).__init__()
+        self.sourcePath = sourcePath
+        self.buildPath = os.path.normpath(buildPath)
+        self.originalCwd = originalCwd
+        self.options = options
+        self.args = args
+        self.contextStack_ = [None]
+        self.configure_failed = False
+
+        # This is a hack... if we ever do cross-compiling or something, we'll have
+        # to change this.
+        self.host_platform = util.Platform()
+        self.target_platform = util.Platform()
+
+    def parseBuildScripts(self):
+        root = os.path.join(self.sourcePath, 'AMBuildScript')
+        self.evalScript(root)
+
+    def pushContext(self, cx):
+        self.contextStack_.append(cx)
+
+    def popContext(self):
+        self.contextStack_.pop()
+
+    def enterContext(self, cx):
+        pass
+
+    def leaveContext(self, cx):
+        pass
+
+    def compileScript(self, path):
+        with open(path) as fp:
+            chars = fp.read()
+
+            # Python 2.6 can't compile() with Windows line endings?!?!!?
+            chars = chars.replace('\r\n', '\n')
+            chars = chars.replace('\r', '\n')
+
+            return compile(chars, path, 'exec')
+
+    def importScript(self, context, file, vars = None):
+        path = os.path.normpath(os.path.join(context.sourcePath, file))
+        self.addConfigureFile(context, path)
+
+        new_vars = copy.copy(vars or {})
+        new_vars['builder'] = context
+
+        code = self.compileScript(path)
+        exec(code, new_vars)
+
+        obj = util.Expando()
+        for key in new_vars:
+            setattr(obj, key, new_vars[key])
+        return obj
+
+    def Context(self, name):
+        return AutoContext(self, self.contextStack_[-1], name)
+
+    def evalScript(self, file, vars = None):
+        file = os.path.normpath(file)
+
+        cx = Context(self, self.contextStack_[-1], file)
+        self.pushContext(cx)
+
+        full_path = os.path.join(self.sourcePath, cx.buildScript)
+
+        self.addConfigureFile(cx, full_path)
+
+        new_vars = copy.copy(vars or {})
+        new_vars['builder'] = cx
+
+        # Run it.
+        rvalue = None
+        code = self.compileScript(full_path)
+
+        self.enterContext(cx)
+        exec(code, new_vars)
+        self.leaveContext(cx)
+
+        if 'rvalue' in new_vars:
+            rvalue = new_vars['rvalue']
+            del new_vars['rvalue']
+
+        self.popContext()
+        return rvalue
+
+    def generateBuildFiles(self):
+        build_py = os.path.join(self.buildPath, 'build.py')
+        with open(build_py, 'w') as fp:
+            fp.write("""
+#!{exe}
+# vim set: ts=8 sts=2 sw=2 tw=99 et:
+import sys
+from ambuild2 import run
+
+if not run.CompatBuild(r"{build}"):
+  sys.exit(1)
+""".format(exe = sys.executable, build = self.buildPath))
+
+        with open(os.path.join(self.buildPath, 'Makefile'), 'w') as fp:
+            fp.write("""
+all:
+	"{exe}" "{py}"
+""".format(exe = sys.executable, py = build_py))
+
+    def generate(self):
+        self.preGenerate()
+        self.parseBuildScripts()
+        self.postGenerate()
+        if self.options.make_scripts:
+            self.generateBuildFiles()
+        return True
+
+    def getLocalFolder(self, context):
+        return context.localFolder_
+
+    @property
+    def backend(self):
+        raise Exception('Must be implemented!')
+
+    def addSymlink(self, context, source, output_path):
+        raise Exception('Must be implemented!')
+
+    def addFolder(self, context, folder):
+        raise Exception('Must be implemented!')
+
+    def addCopy(self, context, source, output_path):
+        raise Exception('Must be implemented!')
+
+    def addShellCommand(self,
+                        context,
+                        inputs,
+                        argv,
+                        outputs,
+                        folder = -1,
+                        dep_type = None,
+                        weak_inputs = [],
+                        shared_outputs = []):
+        raise Exception('Must be implemented!')
+
+    def addConfigureFile(self, context, path):
+        raise Exception('Must be implemented!')

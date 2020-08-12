@@ -129,11 +129,17 @@ class Preparer(object):
                 os.mkdir(new_buildpath)
             self.buildPath = new_buildpath
 
-        from ambuild2.frontend.v2_0.context_manager import ContextManager
-
-        cm = ContextManager(self.sourcePath, self.buildPath, os.getcwd(), options, args)
+        if options.generator == 'ambuild2':
+            from ambuild2.frontend.v2_0.amb2 import gen
+            builder = gen.Generator(self.sourcePath, self.buildPath, os.getcwd(), options, args)
+        elif options.generator == 'vs':
+            from ambuild2.frontend.v2_0.vs import gen
+            builder = gen.Generator(self.sourcePath, self.buildPath, os.getcwd(), options, args)
+        else:
+            sys.stderr.write('Unrecognized build generator: ' + options.generator + '\n')
+            sys.exit(1)
 
         with util.FolderChanger(self.buildPath):
-            if not cm.generate(options.generator):
+            if not builder.generate():
                 sys.stderr.write('Configure failed.\n')
                 sys.exit(1)
