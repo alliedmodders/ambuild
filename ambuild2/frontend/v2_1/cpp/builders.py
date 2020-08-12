@@ -18,6 +18,7 @@ import subprocess
 import re, os
 from ambuild2 import util
 from ambuild2.frontend import paths
+from ambuild2.frontend.v2_1 import cpp
 
 class Dep(object):
     def __init__(self, text, node):
@@ -294,7 +295,23 @@ class BinaryBuilder(object):
         return self.buildName(self.compiler, self.name_)
 
     def generate(self, generator, cx):
-        return generator.addCxxTasks(cx, self)
+        # Find dependencies
+        inputs = []
+        generator.parseCxxDeps(cx, self, inputs, self.compiler.linkflags)
+        generator.parseCxxDeps(cx, self, inputs, self.compiler.postlink)
+
+        # Add object files.
+        for obj in self.objects:
+            if obj.type == 'object':
+                inputs.append(generator.addCxxObjTask(cx, self.shared_cc_outputs, obj.folderNode, obj))
+            elif obj.type == 'resource':
+                inputs.append(generator.addCxxRcTask(cx, self.folderNode, obj))
+
+        # Add the link step.
+        folder_node = generator.generateFolder(cx.localFolder, self.localFolder)
+        output_file, debug_file = self.link(context = cx, folder = folder_node, inputs = inputs)
+
+        return cpp.CppNodes(output_file, debug_file, self.type)
 
     # Make an item that can be passed into linkflags/postlink but has an attached
     # dependency.
