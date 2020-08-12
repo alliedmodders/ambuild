@@ -19,6 +19,7 @@ import traceback
 import os, sys, imp
 from ambuild2 import util, database, damage
 from ambuild2.builder import Builder
+from ambuild2.frontend.version import Version
 from ambuild2.process_manager import ProcessManager
 from ambuild2.task import Task, TaskMaster
 from optparse import OptionParser
@@ -92,17 +93,34 @@ class Context(object):
 
         # The database should be upgraded here, so we should always have an
         # API version set.
-        api_version = self.db.query_var('api_version')
+        api_version = Version(self.db.query_var('api_version'))
         assert api_version is not None
 
-        if api_version == '2.0':
-            from ambuild2.frontend.v2_0.amb2.gen import Generator
-        elif api_version == '2.1':
-            from ambuild2.frontend.v2_1.amb2 import Generator
+        from ambuild2.frontend.amb2 import Generator
 
-        gen = Generator.FromVars(self.vars, self.db, self.options.refactor)
+        if api_version >= '2.1':
+            from ambuild2.frontend.v2_1.context_manager import ContextManager
+        elif api_version >= '2.0':
+            from ambuild2.frontend.v2_0.context_manager import ContextManager
+
+        # Backwards compatibility: for an automatic reconfigure on an older build,
+        # just assume the source path is the cwd. If the AMBuildScript suddenly
+        # has decided to depend on originalCwd, then the user may have to manually
+        # run configure.py again, until we remove configure.py entirely.
+        if 'originalCwd' in self.vars:
+            originalCwd = self.vars['originalCwd']
+        else:
+            originalCwd = self.vars['sourcePath']
+
+        cm = ContextManager(sourcePath = self.vars['sourcePath'],
+                            buildPath = self.vars['buildPath'],
+                            originalCwd = originalCwd,
+                            options = self.vars['options'],
+                            args = self.vars['args'])
+        cm.db = self.db
+        cm.refactoring = self.options.refactor
         try:
-            gen.generate()
+            cm.generate('ambuild2')
         except:
             traceback.print_exc()
             util.con_err(util.ConsoleRed, 'Failed to reparse build scripts.', util.ConsoleNormal)

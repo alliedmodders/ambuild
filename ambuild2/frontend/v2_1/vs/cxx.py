@@ -52,7 +52,7 @@ class Project(object):
         pass
 
     def generate(self, generator, cx):
-        if generator.options.vs_split:
+        if generator.cm.options.vs_split:
             return self.generate_split(generator, cx)
         return self.generate_combined(generator, cx)
 

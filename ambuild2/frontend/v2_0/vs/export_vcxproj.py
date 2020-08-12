@@ -18,7 +18,7 @@ import os, re
 from ambuild2 import util
 from ambuild2.frontend import paths
 from ambuild2.frontend.v2_0.cpp import Dep
-from ambuild2.frontend.v2_0.vs.xmlbuilder import XmlBuilder
+from ambuild2.frontend.vs.xmlbuilder import XmlBuilder
 
 def export(node):
     with open(node.path, 'w') as fp:

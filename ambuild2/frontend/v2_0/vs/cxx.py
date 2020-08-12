@@ -18,7 +18,7 @@ import os, types
 from ambuild2 import util
 from ambuild2.frontend import paths
 from ambuild2.frontend.version import Version
-from ambuild2.frontend.v2_0.vs import nodes
+from ambuild2.frontend.vs import nodes
 from ambuild2.frontend.v2_0.vs import export_vcxproj
 from ambuild2.frontend.v2_0.cpp import compilers
 from ambuild2.frontend.v2_0.cpp import Dep, CppNodes
@@ -60,7 +60,7 @@ class Project(object):
         pass
 
     def generate(self, generator, cx):
-        if generator.options.vs_split:
+        if generator.cm.options.vs_split:
             return self.generate_split(generator, cx)
         return self.generate_combined(generator, cx)
 

@@ -14,16 +14,23 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+import os
+from ambuild2 import util
+from ambuild2.frontend import amb2
+from ambuild2.frontend.v2_1.cpp import detect
 
-from ambuild2.frontend.vs import gen as vs_gen
-from ambuild2.frontend.v2_0.vs import cxx
-
-class Generator(vs_gen.Generator):
+class Generator(amb2.Generator):
     def __init__(self, cm):
         super(Generator, self).__init__(cm)
 
-    def detectCompilers(self):
+    def detectCompilers(self, options):
+        if options is None:
+            options = {}
         if not self.compiler:
-            self.base_compiler = cxx.Compiler(cxx.Compiler.GetVersionFromVS(self.vs_version))
-            self.compiler = self.base_compiler.clone()
+            with util.FolderChanger(self.cacheFolder):
+                self.base_compiler = detect.AutoDetectCxx(self.cm.target, self.cm.options, options)
+                if self.base_compiler is None:
+                    raise Exception('Could not detect a suitable C/C++ compiler')
+                self.compiler = self.base_compiler.clone()
+
         return self.compiler
