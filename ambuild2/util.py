@@ -1,4 +1,4 @@
-# vim: set sts=2 ts=8 sw=2 tw=99 et:
+# vim: set sts=4 ts=8 sw=4 tw=99 et:
 import errno
 import subprocess
 import re, os, sys, locale
@@ -243,13 +243,9 @@ def ParseGCCDeps(text):
             new_text += line + '\n'
     return new_text, deps
 
-def ParseMSVCDeps(vars, out):
-    if 'cc_inclusion_pattern' in vars:
-        pattern = vars['cc_inclusion_pattern']
-    elif 'cxx_inclusion_pattern' in vars:
-        pattern = vars['cxx_inclusion_pattern']
-    elif 'msvc_inclusion_pattern' in vars:
-        pattern = vars['msvc_inclusion_pattern']
+def ParseMSVCDeps(out, inclusion_pattern = None):
+    if inclusion_pattern is not None:
+        pattern = inclusion_pattern
     else:
         pattern = 'Note: including file:\s+(.+)$'
 
@@ -529,3 +525,18 @@ def BuildEnv(cmds, env = None):
             else:
                 env[key] = value
     return env
+
+# Build a stable, hashable list (eg tuple) from a dictionary.
+def BuildTupleFromDict(obj):
+    items = []
+    for key, value in obj.items():
+        items.append((key, value))
+    items.sort(key = lambda x: x[0])
+    return tuple(items)
+
+# Build a dictionary from a tuple of key, value tuples.
+def BuildDictFromTuple(tup):
+    obj = {}
+    for key, value in tup:
+        obj[key] = value
+    return obj

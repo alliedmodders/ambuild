@@ -21,11 +21,10 @@ from ambuild2 import util
 from ambuild2.frontend import context_manager
 from ambuild2.frontend import paths
 from ambuild2.frontend.system import System
-from ambuild2.frontend.v2_1.context import BuildContext
-from ambuild2.frontend.v2_1.context import EmptyContext
-from ambuild2.frontend.v2_1.context import RootBuildContext
-from ambuild2.frontend.v2_1.context import TopLevelBuildContext
-from ambuild2.frontend.v2_1.cpp import detect
+from ambuild2.frontend.v2_2.context import BuildContext
+from ambuild2.frontend.v2_2.context import EmptyContext
+from ambuild2.frontend.v2_2.context import RootBuildContext
+from ambuild2.frontend.v2_2.context import TopLevelBuildContext
 from ambuild2.frontend.version import Version
 
 class ConfigureException(Exception):
@@ -38,16 +37,10 @@ class ContextManager(context_manager.ContextManager):
 
         # Detect the target architecture.
         self.host = System.Host
-        self.target = System.Host
-
-        # Override the target architecture.
-        new_arch = getattr(self.options, 'target_arch', None)
-        if new_arch is not None:
-            self.target = System(self.target.platform, util.NormalizeArchString(new_arch))
 
     @property
     def apiVersion(self):
-        return Version('2.1.1')
+        return Version('2.2')
 
     def parseBuildScripts(self):
         root = os.path.join(self.sourcePath, 'AMBuildScript')
@@ -169,14 +162,16 @@ class ContextManager(context_manager.ContextManager):
     def getLocalFolder(self, context):
         return context.buildFolder
 
+    def copyCompilerVars(self, vars, compiler):
+        for prop_name in compiler.vendor.extra_props:
+            key = '{0}_{1}'.format(compiler.vendor.name, prop_name)
+            vars[key] = compiler.vendor.extra_props[prop_name]
+
     def createGenerator(self, name):
-        if name == 'vs':
-            from ambuild2.frontend.v2_1.vs.gen import Generator
-            self.generator = Generator(self)
-        elif name == 'ambuild2':
+        if name == 'ambuild2':
             # Different name, because pip, impressively, does not delete caches for old files, and
             # and this causes the old "amb2" directory to linger and create import problems!
-            from ambuild2.frontend.v2_1.amb2_gen import Generator
+            from ambuild2.frontend.v2_2.amb2_gen import Generator
             self.generator = Generator(self)
         else:
             super(ContextManager, self).createGenerator(name)

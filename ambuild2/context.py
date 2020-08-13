@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -98,7 +98,9 @@ class Context(object):
 
         from ambuild2.frontend.amb2 import Generator
 
-        if api_version >= '2.1':
+        if api_version >= '2.2':
+            from ambuild2.frontend.v2_2.context_manager import ContextManager
+        elif api_version >= '2.1':
             from ambuild2.frontend.v2_1.context_manager import ContextManager
         elif api_version >= '2.0':
             from ambuild2.frontend.v2_0.context_manager import ContextManager

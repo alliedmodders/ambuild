@@ -87,16 +87,6 @@ class ContextManager(context_manager.ContextManager):
     def getLocalFolder(self, context):
         return context.localFolder_
 
-    def copyCompilerVars(self, vars, compiler):
-        compilers = [
-            ('cc', compiler.cc),
-            ('cxx', compiler.cxx),
-        ]
-        for prefix, comp in compilers:
-            for prop_name in comp.extra_props:
-                key = '{0}_{1}'.format(prefix, prop_name)
-                vars[key] = comp.extra_props[prop_name]
-
     def createGenerator(self, name):
         if name == 'vs':
             from ambuild2.frontend.v2_0.vs.gen import Generator
