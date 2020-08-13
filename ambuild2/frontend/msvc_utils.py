@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -19,6 +19,7 @@ import json
 import os
 import platform
 import subprocess
+import sys
 import tempfile
 from ambuild2 import util
 from ambuild2.frontend.version import Version
@@ -26,7 +27,7 @@ try:
     import winreg
 except:
     try:
-        import _winreg
+        import _winreg as winreg
     except:
         winreg = None
 
@@ -41,7 +42,8 @@ class MSVCFinder(object):
         self.installs_ = []
 
     def find_all(self):
-        self.find_old()
+        if not self.find_old():
+            self.find_old_build_tools()
         self.find_new()
 
         def sort_by_version(install):
@@ -115,10 +117,10 @@ class MSVCFinder(object):
             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path, 0, sam) as key:
                 path_value, reg_type = winreg.QueryValueEx(key, version)
             if reg_type != winreg.REG_SZ:
-                return
+                return False
             install = MSVCInstall(version, path_value)
         except:
-            return
+            return False
 
         candidates = []
 
@@ -139,6 +141,18 @@ class MSVCFinder(object):
 
         if len(install.vcvars):
             self.installs_.append(install)
+        return True
+
+    def find_old_build_tools(self):
+        top = os.environ.get('ProgramFiles(x86)', r"C:\\Program Files (x86)")
+        path = os.path.join(top, 'Microsoft Visual C++ Build Tools', 'vcbuildtools.bat')
+        if not os.path.exists(path):
+            return
+
+        install = MSVCInstall('14.0', os.path.split(path)[0])
+        install.vcvars['all'] = path
+        self.installs_.append(install)
+        return True
 
 def parse_env(text):
     env = {}
@@ -181,12 +195,12 @@ def run_batch(contents):
     finally:
         os.unlink(fp.name)
 
-def DeduceEnv(vcvars_file):
+def DeduceEnv(vcvars_file, argv):
     contents = "SET\n"
     env_before = parse_env(run_batch(contents))
-
+    args = ' '.join(['"{}"'.format(arg) for arg in argv])
     contents = "@echo off\n" + \
-               "CALL \"{}\" 1>NUL\n".format(vcvars_file) + \
+               "CALL \"{}\" {} 1>NUL\n".format(vcvars_file, args) + \
                "@echo on\n" + \
                "SET\n"
     env_after = parse_env(run_batch(contents))
@@ -202,3 +216,14 @@ def DeduceEnv(vcvars_file):
     # and is better left immutable. This also lets us hash it for reverse
     # lookup.
     return tuple(env_commands)
+
+kArchMap = {
+    'x86_64': 'amd64',
+}
+
+def MakeArchParam(host, target):
+    if host.arch == target.arch:
+        return kArchMap.get(target.arch, target.arch)
+    host_arch = kArchMap.get(host.arch, host.arch)
+    target_arch = kArchMap.get(target.arch, target.arch)
+    return '{}_{}'.format(host_arch, target_arch)

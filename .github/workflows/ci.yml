@@ -4,10 +4,16 @@ on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         python-version: [2.7, 3.3, 3.8]
+        os: [ubuntu-18.04, macos-latest, windows-2019]
+        exclude:
+         - os: macos-latest
+           python-version: 3.3
+         - os: windows-2019
+           python-version: 3.3
 
     steps:
     - uses: actions/checkout@v2
@@ -15,19 +21,31 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Install Deps
+      if: runner.os == 'Linux'
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get install lib32stdc++-7-dev lib32z1-dev libc6-dev-i386
+        sudo apt-get install g++-multilib
     - name: Unit Tests
       run: |
         python -m unittest discover ambuild2 "*_test.py"
-    - name: Smoke Test
+    - name: Smoke Tests 1
+      if: runner.os != 'Windows' # no choco vcvars detection on older APIs
       run: |
         pip install .
-        mkdir objdir
-        cd objdir
+        mkdir objdir1
+        cd objdir1
         python ../tests/staticlib/configure.py
         ambuild
-        cd ..
-        rm -rf objdir
-        mkdir objdir
-        cd objdir
+        mkdir ../objdir2/
+        cd ../objdir2/
         python ../tests/modules/configure.py
+        ambuild
+    - name: Smoke Tests 2
+      run: |
+        pip install .
+        mkdir objdir3
+        cd objdir3
+        python ../tests/multiarch/configure.py
         ambuild

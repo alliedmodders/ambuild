@@ -30,7 +30,6 @@ class Generator(BaseGenerator):
         self.old_commands_ = set()
         self.rm_list_ = []
         self.bad_outputs_ = set()
-        self.compiler = None
         self.symlink_support = False
         self.had_symlink_fallback = False
         self.db = cm.db
@@ -151,25 +150,24 @@ class Generator(BaseGenerator):
             'args': self.cm.args
         }
 
-        # Save any environment variables that are relevant to the build.
+        # Save env vars that will be needed to reconfigure.
         env = {}
-
-        if self.compiler is not None:
-            # Save env vars that will be needed to reconfigure.
-            for key in self.compiler.EnvVars:
-                if key in os.environ:
-                    env[key] = os.environ[key]
-
-            # Save any extra compiler info that must be communicated to the backend.
-            self.cm.copyCompilerVars(vars, self.compiler)
-
+        for key in ['CC', 'CXX', 'CFLAGS', 'CXXFLAGS']:
+            if key in os.environ:
+                env[key] = os.environ[key]
         vars['env'] = env
+
+        self.copyBuildVars(vars)
 
         with open(os.path.join(self.cacheFolder, 'vars'), 'wb') as fp:
             util.DiskPickle(vars, fp)
 
+    # Implemented by derived classes.
+    def copyBuildVars(self, vars):
+        pass
+
     def detectCompilers(self, options = None):
-        raise Exception('Implement me!')
+        raise NotImplementedError()
 
     def getLocalFolder(self, context):
         if self.cm.apiVersion < '2.1':
