@@ -18,7 +18,4 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install yapf
-    - name: Style and Formatting Checks
-      run: |
-        yapf --diff --recursive .
+    - uses: WildCard65/yapf-action@v1.1
