@@ -35,16 +35,17 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1.3.0
       with:
         arch: x64
-    - name: Test runtime API
-      run: |
-        set -e
-        mkdir objdir
-        cd objdir
-        python ../tests/staticlib/configure.py
-        ambuild
-        rm -rf ./*
-        python ../tests/modules/configure.py
-        ambuild
-        cd ..
-        rm -rf objdir
-      shell: bash
+    - name: 'Test runtime API #1'
+      uses: WildCard65/invoke-ambuild@v0.3
+      with:
+        install-ambuild: false
+        build-path: objdir
+        project-root: ../tests/staticlib
+        delete-build: true
+    - name: 'Test runtime API #2'
+      uses: WildCard65/invoke-ambuild@v0.3
+      with:
+        install-ambuild: false
+        build-path: objdir
+        project-root: ../tests/modules
+        delete-build: true
