@@ -1,8 +1,4 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 builder.DetectCxx()
-builder.cxx.cflags += [
-  '-Wall',
-  '-Werror'
-]
 
 builder.Build('core/AMBuild')

@@ -102,7 +102,7 @@ class ContextManager(context_manager.ContextManager):
             from ambuild2.frontend.v2_0.vs.gen import Generator
             self.generator = Generator(self)
         elif name == 'ambuild2':
-            from ambuild2.frontend.v2_0.amb2 import Generator
+            from ambuild2.frontend.v2_0.amb2_gen import Generator
             self.generator = Generator(self)
         else:
             return super(ContextManager, self).createGenerator(name)

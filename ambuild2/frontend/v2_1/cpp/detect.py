@@ -75,11 +75,7 @@ class CompilerLocator(object):
             if compiler:
                 return compiler
 
-        return self.detect_defaults()
-
-    def detect_defaults(self):
-        cc, cxx = self.find_default_compiler()
-        return self.create_cli(cc, cxx)
+        return self.find_default_compiler()
 
     def detect_from_env(self):
         if 'CC' not in os.environ:
@@ -188,7 +184,7 @@ class CompilerLocator(object):
                 continue
             cxx = self.find_compiler(os.environ, 'CXX', cxx_cmd, cc_family)
             if cxx is not None:
-                return cc, cxx
+                return self.create_cli(cc, cxx)
 
         raise CompilerNotFoundException('Unable to find a suitable C/C++ compiler')
 
