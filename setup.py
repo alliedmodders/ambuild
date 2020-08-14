@@ -57,19 +57,13 @@ if __name__ == '__main__':
             amb_scripts.append('scripts/ambuild_objcopy_wrapper.sh')
 
     setup(name = 'AMBuild',
+          version = '2.0',
           description = 'AlliedModders Build System',
           author = 'David Anderson',
           author_email = 'dvander@alliedmods.net',
           url = 'http://www.alliedmods.net/ambuild',
           packages = find_packages(),
-          python_requires = '>=2.7,!=3.3.*',
-          setup_requires = ['typing;python_version<"3.5"', 'setuptools-git-versioning>=1.1.5'],
-          version_config = {
-              'template': '{tag}',
-              'dev_template': '{tag}.{ccount}+git.{sha}',
-              'dirty_template': '{tag}.{ccount}+git.{sha}.dirty',
-              'starting_version': '2.1.1'
-          },
+          python_requires = '>=2.6',
           entry_points = {'console_scripts': ['ambuild = ambuild2.run:cli_run']},
           scripts = amb_scripts,
           zip_safe = False)
