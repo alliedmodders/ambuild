@@ -27,35 +27,24 @@ jobs:
         python -m pip install --upgrade pip setuptools
         pip install wheel
     - name: Unit Tests
-      run: |
-        python -m unittest discover ambuild2 "*_test.py"
+      run: python -m unittest discover ambuild2 "*_test.py"
     - name: Install AMBuild
-      run:
-        pip install ./
+      run: pip install ./
     - name: Activate Visual Studio DevCMD
       if: ${{ matrix.os == 'windows-latest' }}
       uses: ilammy/msvc-dev-cmd@v1.3.0
       with:
         arch: x64
-    - name: Test runtime API 1
+    - name: Test runtime API
       run: |
+        set -e
         mkdir objdir
         cd objdir
         python ../tests/staticlib/configure.py
         ambuild
-        cd ..
-    - name: Cleanup Test 1
-      uses: JesseTG/rm@v1.0.0
-      with:
-        path: objdir
-    - name: Test runtime API 2
-      run: |
-        mkdir objdir
-        cd objdir
+        rm -rf ./*
         python ../tests/modules/configure.py
         ambuild
         cd ..
-    - name: Cleanup Test 2
-      uses: JesseTG/rm@v1.0.0
-      with:
-        path: objdir
+        rm -rf objdir
+      shell: bash
