@@ -18,7 +18,11 @@ import subprocess
 import re, os
 from ambuild2 import nodetypes
 from ambuild2 import util
-from ambuild2.frontend.v2_0 import cpp
+
+class CppNodes(object):
+    def __init__(self, output, debug_outputs):
+        self.binary = output
+        self.debug = debug_outputs
 
 # Poor abstraction - vendor object should encapsulate logic to avoid instanceof
 # checks. For now, we just import the name.
@@ -189,7 +193,7 @@ class BinaryBuilder(object):
 
         output_file, debug_file = self.link(context = cx, folder = folder_node, inputs = inputs)
 
-        return cpp.CppNodes(output_file, debug_file)
+        return CppNodes(output_file, debug_file)
 
     # Make an item that can be passed into linkflags/postlink but has an attached
     # dependency.
