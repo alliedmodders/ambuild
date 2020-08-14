@@ -4,10 +4,16 @@ on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [2.7, 3.3, 3.8]
+        os: [ubuntu-16.04, ubuntu-latest, macos-latest, windows-latest]
+        python-version: [2.7, 3.5, 3.6, 3.7, 3.8]
+        include:
+          - os: ubuntu-latest
+            python-version: 3.3
+          - os: ubuntu-latest
+            python-version: 3.4
 
     steps:
     - uses: actions/checkout@v2
@@ -15,19 +21,41 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
+        architecture: x64
+    - name: Update packaging tools
+      run: |
+        python -m pip install --upgrade pip setuptools
+        pip install wheel
     - name: Unit Tests
       run: |
         python -m unittest discover ambuild2 "*_test.py"
-    - name: Smoke Test
+    - name: Install AMBuild
+      run:
+        pip install ./
+    - name: Activate Visual Studio DevCMD
+      if: ${{ matrix.os == 'windows-latest' }}
+      uses: ilammy/msvc-dev-cmd@v1.3.0
+      with:
+        arch: x64
+    - name: Test runtime API 1
       run: |
-        pip install .
         mkdir objdir
         cd objdir
         python ../tests/staticlib/configure.py
         ambuild
         cd ..
-        rm -rf objdir
+    - name: Cleanup Test 1
+      uses: JesseTG/rm@v1.0.0
+      with:
+        path: objdir
+    - name: Test runtime API 2
+      run: |
         mkdir objdir
         cd objdir
         python ../tests/modules/configure.py
         ambuild
+        cd ..
+    - name: Cleanup Test 2
+      uses: JesseTG/rm@v1.0.0
+      with:
+        path: objdir
