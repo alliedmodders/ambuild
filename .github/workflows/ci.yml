@@ -21,3 +21,13 @@ jobs:
     - name: Smoke Test
       run: |
         pip install .
+        mkdir objdir
+        cd objdir
+        python ../tests/staticlib/configure.py
+        ambuild
+        cd ..
+        rm -rf objdir
+        mkdir objdir
+        cd objdir
+        python ../tests/modules/configure.py
+        ambuild
