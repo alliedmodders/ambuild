@@ -36,14 +36,14 @@ jobs:
       with:
         arch: x64
     - name: 'Test runtime API #1'
-      uses: WildCard65/invoke-ambuild@v1.0-fin
+      uses: WildCard65/invoke-ambuild@v1.1-fin
       with:
         auto-install: false
         build-folder: objdir
         project-root: tests/staticlib
         delete-build: true
     - name: 'Test runtime API #2'
-      uses: WildCard65/invoke-ambuild@v1.0-fin
+      uses: WildCard65/invoke-ambuild@v1.1-fin
       with:
         auto-install: false
         build-folder: objdir
