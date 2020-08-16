@@ -1,0 +1,5 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+builder.cxx = builder.DetectCxx()
+builder.Build('core/AMBuild')
+if '-Wall' in builder.cxx.cflags:
+    raise Exception('Child build script did not inherit properly')

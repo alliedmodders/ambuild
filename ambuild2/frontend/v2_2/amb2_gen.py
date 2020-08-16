@@ -17,31 +17,12 @@
 import os
 from ambuild2 import util
 from ambuild2.frontend import amb2
-from ambuild2.frontend.v2_0.cpp import detect
+from ambuild2.frontend.v2_2.cpp import detect
 
 class Generator(amb2.Generator):
     def __init__(self, cm):
         super(Generator, self).__init__(cm)
-        self.compiler = None
 
-    def copyBuildVars(self, vars):
-        if not self.compiler:
-            return
-
-        # Save any environment variables that are relevant to the build.
-        compilers = [
-            ('cc', self.compiler.cc),
-            ('cxx', self.compiler.cxx),
-        ]
-        for prefix, comp in compilers:
-            for prop_name in comp.extra_props:
-                key = '{0}_{1}'.format(prefix, prop_name)
-                vars[key] = comp.extra_props[prop_name]
-
-    def detectCompilers(self):
-        if not self.compiler:
-            with util.FolderChanger(self.cacheFolder):
-                self.base_compiler = detect.DetectCxx(os.environ, self.cm.options)
-                self.compiler = self.base_compiler.clone()
-
-        return self.compiler
+    def detectCompilers(self, **kwargs):
+        with util.FolderChanger(self.cacheFolder):
+            return detect.AutoDetectCxx(self.cm.host, self.cm.options, **kwargs)

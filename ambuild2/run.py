@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -143,6 +143,8 @@ def PreparerForAPI(api):
         from ambuild2.frontend.v2_0.prep import Preparer
     elif api == '2.1' or api.startswith('2.1.'):
         from ambuild2.frontend.v2_1 import Preparer
+    elif api == '2.2' or api.startswith('2.2.'):
+        from ambuild2.frontend.v2_2.prep import Preparer
     else:
         raise Exception('API version {0} not found'.format(api))
     return Preparer

@@ -1,0 +1,21 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import platform
+from ambuild2.frontend.version import Version
+
+def has_x86():
+    if builder.host.platform == 'mac':
+        version = Version(platform.mac_ver()[0])
+        return version < '10.13'
+    return True
+
+if has_x86():
+    builder.x86 = builder.DetectCxx(target_arch = 'x86')
+else:
+    builder.x86 = None
+builder.x64 = builder.DetectCxx(target_arch = 'x86_64')
+
+for cxx in [builder.x86, builder.x64]:
+    if cxx and cxx.like('msvc'):
+        cxx.cxxflags += ['/EHsc']
+
+builder.Build('core/AMBuild')

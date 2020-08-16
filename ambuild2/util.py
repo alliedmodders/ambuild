@@ -1,4 +1,4 @@
-# vim: set sts=2 ts=8 sw=2 tw=99 et:
+# vim: set sts=4 ts=8 sw=4 tw=99 et:
 import errno
 import subprocess
 import re, os, sys, locale
@@ -110,18 +110,49 @@ def WaitForProcess(process):
     process.stderrText = DecodeConsoleText(sys.stderr, err)
     return process.returncode
 
-def CreateProcess(argv, executable = None, env = None):
+def SanitizeEnv(env):
+    if sys.version_info[0] >= 3:
+        return env
+
+    new_env = {}
+    for key in env:
+        value = env[key]
+        if isinstance(key, unicode):
+            key = key.encode('utf-8')
+        if isinstance(value, unicode):
+            value = value.encode('utf-8')
+        assert isinstance(key, str)
+        assert isinstance(value, str)
+        new_env[key] = value
+    return new_env
+
+def NeedsSanitizing(env):
+    if sys.version_info[0] >= 3:
+        return False
+
+    for key in env:
+        if isinstance(key, unicode) or isinstance(env[key], unicode):
+            return True
+    return False
+
+def CreateProcess(argv, executable = None, env = None, no_raise = True):
     pargs = {'args': argv}
     pargs['stdout'] = subprocess.PIPE
     pargs['stderr'] = subprocess.PIPE
     if executable != None:
         pargs['executable'] = executable
-    if env != None:
-        pargs['env'] = env
+
+    if env:
+        pargs['env'] = SanitizeEnv(env)
+    elif NeedsSanitizing(os.environ):
+        pargs['env'] = SanitizeEnv(os.environ)
+
     try:
         process = subprocess.Popen(**pargs)
     except:
-        return None
+        if no_raise:
+            return None
+        raise
     return process
 
 def MakePath(*list):
@@ -165,6 +196,11 @@ class Guard:
         self.obj.close()
 
 def Execute(argv, shell = False, env = None):
+    if env is not None:
+        env = SanitizeEnv(env)
+    elif NeedsSanitizing(os.environ):
+        env = SanitizeEnv(os.environ)
+
     p = subprocess.Popen(args = argv,
                          stdout = subprocess.PIPE,
                          stderr = subprocess.PIPE,
@@ -243,13 +279,9 @@ def ParseGCCDeps(text):
             new_text += line + '\n'
     return new_text, deps
 
-def ParseMSVCDeps(vars, out):
-    if 'cc_inclusion_pattern' in vars:
-        pattern = vars['cc_inclusion_pattern']
-    elif 'cxx_inclusion_pattern' in vars:
-        pattern = vars['cxx_inclusion_pattern']
-    elif 'msvc_inclusion_pattern' in vars:
-        pattern = vars['msvc_inclusion_pattern']
+def ParseMSVCDeps(out, inclusion_pattern = None):
+    if inclusion_pattern is not None:
+        pattern = inclusion_pattern
     else:
         pattern = 'Note: including file:\s+(.+)$'
 
@@ -529,3 +561,18 @@ def BuildEnv(cmds, env = None):
             else:
                 env[key] = value
     return env
+
+# Build a stable, hashable list (eg tuple) from a dictionary.
+def BuildTupleFromDict(obj):
+    items = []
+    for key, value in obj.items():
+        items.append((key, value))
+    items.sort(key = lambda x: x[0])
+    return tuple(items)
+
+# Build a dictionary from a tuple of key, value tuples.
+def BuildDictFromTuple(tup):
+    obj = {}
+    for key, value in tup:
+        obj[key] = value
+    return obj

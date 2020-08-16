@@ -1,0 +1,14 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+
+# This should only change the cxx for this builder.
+if builder.cxx.like('gcc'):
+    builder.cxx.cflags += ['-Wall', '-Werror']
+else:
+    builder.cxx.cflags += ['/WX']
+
+program = builder.cxx.Program('sample')
+program.sources += [
+  'main.cc',
+]
+
+builder.Add(program)
