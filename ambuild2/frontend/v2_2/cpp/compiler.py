@@ -158,15 +158,6 @@ class CliCompiler(Compiler):
     def StaticLibrary(self, name):
         return builders.StaticLibrary(self.clone(), name)
 
-    def ProgramProject(self, name):
-        return builders.Project(builders.Program, self.clone(), name)
-
-    def LibraryProject(self, name):
-        return builders.Project(builders.Library, self.clone(), name)
-
-    def StaticLibraryProject(self, name):
-        return builders.Project(builders.StaticLibrary, self.clone(), name)
-
     @staticmethod
     def run_pkg_config(argv):
         output = subprocess.check_output(args = ['pkg-config'] + argv)

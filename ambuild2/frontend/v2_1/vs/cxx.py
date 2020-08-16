@@ -79,7 +79,7 @@ class Project(object):
         generator.addProjectNode(cx, node)
         return outputs
 
-    def export(self, node):
+    def export(self, cm, node):
         export_vcxproj.export(node)
 
 class VisualStudio(MSVC):

@@ -59,7 +59,7 @@ class Preparer(object):
             help = "Split debugging symbols from binaries into separate symbol files.")
 
         # Generator specific options.
-        self.options.add_argument("--vs-version", type = str, dest = "vs_version", default = "12")
+        self.options.add_argument("--vs-version", type = str, dest = "vs_version", default = "14")
         self.options.add_argument("--vs-split",
                                   action = 'store_true',
                                   dest = "vs_split",

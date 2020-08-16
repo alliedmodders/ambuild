@@ -173,5 +173,8 @@ class ContextManager(context_manager.ContextManager):
             # and this causes the old "amb2" directory to linger and create import problems!
             from ambuild2.frontend.v2_2.amb2_gen import Generator
             self.generator = Generator(self)
+        elif name == 'vs':
+            from ambuild2.frontend.v2_2.vs.gen import Generator
+            self.generator = Generator(self)
         else:
             super(ContextManager, self).createGenerator(name)

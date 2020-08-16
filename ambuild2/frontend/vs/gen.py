@@ -86,7 +86,7 @@ class Generator(BaseGenerator):
             if node.uuid is None:
                 node.uuid = str(uuids.uuid1()).upper()
                 self.vars_['uuids'][node.path] = node.uuid
-            node.project.export(node)
+            node.project.export(self.cm, node)
 
     # Overridden.
     #
