@@ -120,11 +120,11 @@ class BaseContext(object):
     def HasFeature(self, name):
         return False
 
-    def CloneableDict(self, *kwargs, **kwargs):
-        return CloneableDict(*kwargs, **kwargs)
+    def CloneableDict(self, *args, **kwargs):
+        return CloneableDict(*args, **kwargs)
 
-    def CloneableList(self, *kwargs, **kwargs):
-        return CloneableList(*kwargs, **kwargs)
+    def CloneableList(self, *args, **kwargs):
+        return CloneableList(*args, **kwargs)
 
 # Access to input-oriented API.
 class EmptyContext(BaseContext):
