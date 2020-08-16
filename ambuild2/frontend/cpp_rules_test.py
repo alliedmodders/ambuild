@@ -21,6 +21,9 @@ TestRules = {
     'family==gcc': {
         'arch==x86': {
             'CFLAGS': ['-m32'],
+            'platform==mac': {
+                'CFLAGS': ['-arch', 'i386'],
+            },
         },
         'arch==x86_64': {
             'CFLAGS': ['-m64'],
@@ -44,3 +47,11 @@ class IsSubPathTests(unittest.TestCase):
             'arch': 'x86_64',
         })
         self.assertEquals(props, {})
+
+        props = rp.parse({
+            'family': 'gcc',
+            'arch': 'x86',
+            'platform': 'mac',
+        })
+        self.assertIn('CFLAGS', props)
+        self.assertEquals(props['CFLAGS'], ['-m32', '-arch', 'i386'])

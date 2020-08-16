@@ -20,9 +20,15 @@ DEFAULT_RULES = {
     'family==gcc': {
         'arch==x86': {
             'CFLAGS': ['-m32'],
+            'platform==mac': {
+                'CFLAGS': ['-arch', 'i386'],
+            },
         },
         'arch==x86_64': {
             'CFLAGS': ['-m64'],
+            'platform==mac': {
+                'CFLAGS': ['-arch', 'x86_64'],
+            },
         },
     },
 }
@@ -47,7 +53,13 @@ class RulesParser(object):
             self.add_prop(key, value)
 
     def add_prop(self, key, value):
-        self.props_[key] = value
+        if key not in self.props_:
+            self.props_[key] = value
+            return
+        if isinstance(value, list):
+            self.props_[key].extend(value)
+        else:
+            self.props_[key] = value
 
     def parse_section(self, key, value):
         if '==' in key:
@@ -68,5 +80,5 @@ class RulesParser(object):
         if not op(self.inputs_[parts[0]], parts[1]):
             return
 
-        for sub_key, sub_value in value.items():
+        for sub_key, sub_value in sorted(value.items()):
             self.parse_property(sub_key, sub_value)
