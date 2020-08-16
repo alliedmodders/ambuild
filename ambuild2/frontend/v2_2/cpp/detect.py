@@ -72,9 +72,13 @@ class CompilerLocator(object):
             'family': 'unknown',
             'platform': self.host_.platform,
         }
+        self.target_override_ = False
 
-        arch = kwargs.pop('target_arch', self.host_.arch)
-        arch = util.NormalizeArchString(arch)
+        arch = self.host_.arch
+        if 'target_arch' in kwargs:
+            arch = util.NormalizeArchString(kwargs.pop('target_arch'))
+            self.target_override_ = True
+
         self.rules_config_['arch'] = arch
         self.target_ = System(self.host_.platform, arch)
 
@@ -128,7 +132,7 @@ class CompilerLocator(object):
             util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
             raise Exception(message)
 
-        if cxx.arch != self.target_.arch:
+        if cxx.arch != self.target_.arch and self.target_override_:
             message = "Compiler architecture {0} does not match requested architecture {1}".format(
                 cxx.arch, self.target_.arch)
             util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
