@@ -311,7 +311,7 @@ class BinaryBuilder(object):
                 inputs.append(
                     generator.addCxxObjTask(cx, self.shared_cc_outputs, obj.folderNode, obj))
             elif obj.type == 'resource':
-                inputs.append(generator.addCxxRcTask(cx, self.folderNode, obj))
+                inputs.append(generator.addCxxRcTask(cx, obj.folderNode, obj))
 
         # Add the link step.
         folder_node = generator.generateFolder(cx.localFolder, self.localFolder)
