@@ -21,6 +21,7 @@ from ambuild2 import util
 from ambuild2.context import Context
 
 DEFAULT_API = '2.1.1'
+CURRENT_API = '2.2'
 
 SampleScript = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 builder.DetectCxx()
@@ -138,6 +139,10 @@ def CompatBuild(buildPath):
 def PrepareBuild(sourcePath, buildPath = None):
     return BuildParser(sourcePath, '2.0', buildPath)
 
+class ApiVersionNotFoundException(Exception):
+    def __init__(self, *args, **kwargs):
+        super(Exception, self).__init__(*args, **kwargs)
+
 def PreparerForAPI(api):
     if api == '2.0':
         from ambuild2.frontend.v2_0.prep import Preparer
@@ -146,7 +151,10 @@ def PreparerForAPI(api):
     elif api == '2.2' or api.startswith('2.2.'):
         from ambuild2.frontend.v2_2.prep import Preparer
     else:
-        raise Exception('API version {0} not found'.format(api))
+        message = "AMBuild {} not found; {} is installed. Do you need to upgrade?\n".format(
+                         api, CURRENT_API)
+        raise ApiVersionNotFoundException(message)
+
     return Preparer
 
 def HasAPI(api):
