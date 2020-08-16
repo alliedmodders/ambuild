@@ -71,10 +71,10 @@ class BuilderProxy(object):
         return Dep(text, node)
 
 class Project(object):
-    def __init__(self, constructor, compiler, name):
+    def __init__(self, constructor, context, name):
         super(Project, self).__init__()
         self.constructor_ = constructor
-        self.compiler = compiler
+        self.context_ = context
         self.name = name
         self.sources = []
         self.proxies_ = []
@@ -96,9 +96,8 @@ class Project(object):
             outputs += [builder.generate(generator, cx)]
         return outputs
 
-    def Configure(self, name, tag):
-        compiler = self.compiler.clone()
-        proxy = BuilderProxy(self, compiler, name)
+    def Configure(self, compiler, name, tag):
+        proxy = BuilderProxy(self, compiler.clone(), name)
         self.proxies_.append(proxy)
         return proxy
 

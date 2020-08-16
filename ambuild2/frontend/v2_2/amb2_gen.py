@@ -17,6 +17,7 @@
 import os
 from ambuild2 import util
 from ambuild2.frontend import amb2
+from ambuild2.frontend.v2_2.cpp import builders
 from ambuild2.frontend.v2_2.cpp import detect
 
 class Generator(amb2.Generator):
@@ -26,3 +27,12 @@ class Generator(amb2.Generator):
     def detectCompilers(self, **kwargs):
         with util.FolderChanger(self.cacheFolder):
             return detect.AutoDetectCxx(self.cm.host, self.cm.options, **kwargs)
+
+    def newProgramProject(self, context, name):
+        return builders.Project(builders.Program, context, name)
+
+    def newLibraryProject(self, context, name):
+        return builders.Project(builders.Library, context, name)
+
+    def newStaticLibraryProject(self, context, name):
+        return builders.Project(builders.StaticLibrary, context, name)

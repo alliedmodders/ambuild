@@ -125,15 +125,6 @@ class Compiler(Cloneable):
     def StaticLibrary(self, name):
         raise Exception('Must be implemented!')
 
-    def ProgramProject(self, name):
-        raise Exception('Must be implemented!')
-
-    def LibraryProject(self, name):
-        raise Exception('Must be implemented!')
-
-    def StaticLibraryProject(self, name):
-        raise Exception('Must be implemented!')
-
     @staticmethod
     def Dep(text, node = None):
         return builders.Dep(text, node)
