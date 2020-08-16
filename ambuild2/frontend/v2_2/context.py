@@ -211,6 +211,15 @@ class BuildContext(BaseContext):
         else:
             self.buildFolder = os.path.normpath(folder)
 
+    def ProgramProject(self, name):
+        return self.generator_.newProgramProject(self, name)
+
+    def LibraryProject(self, name):
+        return self.generator_.newLibraryProject(self, name)
+
+    def StaticLibraryProject(self, name):
+        return self.generator_.newStaticLibraryProject(self, name)
+
 # Access to everything.
 class TopLevelBuildContext(BuildContext):
     def __init__(self, cm, parent, vars, script, sourceFolder, buildFolder):
