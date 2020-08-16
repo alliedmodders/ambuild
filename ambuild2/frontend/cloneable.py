@@ -26,3 +26,7 @@ class Cloneable(object):
 class CloneableDict(collections.OrderedDict, Cloneable):
     def __init__(self, *args, **kwargs):
         super(CloneableDict, self).__init__(*args, **kwargs)
+
+class CloneableList(list, Cloneable):
+    def __init__(self, *args, **kwargs):
+        super(CloneableList, self).__init__(*args, **kwargs)

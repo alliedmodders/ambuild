@@ -18,6 +18,8 @@ import copy
 import os
 import sys
 from ambuild2.frontend.cloneable import Cloneable
+from ambuild2.frontend.cloneable import CloneableDict
+from ambuild2.frontend.cloneable import CloneableList
 from ambuild2.frontend.proxy import AttributeProxy
 from ambuild2.frontend.v2_2 import tools
 from ambuild2.frontend.version import Version
@@ -117,6 +119,12 @@ class BaseContext(object):
 
     def HasFeature(self, name):
         return False
+
+    def CloneableDict(self, *kwargs, **kwargs):
+        return CloneableDict(*kwargs, **kwargs)
+
+    def CloneableList(self, *kwargs, **kwargs):
+        return CloneableList(*kwargs, **kwargs)
 
 # Access to input-oriented API.
 class EmptyContext(BaseContext):
