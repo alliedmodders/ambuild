@@ -273,7 +273,6 @@ class CompilerLocator(object):
         try:
             return VerifyCompiler(flags, mode, cmd, assumed_family, env, abs_path), None
         except Exception as e:
-            raise
             util.con_out(util.ConsoleHeader, 'Compiler {0} for {1} failed: '.format(cmd, mode),
                          util.ConsoleRed, str(e), util.ConsoleNormal)
             return None, e
