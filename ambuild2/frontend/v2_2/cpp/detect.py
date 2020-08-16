@@ -144,7 +144,7 @@ class CompilerLocator(object):
             env_data = util.BuildTupleFromDict(env_data)
 
         return compiler.CliCompiler(cxx.vendor,
-                                    self.target_,
+                                    System(self.host_.platform, cxx.arch),
                                     cc.argv,
                                     cxx.argv,
                                     options = self.gen_options_,
