@@ -152,7 +152,7 @@ def PreparerForAPI(api):
         from ambuild2.frontend.v2_2.prep import Preparer
     else:
         message = "AMBuild {} not found; {} is installed. Do you need to upgrade?\n".format(
-                         api, CURRENT_API)
+            api, CURRENT_API)
         raise ApiVersionNotFoundException(message)
 
     return Preparer
