@@ -20,10 +20,11 @@ from ambuild2 import util
 from ambuild2.frontend import paths
 
 class CppNodes(object):
-    def __init__(self, output, debug_outputs, type):
+    def __init__(self, output, debug_outputs, type, target):
         self.binary = output
         self.debug = debug_outputs
         self.type = type
+        self.target = target
 
 class Dep(object):
     def __init__(self, text, node):
@@ -318,7 +319,7 @@ class BinaryBuilder(object):
         folder_node = generator.generateFolder(cx.localFolder, self.localFolder)
         output_file, debug_file = self.link(context = cx, folder = folder_node, inputs = inputs)
 
-        return CppNodes(output_file, debug_file, self.type)
+        return CppNodes(output_file, debug_file, self.type, self.compiler.target)
 
     # Make an item that can be passed into linkflags/postlink but has an attached
     # dependency.
