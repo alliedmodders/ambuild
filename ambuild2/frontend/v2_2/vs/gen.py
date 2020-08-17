@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=4 sw=4 tw=99 et:
+# vim: set ts=8 sts=2 sw=2 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -14,25 +14,24 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-import os
-from ambuild2 import util
-from ambuild2.frontend import amb2
-from ambuild2.frontend.v2_2.cpp import builders
-from ambuild2.frontend.v2_2.cpp import detect
+import ambuild2.frontend.vs.gen as vs_gen
+from ambuild2.frontend.v2_2.vs import cxx
 
-class Generator(amb2.Generator):
+class Generator(vs_gen.Generator):
     def __init__(self, cm):
         super(Generator, self).__init__(cm)
+        self.vs_version_number = cxx.Compiler.GetVersionFromVS(self.vs_version)
+        self.vs_vendor = cxx.VisualStudio(self.vs_version_number)
 
+    # Overridden.
     def detectCompilers(self, **kwargs):
-        with util.FolderChanger(self.cacheFolder):
-            return detect.AutoDetectCxx(self.cm.host, self.cm.options, **kwargs)
+        return cxx.Compiler(self.vs_vendor, kwargs.pop('target_arch', None))
 
     def newProgramProject(self, context, name):
-        return builders.Project(builders.Program, name)
+        return cxx.Project(cxx.Program, name)
 
     def newLibraryProject(self, context, name):
-        return builders.Project(builders.Library, name)
+        return cxx.Project(cxx.Library, name)
 
     def newStaticLibraryProject(self, context, name):
-        return builders.Project(builders.StaticLibrary, name)
+        return cxx.Project(cxx.StaticLibrary, name)

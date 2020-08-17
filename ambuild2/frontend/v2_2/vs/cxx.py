@@ -17,41 +17,41 @@
 import os, types
 from ambuild2 import util
 from ambuild2.frontend import paths
+from ambuild2.frontend.system import System
+from ambuild2.frontend.v2_2.cpp import compiler
+from ambuild2.frontend.v2_2.cpp.builders import CppNodes
+from ambuild2.frontend.v2_2.cpp.builders import Dep
+from ambuild2.frontend.v2_2.cpp.msvc import MSVC
+from ambuild2.frontend.v2_2.vs import export_vcxproj
+from ambuild2.frontend.v2_2.vs import nodes
 from ambuild2.frontend.version import Version
-from ambuild2.frontend.vs import nodes
-from ambuild2.frontend.v2_0.vs import export_vcxproj
-from ambuild2.frontend.v2_0.cpp import compilers
-from ambuild2.frontend.v2_0.cpp import Dep, CppNodes
 
-class CompilerShell(object):
-    def __init__(self, version):
-        self.version = version
-        self.behavior = 'msvc'
-        self.name = 'msvc'
-
-    def like(self, name):
-        return name == self.name
+def GetProjectFileSuffix(version):
+    # Assume the compiler version is related to the IDE version.
+    if version >= 'msvc-1600':
+        return '.vcxproj'
+    if version >= 'msvc-1300':
+        return '.vcproj'
+    raise Exception('Unhandled version: {0}'.format(version))
 
 class Project(object):
-    def __init__(self, ctor, compiler, name):
+    def __init__(self, ctor, name):
         self.ctor_ = ctor
         self.name_ = name
-        self.compiler = compiler
         self.sources = []
         self.builders_ = []
 
-    def Configure(self, name, tag):
-        compiler = self.compiler.clone()
-        builder = self.ctor_(self, compiler, name, tag)
+    def Configure(self, compiler, name, tag):
+        builder = self.ctor_(self, compiler.clone(), name, tag)
         builder.sources = self.sources[:]
         self.builders_ += [builder]
         return builder
 
-    def default(self):
+    def default(self, compiler):
         # Attach finish/generate methods to this builder, so it generates a
         # projeet file. This is a wrapper around the older API which does not
         # wrap binaries in projects.
-        builder = self.Configure(self.name_, 'Default')
+        builder = self.Configure(compiler, self.name_, 'Default')
         builder.finish = self.finish
         builder.generate = lambda generator, cx: self.generate(generator, cx)[0]
         return builder
@@ -67,7 +67,7 @@ class Project(object):
     def generate_split(self, generator, cx):
         outputs = []
         for builder in self.builders_:
-            project = Project(self.ctor_, self.compiler, builder.name_)
+            project = Project(self.ctor_, builder.name_)
             project.sources = self.sources[:]
             project.builders_ = [builder]
             outputs += project.generate_combined(generator, cx)
@@ -75,7 +75,8 @@ class Project(object):
 
     def generate_combined(self, generator, cx):
         outputs = []
-        proj_path = paths.Join(cx.localFolder, self.name_ + self.compiler.projectFileSuffix)
+        proj_path = paths.Join(cx.localFolder,
+                               self.name_ + GetProjectFileSuffix(generator.vs_vendor.version))
         node = nodes.ProjectNode(cx, proj_path, self)
         for builder in self.builders_:
             tag_folder = generator.addFolder(cx, builder.localFolder)
@@ -83,71 +84,54 @@ class Project(object):
             pdbFile = paths.Join(tag_folder, builder.name_ + '.pdb')
             objNode = generator.addOutput(cx, objFile, node)
             pdbNode = generator.addOutput(cx, pdbFile, node)
-            outputs.append(CppNodes(objNode, pdbNode))
+            outputs.append(CppNodes(objNode, pdbNode, builder.type, builder.compiler.target))
         generator.addProjectNode(cx, node)
         return outputs
 
     def export(self, cm, node):
-        export_vcxproj.export(node)
+        export_vcxproj.export(cm, node)
 
-class Compiler(compilers.Compiler):
+class VisualStudio(MSVC):
     def __init__(self, version):
-        super(Compiler, self).__init__()
-        self.version_ = version
+        super(MSVC, self).__init__(version)
 
-        # For compatibility with older build scripts.
-        self.cc = CompilerShell(version)
-        self.cxx = CompilerShell(version)
+    def like(self, name):
+        return name == 'vs' or name == 'msvc'
+
+class Compiler(compiler.Compiler):
+    def __init__(self, vendor, target_arch = 'x86'):
+        target = System('windows', target_arch)
+        super(Compiler, self).__init__(vendor, target)
 
     def clone(self):
-        cc = Compiler(self.version)
+        cc = Compiler(self.vendor)
         cc.inherit(self)
         return cc
 
-    @property
-    def projectFileSuffix(self):
-        # Assume the compiler version is related to the IDE version.
-        if self.version >= 1600:
-            return '.vcxproj'
-        if self.version >= 1300:
-            return '.vcproj'
-        # lol whatevs
-        return '.dsp'
-
-    @property
-    def version(self):
-        return self.version_
-
     @staticmethod
     def GetVersionFromVS(vs_version):
+        vs_version = int(vs_version)
+        msvc_version = (vs_version * 100) + 600
+
+        # Microsoft skipped version 13, of course.
         if vs_version >= 14:
-            return Version((vs_version * 100) + 500)
-        return Version((vs_version * 100) + 600)
-
-    def ProgramProject(self, name):
-        return Project(Program, self, name)
-
-    def LibraryProject(self, name):
-        return Project(Library, self, name)
-
-    def StaticLibraryProject(self, name):
-        return Project(StaticLibrary, self, name)
+            msvc_version -= 100
+        # In VS 2017, the numbering continues from 1910
+        if vs_version == 15:
+            msvc_version = 1910
+        return msvc_version
 
     def Program(self, name):
-        return Project(Program, self, name).default()
+        return Project(Program, name).default(self)
 
     def Library(self, name):
-        return Project(Library, self, name).default()
+        return Project(Library, name).default(self)
 
     def StaticLibrary(self, name):
-        return Project(StaticLibrary, self, name).default()
+        return Project(StaticLibrary, name).default(self)
 
     def like(self, name):
         return name == 'msvc'
-
-    @property
-    def vendor(self):
-        return 'msvc'
 
 class BinaryBuilder(object):
     def __init__(self, project, compiler, name, tag):

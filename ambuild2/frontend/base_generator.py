@@ -47,11 +47,11 @@ class BaseGenerator(object):
         raise Exception('Must be implemented!')
 
     # The following methods are only needed to implement v2.2 generators.
-    def newProgramProject(self, name):
+    def newProgramProject(self, context, name):
         raise NotImplementedError()
 
-    def newLibraryProject(self, name):
+    def newLibraryProject(self, context, name):
         raise NotImplementedError()
 
-    def newStaticLibraryProject(self, name):
+    def newStaticLibraryProject(self, context, name):
         raise NotImplementedError()

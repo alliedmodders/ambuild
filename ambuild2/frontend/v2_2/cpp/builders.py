@@ -72,10 +72,9 @@ class BuilderProxy(object):
         return Dep(text, node)
 
 class Project(object):
-    def __init__(self, constructor, context, name):
+    def __init__(self, constructor, name):
         super(Project, self).__init__()
         self.constructor_ = constructor
-        self.context_ = context
         self.name = name
         self.sources = []
         self.proxies_ = []
