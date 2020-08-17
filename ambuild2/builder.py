@@ -117,7 +117,7 @@ class Builder(object):
                 util.con_err(util.ConsoleBlue, ' -> ', util.ConsoleRed,
                              '{0}'.format(task.entry.format()), util.ConsoleNormal)
 
-        return tm.status()
+        return tm.status(), tm.failed_task_message
 
     def lazyUpdateEntry(self, entry):
         if entry.type != nodetypes.Source:

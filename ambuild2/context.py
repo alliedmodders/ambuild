@@ -174,9 +174,13 @@ class Context(object):
             builder.printSteps()
             return True
 
-        status = builder.update()
+        status, message = builder.update()
         if status == TaskMaster.BUILD_FAILED:
-            util.con_err(util.ConsoleHeader, 'Build failed.', util.ConsoleNormal)
+            if message is None:
+                util.con_err(util.ConsoleHeader, 'Build failed.', util.ConsoleNormal)
+            else:
+                util.con_err(util.ConsoleHeader, 'Build failed: {}'.format(message),
+                             util.ConsoleNormal)
             return False
         if status == TaskMaster.BUILD_INTERRUPTED:
             util.con_err(util.ConsoleHeader, 'Build cancelled.', util.ConsoleNormal)
