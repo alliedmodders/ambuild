@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -17,10 +17,11 @@
 from ambuild2 import util
 
 class System(object):
-    def __init__(self, platform, arch):
+    def __init__(self, platform, arch, subarch = ''):
         super(System, self).__init__()
         self.platform_ = platform
         self.arch_ = arch
+        self.subarch_ = subarch
 
     @property
     def platform(self):
@@ -30,4 +31,8 @@ class System(object):
     def arch(self):
         return self.arch_
 
-System.Host = System(util.Platform(), util.Architecture)
+    @property
+    def subarch(self):
+        return self.subarch_
+
+System.Host = System(util.Platform(), util.Architecture, util.SubArch)
