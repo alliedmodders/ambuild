@@ -74,12 +74,13 @@ class CompilerLocator(object):
         }
         self.target_override_ = False
 
-        arch = self.host_.arch
+        arch, subarch = self.host_.arch, self.host_.subarch
         if 'target_arch' in kwargs:
-            arch = util.NormalizeArchString(kwargs.pop('target_arch'))
+            arch, subarch = util.DecodeArchString(kwargs.pop('target_arch'))
             self.target_override_ = True
 
         self.rules_config_['arch'] = arch
+        self.rules_config_['subarch'] = subarch
         self.target_ = System(self.host_.platform, arch)
 
         # Allow specifying the environment file via the environment.
