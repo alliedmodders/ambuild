@@ -101,7 +101,7 @@ class Builder(object):
             else:
                 raise Exception('Unknown entry type: {0}'.format(entry.type))
         if not len(self.leafs):
-            return TaskMaster.BUILD_NO_CHANGES
+            return TaskMaster.BUILD_NO_CHANGES, None
 
         tm = TaskMaster(self.cx, self, self.leafs, self.max_parallel)
         tm.run()
