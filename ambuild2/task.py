@@ -348,6 +348,7 @@ class TaskMaster(object):
         self.pending_ = {}
         self.idle_ = set()
         self.build_completed_ = False
+        self.failed_task_message = None
 
         # Figure out how many tasks to create.
         if cx.options.jobs == 0:
@@ -369,7 +370,7 @@ class TaskMaster(object):
         for _ in range(num_processes):
             self.startWorker()
 
-    def spewResult(self, worker, message):
+    def spewResult(self, worker, task, message):
         if message['ok']:
             color = util.ConsoleGreen
         else:
@@ -390,16 +391,20 @@ class TaskMaster(object):
                 sys.stderr.write('\n')
             sys.stderr.flush()
 
+        if not message['ok'] and task:
+            self.failed_task_message = task.outputs[0]
+
     def recvTaskComplete(self, worker, message):
+        task = self.pending_[worker.pid]
+
         message['pid'] = worker.pid
         if not message['ok']:
-            self.errors_.append((worker, message))
+            self.errors_.append((worker, task, message))
             self.terminateBuild(TaskMaster.BUILD_FAILED)
             return
 
-        self.spewResult(worker, message)
+        self.spewResult(worker, task, message)
 
-        task = self.pending_[worker.pid]
         del self.pending_[worker.pid]
         if message['task_id'] != task.id:
             raise Exception('Worker {} returned wrong task id (got {}, expected {})'.format(
@@ -445,8 +450,8 @@ class TaskMaster(object):
             self.pump()
         except KeyboardInterrupt:  # :TODO: TEST!
             self.terminateBuild(TaskMaster.BUILD_INTERRUPTED)
-        for worker, message in self.errors_:
-            self.spewResult(worker, message)
+        for worker, task, message in self.errors_:
+            self.spewResult(worker, task, message)
         return self.status_
 
     def onShutdown(self):
