@@ -75,6 +75,7 @@ class MSVCFinder(object):
             '*',
             '-requires',
             'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+            '-utf8',
         ]
         try:
             output = subprocess.check_output(argv)
