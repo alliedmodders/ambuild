@@ -34,6 +34,7 @@ class CommandAndVendor(object):
         self.argv = argv
         self.vendor = vendor
         self.arch = arch
+        self.subarch = ''
 
 class CompilerNotFoundException(Exception):
     def __init__(self, message = 'Unable to find a suitable C/C++ compiler'):
@@ -62,6 +63,17 @@ def AutoDetectCxx(host, gen_options, **kwargs):
     locator = CompilerLocator(host, gen_options, **kwargs)
     return locator.detect()
 
+def IsCrossCompile(host, target):
+    if host.platform != target.platform:
+        return True
+    if host.arch != target.arch:
+        if host.arch == 'x86_64' and target.arch in ['x86', 'x86_64']:
+            return False
+        return True
+    if host.subarch != target.subarch:
+        return True
+    return host.abi != target.abi
+
 class CompilerLocator(object):
     def __init__(self, host, gen_options, **kwargs):
         self.host_ = host
@@ -75,21 +87,19 @@ class CompilerLocator(object):
         self.target_override_ = False
 
         arch, subarch = self.host_.arch, self.host_.subarch
+        abi = self.host_.abi
         if 'target_arch' in kwargs:
             arch, subarch = util.DecodeArchString(kwargs.pop('target_arch'))
+            self.target_override_ = True
+        if 'target_abi' in kwargs:
+            abi = kwargs.pop('target_abi')
             self.target_override_ = True
 
         self.rules_config_['arch'] = arch
         self.rules_config_['subarch'] = subarch
-        self.target_ = System(self.host_.platform, arch)
-
-        # Allow specifying the environment file via the environment.
-        self.vcvars_override_ = {}
-        for arch in ['x86', 'x86_64', 'arm', 'arm64', 'all']:
-            key = 'AMBUILD_VCVARS_{}'.format(arch.upper())
-            if key not in os.environ:
-                continue
-            self.vcvars_override_[arch] = os.environ[key]
+        self.rules_config_['abi'] = abi
+        self.target_ = System(self.host_.platform, arch, subarch, abi)
+        self.cross_compile_ = IsCrossCompile(self.host_, self.target_)
 
     def detect(self):
         if 'CC' in os.environ or 'CXX' in os.environ:
@@ -145,7 +155,8 @@ class CompilerLocator(object):
             env_data = util.BuildTupleFromDict(env_data)
 
         return compiler.CliCompiler(cxx.vendor,
-                                    System(self.host_.platform, cxx.arch),
+                                    System(self.host_.platform, cxx.arch, cxx.subarch,
+                                           self.target_.abi),
                                     cc.argv,
                                     cxx.argv,
                                     options = self.gen_options_,
@@ -157,18 +168,6 @@ class CompilerLocator(object):
         _, has_cl = FindToolsInEnv(os.environ, ['cl.exe'])
         if has_cl:
             return self.find_default_compiler()
-
-        if self.target_.arch in self.vcvars_override_:
-            cxx = self.try_msvc_bat(self.vcvars_override_[self.target_.arch])
-            if not cxx:
-                raise CompilerNotFoundException()
-            return cxx
-
-        if 'all' in self.vcvars_override_:
-            cxx = self.try_msvc_bat(self.vcvars_override_['all'], pass_arch = True)
-            if not cxx:
-                raise CompilerNotFoundException()
-            return cxx
 
         installs = msvc_utils.MSVCFinder().find_all()
         for install in installs:

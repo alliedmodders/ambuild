@@ -49,6 +49,12 @@ class Dep(object):
 
         return item
 
+def TargetSuffix(target):
+    base = '{}-{}{}'.format(target.platform, target.arch, target.subarch)
+    if target.abi:
+        return base + '-' + target.abi
+    return base
+
 class BuilderProxy(object):
     def __init__(self, builder, compiler, name):
         self.constructor_ = builder.constructor_
@@ -56,8 +62,7 @@ class BuilderProxy(object):
         self.custom = builder.custom[:]
         self.compiler = compiler
         self.name_ = name
-        self.localFolder = os.path.join(
-            name, '{}-{}'.format(compiler.target.platform, compiler.target.arch))
+        self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
 
     @property
     def outputFile(self):
@@ -292,8 +297,7 @@ class BinaryBuilder(object):
         self.used_cxx_ = False
         self.linker_ = None
         self.modules_ = []
-        self.localFolder = os.path.join(
-            name, '{}-{}'.format(compiler.target.platform, compiler.target.arch))
+        self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
         self.has_code_ = False
 
     @property
