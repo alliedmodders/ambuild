@@ -21,7 +21,6 @@ import shlex
 import subprocess
 import tempfile
 from ambuild2 import util
-from ambuild2.frontend import cpp_rules
 from ambuild2.frontend import msvc_utils
 from ambuild2.frontend.system import System
 from ambuild2.frontend.v2_2.cpp import vendor, compiler
@@ -78,12 +77,7 @@ class CompilerLocator(object):
     def __init__(self, host, gen_options, **kwargs):
         self.host_ = host
         self.gen_options_ = gen_options
-        self.rp_ = cpp_rules.RulesParser()
         self.force_msvc_version_ = kwargs.pop('force_msvc_version', None)
-        self.rules_config_ = {
-            'family': 'unknown',
-            'platform': self.host_.platform,
-        }
         self.target_override_ = False
 
         arch, subarch = self.host_.arch, self.host_.subarch
@@ -95,9 +89,6 @@ class CompilerLocator(object):
             abi = kwargs.pop('target_abi')
             self.target_override_ = True
 
-        self.rules_config_['arch'] = arch
-        self.rules_config_['subarch'] = subarch
-        self.rules_config_['abi'] = abi
         self.target_ = System(self.host_.platform, arch, subarch, abi)
         self.cross_compile_ = IsCrossCompile(self.host_, self.target_)
 
@@ -262,13 +253,19 @@ class CompilerLocator(object):
         return None
 
     def run_compiler(self, mode, cmd, assumed_family, env = None, abs_path = None):
-        self.rules_config_['family'] = assumed_family
-        props = self.rp_.parse(self.rules_config_)
-
-        flags = props.get('CFLAGS', [])
-        flags += shlex.split(os.environ.get('CFLAGS', ''))
+        flags = shlex.split(os.environ.get('CFLAGS', ''))
         if mode == 'CXX':
             flags.extend(shlex.split(os.environ.get('CXXFLAGS', '')))
+
+        if assumed_family == 'gcc':
+            if self.target_.arch == 'x86':
+                flags += ['-m32']
+                if self.host_.platform == 'mac':
+                    flags += ['-arch', 'i386']
+            elif self.target_.arch == 'x86_64':
+                flags += ['-m64']
+                if self.host_.platform == 'mac':
+                    flags += ['-arch', 'x86_64']
 
         try:
             return VerifyCompiler(flags, mode, cmd, assumed_family, env, abs_path), None
