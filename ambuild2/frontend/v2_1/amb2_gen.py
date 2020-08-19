@@ -16,10 +16,10 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
 from ambuild2 import util
-from ambuild2.frontend import amb2
+from ambuild2.frontend import amb2_gen
 from ambuild2.frontend.v2_1.cpp import detect
 
-class Generator(amb2.Generator):
+class Generator(amb2_gen.Generator):
     def __init__(self, cm):
         super(Generator, self).__init__(cm)
         self.compiler = None
