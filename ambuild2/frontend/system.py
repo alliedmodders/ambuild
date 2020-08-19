@@ -17,11 +17,12 @@
 from ambuild2 import util
 
 class System(object):
-    def __init__(self, platform, arch, subarch = ''):
+    def __init__(self, platform, arch, subarch = '', abi = ''):
         super(System, self).__init__()
         self.platform_ = platform
         self.arch_ = arch
         self.subarch_ = subarch
+        self.abi_ = abi
 
     @property
     def platform(self):
@@ -35,4 +36,8 @@ class System(object):
     def subarch(self):
         return self.subarch_
 
-System.Host = System(util.Platform(), util.Architecture, util.SubArch)
+    @property
+    def abi(self):
+        return self.abi_
+
+System.Host = System(util.Platform(), util.Architecture, util.SubArch, util.DetectHostAbi())

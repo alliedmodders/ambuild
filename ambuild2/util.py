@@ -66,6 +66,42 @@ def Platform():
         return 'cygwin'
     return 'unknown'
 
+def DetectHostAbi():
+    if Architecture == 'arm':
+        return DetectHostArmAbi()
+    return ''
+
+def DetectHostArmAbi():
+    if not IsLinux():
+        return ''
+
+    paths = os.environ.get('PATH', '').split(':')
+    any_bin_path = sys.executable
+    for path in paths:
+        candidate = os.path.join(path, 'ld')
+        if os.path.exists(candidate):
+            any_bin_path = candidate
+            break
+
+    argv = [
+        'readelf',
+        '-A',
+        any_bin_path,
+    ]
+    try:
+        output = subprocess.check_output(argv)
+        output = output.decode('utf-8')
+    except Exception as e:
+        sys.stderr.write('Could not determine ARM ABI: {}'.format(e))
+        return 'unknown'
+
+    lines = output.split('\n')
+    for line in lines:
+        parts = [part.strip() for part in line.split(':')]
+        if len(parts) == 2 and parts[0] == 'Tag_ABI_VFP_args' and parts[1] == 'VFP registers':
+            return 'gnueabihf'
+    return 'gnueabi'
+
 def IsLinux():
     return sys.platform[0:5] == 'linux'
 
