@@ -105,17 +105,17 @@ class Context(object):
         return self.compiler
 
     def ImportScript(self, file, vars = None):
-        return self.generator.importScript(self, file, vars or {})
+        return self.cm.importScript(self, file, vars or {})
 
     def RunScript(self, file, vars = None):
-        return self.generator.evalScript(file, vars or {})
+        return self.cm.evalScript(file, vars or {})
 
     def RunBuildScripts(self, files, vars = None):
         if util.IsString(files):
-            self.generator.evalScript(files, vars or {})
+            self.cm.evalScript(files, vars or {})
         else:
             for script in files:
-                self.generator.evalScript(script, vars)
+                self.cm.evalScript(script, vars)
 
     def Add(self, taskbuilder):
         taskbuilder.finish(self)
@@ -154,15 +154,15 @@ class Context(object):
         return self.generator.addConfigureFile(self, path)
 
     def Context(self, name):
-        return self.generator.Context(name)
+        return self.cm.Context(name)
 
 class AutoContext(Context):
     def __init__(self, gen, parent, file):
         super(AutoContext, self).__init__(gen, parent, file)
 
     def __enter__(self):
-        self.generator.pushContext(self)
+        self.cm.pushContext(self)
         return self
 
     def __exit__(self, type, value, traceback):
-        self.generator.popContext()
+        self.cm.popContext()

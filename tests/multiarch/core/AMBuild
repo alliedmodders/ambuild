@@ -1,0 +1,22 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+
+project = builder.ProgramProject('sample')
+project.sources += [
+  'main.cpp',
+]
+
+for cxx in [builder.x86, builder.x64]:
+    if cxx is None:
+        continue
+
+    if cxx.like('gcc'):
+        cxx.cflags += [
+          '-Wall',
+          '-Werror'
+        ]
+    elif cxx.like('msvc'):
+        cxx.cflags += ['/WX']
+
+    project.Configure(cxx, 'sample', cxx.target.arch)
+
+builder.Add(project)

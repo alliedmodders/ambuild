@@ -1,4 +1,4 @@
-# vim: set sts=2 ts=8 sw=2 tw=99 et:
+# vim: set sts=4 ts=8 sw=4 tw=99 et:
 import errno
 import subprocess
 import re, os, sys, locale
@@ -31,7 +31,21 @@ def NormalizeArchString(arch):
         return 'unknown'
     return arch
 
-Architecture = NormalizeArchString(platform.machine())
+# Advanced version - split into (arch, subarch).
+def DecodeArchString(arch):
+    if arch.lower() in ['x86_64', 'x64', 'amd64']:
+        return 'x86_64', ''
+    if arch.lower() in ['x86', 'i386', 'i686', 'x32', 'ia32']:
+        return 'x86', ''
+    if arch.startswith('arm64') or arch.startswith('armv8') or arch.startswith('aarch64'):
+        return 'arm64', ''
+    if arch.startswith('arm'):
+        return 'arm', arch[len('arm'):]
+    if not arch:
+        return 'unknown', ''
+    return arch, ''
+
+Architecture, SubArch = DecodeArchString(platform.machine())
 
 def Platform():
     if IsWindows():
@@ -51,6 +65,42 @@ def Platform():
     if IsCygwin():
         return 'cygwin'
     return 'unknown'
+
+def DetectHostAbi():
+    if Architecture == 'arm':
+        return DetectHostArmAbi()
+    return ''
+
+def DetectHostArmAbi():
+    if not IsLinux():
+        return ''
+
+    paths = os.environ.get('PATH', '').split(':')
+    any_bin_path = sys.executable
+    for path in paths:
+        candidate = os.path.join(path, 'ld')
+        if os.path.exists(candidate):
+            any_bin_path = candidate
+            break
+
+    argv = [
+        'readelf',
+        '-A',
+        any_bin_path,
+    ]
+    try:
+        output = subprocess.check_output(argv)
+        output = output.decode('utf-8')
+    except Exception as e:
+        sys.stderr.write('Could not determine ARM ABI: {}'.format(e))
+        return 'unknown'
+
+    lines = output.split('\n')
+    for line in lines:
+        parts = [part.strip() for part in line.split(':')]
+        if len(parts) == 2 and parts[0] == 'Tag_ABI_VFP_args' and parts[1] == 'VFP registers':
+            return 'gnueabihf'
+    return 'gnueabi'
 
 def IsLinux():
     return sys.platform[0:5] == 'linux'
@@ -110,18 +160,49 @@ def WaitForProcess(process):
     process.stderrText = DecodeConsoleText(sys.stderr, err)
     return process.returncode
 
-def CreateProcess(argv, executable = None, env = None):
+def SanitizeEnv(env):
+    if sys.version_info[0] >= 3:
+        return env
+
+    new_env = {}
+    for key in env:
+        value = env[key]
+        if isinstance(key, unicode):
+            key = key.encode('utf-8')
+        if isinstance(value, unicode):
+            value = value.encode('utf-8')
+        assert isinstance(key, str)
+        assert isinstance(value, str)
+        new_env[key] = value
+    return new_env
+
+def NeedsSanitizing(env):
+    if sys.version_info[0] >= 3:
+        return False
+
+    for key in env:
+        if isinstance(key, unicode) or isinstance(env[key], unicode):
+            return True
+    return False
+
+def CreateProcess(argv, executable = None, env = None, no_raise = True):
     pargs = {'args': argv}
     pargs['stdout'] = subprocess.PIPE
     pargs['stderr'] = subprocess.PIPE
     if executable != None:
         pargs['executable'] = executable
-    if env != None:
-        pargs['env'] = env
+
+    if env:
+        pargs['env'] = SanitizeEnv(env)
+    elif NeedsSanitizing(os.environ):
+        pargs['env'] = SanitizeEnv(os.environ)
+
     try:
         process = subprocess.Popen(**pargs)
     except:
-        return None
+        if no_raise:
+            return None
+        raise
     return process
 
 def MakePath(*list):
@@ -165,6 +246,11 @@ class Guard:
         self.obj.close()
 
 def Execute(argv, shell = False, env = None):
+    if env is not None:
+        env = SanitizeEnv(env)
+    elif NeedsSanitizing(os.environ):
+        env = SanitizeEnv(os.environ)
+
     p = subprocess.Popen(args = argv,
                          stdout = subprocess.PIPE,
                          stderr = subprocess.PIPE,
@@ -243,13 +329,9 @@ def ParseGCCDeps(text):
             new_text += line + '\n'
     return new_text, deps
 
-def ParseMSVCDeps(vars, out):
-    if 'cc_inclusion_pattern' in vars:
-        pattern = vars['cc_inclusion_pattern']
-    elif 'cxx_inclusion_pattern' in vars:
-        pattern = vars['cxx_inclusion_pattern']
-    elif 'msvc_inclusion_pattern' in vars:
-        pattern = vars['msvc_inclusion_pattern']
+def ParseMSVCDeps(out, inclusion_pattern = None):
+    if inclusion_pattern is not None:
+        pattern = inclusion_pattern
     else:
         pattern = 'Note: including file:\s+(.+)$'
 
@@ -529,3 +611,18 @@ def BuildEnv(cmds, env = None):
             else:
                 env[key] = value
     return env
+
+# Build a stable, hashable list (eg tuple) from a dictionary.
+def BuildTupleFromDict(obj):
+    items = []
+    for key, value in obj.items():
+        items.append((key, value))
+    items.sort(key = lambda x: x[0])
+    return tuple(items)
+
+# Build a dictionary from a tuple of key, value tuples.
+def BuildDictFromTuple(tup):
+    obj = {}
+    for key, value in tup:
+        obj[key] = value
+    return obj

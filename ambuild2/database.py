@@ -98,6 +98,9 @@ def CreateDatabase(path):
     #   tools: A tuple of (name, path) tuples, denoting where to find named
     #          tools.
     #
+    #   props: A tuple of (key, value) tuples, denoting extra properties that
+    #          can be attached to an environment.
+    #
     # This is explicitly not a dictionary. A tuple makes it hashable which is
     # useful for doing reverse-lookups without hitting the DB. It also makes
     # it easier to guarantee consistent ordering.

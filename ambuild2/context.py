@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -98,7 +98,9 @@ class Context(object):
 
         from ambuild2.frontend.amb2 import Generator
 
-        if api_version >= '2.1':
+        if api_version >= '2.2':
+            from ambuild2.frontend.v2_2.context_manager import ContextManager
+        elif api_version >= '2.1':
             from ambuild2.frontend.v2_1.context_manager import ContextManager
         elif api_version >= '2.0':
             from ambuild2.frontend.v2_0.context_manager import ContextManager
@@ -172,9 +174,13 @@ class Context(object):
             builder.printSteps()
             return True
 
-        status = builder.update()
+        status, message = builder.update()
         if status == TaskMaster.BUILD_FAILED:
-            util.con_err(util.ConsoleHeader, 'Build failed.', util.ConsoleNormal)
+            if message is None:
+                util.con_err(util.ConsoleHeader, 'Build failed.', util.ConsoleNormal)
+            else:
+                util.con_err(util.ConsoleHeader, 'Build failed: {}'.format(message),
+                             util.ConsoleNormal)
             return False
         if status == TaskMaster.BUILD_INTERRUPTED:
             util.con_err(util.ConsoleHeader, 'Build cancelled.', util.ConsoleNormal)

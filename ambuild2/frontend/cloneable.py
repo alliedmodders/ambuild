@@ -14,30 +14,19 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-from ambuild2 import util
+import collections
+import copy
 
-class System(object):
-    def __init__(self, platform, arch, subarch = '', abi = ''):
-        super(System, self).__init__()
-        self.platform_ = platform
-        self.arch_ = arch
-        self.subarch_ = subarch
-        self.abi_ = abi
+# An object inheriting from Cloneable will be automatically shallow-copied
+# when constructing child build contexts. Use copy.deepcopy to clone.
+class Cloneable(object):
+    def __init__(self):
+        pass
 
-    @property
-    def platform(self):
-        return self.platform_
+class CloneableDict(collections.OrderedDict, Cloneable):
+    def __init__(self, *args, **kwargs):
+        super(CloneableDict, self).__init__(*args, **kwargs)
 
-    @property
-    def arch(self):
-        return self.arch_
-
-    @property
-    def subarch(self):
-        return self.subarch_
-
-    @property
-    def abi(self):
-        return self.abi_
-
-System.Host = System(util.Platform(), util.Architecture, util.SubArch, util.DetectHostAbi())
+class CloneableList(list, Cloneable):
+    def __init__(self, *args, **kwargs):
+        super(CloneableList, self).__init__(*args, **kwargs)

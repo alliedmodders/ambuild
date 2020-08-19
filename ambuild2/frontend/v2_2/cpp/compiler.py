@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -17,11 +17,12 @@
 import copy
 import subprocess
 import sys
-from ambuild2.frontend.v2_1.cpp import builders
 from ambuild2 import util
+from ambuild2.frontend.cloneable import Cloneable
+from ambuild2.frontend.v2_2.cpp import builders
 
 # Base compiler object.
-class Compiler(object):
+class Compiler(Cloneable):
     attrs_ = [
         'includes',  # C and C++ include paths
         'cxxincludes',  # C++-only include paths
@@ -50,8 +51,9 @@ class Compiler(object):
         'weaklinkdeps',
     ]
 
-    def __init__(self, vendor, options = None):
+    def __init__(self, vendor, target, options = None):
         self.vendor = vendor
+        self.target = target
         for attr in self.attrs_:
             setattr(self, attr, [])
         if getattr(options, 'symbol_files', False):
@@ -123,35 +125,29 @@ class Compiler(object):
     def StaticLibrary(self, name):
         raise Exception('Must be implemented!')
 
-    def ProgramProject(self, name):
-        raise Exception('Must be implemented!')
-
-    def LibraryProject(self, name):
-        raise Exception('Must be implemented!')
-
-    def StaticLibraryProject(self, name):
-        raise Exception('Must be implemented!')
-
     @staticmethod
     def Dep(text, node = None):
         return builders.Dep(text, node)
 
 class CliCompiler(Compiler):
-    def __init__(self, vendor, cc_argv, cxx_argv, options = None, env_data = None):
-        super(CliCompiler, self).__init__(vendor, options)
+    def __init__(self, vendor, target, cc_argv, cxx_argv, options = None, env_data = None):
+        super(CliCompiler, self).__init__(vendor, target, options)
         self.cc_argv = cc_argv
         self.cxx_argv = cxx_argv
         self.found_pkg_config_ = False
         self.env_data = env_data
 
     def clone(self):
-        cc = CliCompiler(self.vendor, self.cc_argv, self.cxx_argv)
+        cc = CliCompiler(self.vendor, self.target, self.cc_argv, self.cxx_argv)
         cc.inherit(self)
         return cc
 
     def inherit(self, other):
         super(CliCompiler, self).inherit(other)
         self.env_data = other.env_data
+
+    def __deepcopy__(self, memo):
+        return self.clone()
 
     def Program(self, name):
         return builders.Program(self.clone(), name)
@@ -161,15 +157,6 @@ class CliCompiler(Compiler):
 
     def StaticLibrary(self, name):
         return builders.StaticLibrary(self.clone(), name)
-
-    def ProgramProject(self, name):
-        return builders.Project(builders.Program, self.clone(), name)
-
-    def LibraryProject(self, name):
-        return builders.Project(builders.Library, self.clone(), name)
-
-    def StaticLibraryProject(self, name):
-        return builders.Project(builders.StaticLibrary, self.clone(), name)
 
     @staticmethod
     def run_pkg_config(argv):

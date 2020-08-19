@@ -45,6 +45,18 @@ class Task(object):
                                                                       self.data[1]))
         return (' '.join([arg for arg in self.data]))
 
+def GetMsvcInclusionPattern(vars, tools_env):
+    if 'cc_inclusion_pattern' in vars:
+        return vars['cc_inclusion_pattern']
+    elif 'cxx_inclusion_pattern' in vars:
+        return vars['cxx_inclusion_pattern']
+    elif 'msvc_inclusion_pattern' in vars:
+        return vars['msvc_inclusion_pattern']
+    if tools_env:
+        if 'inclusion_pattern' in tools_env.props:
+            return tools_env.props['inclusion_pattern']
+    return None
+
 class TaskWorker(process_manager.MessageReceiver):
     def __init__(self, channel, vars):
         super(TaskWorker, self).__init__(channel)
@@ -239,7 +251,8 @@ class TaskWorker(process_manager.MessageReceiver):
             if cc_type == 'gcc':
                 err, deps = util.ParseGCCDeps(err)
             elif cc_type == 'msvc':
-                out, deps = util.ParseMSVCDeps(self.vars, out)
+                inclusion_pattern = GetMsvcInclusionPattern(self.vars, tools_env)
+                out, deps = util.ParseMSVCDeps(out, inclusion_pattern)
             elif cc_type == 'sun':
                 err, deps = util.ParseSunDeps(err)
             elif cc_type == 'fxc':
@@ -265,6 +278,8 @@ class TaskWorker(process_manager.MessageReceiver):
         cl_argv = task_data['cl_argv']
         rc_argv = task_data['rc_argv']
 
+        inclusion_pattern = GetMsvcInclusionPattern(self.vars, tools_env)
+
         env = None
         if tools_env is not None:
             if tools_env.env_cmds is not None:
@@ -277,7 +292,7 @@ class TaskWorker(process_manager.MessageReceiver):
         with util.FolderChanger(task_folder):
             # Includes go to stderr when we preprocess to stdout.
             p, out, err = util.Execute(cl_argv, env = env)
-            out, deps = util.ParseMSVCDeps(self.vars, err)
+            out, deps = util.ParseMSVCDeps(err, inclusion_pattern)
             paths = self.rewriteDeps(deps)
 
             if p.returncode == 0:
@@ -333,6 +348,7 @@ class TaskMaster(object):
         self.pending_ = {}
         self.idle_ = set()
         self.build_completed_ = False
+        self.failed_task_message = None
 
         # Figure out how many tasks to create.
         if cx.options.jobs == 0:
@@ -354,7 +370,7 @@ class TaskMaster(object):
         for _ in range(num_processes):
             self.startWorker()
 
-    def spewResult(self, worker, message):
+    def spewResult(self, worker, task, message):
         if message['ok']:
             color = util.ConsoleGreen
         else:
@@ -375,16 +391,20 @@ class TaskMaster(object):
                 sys.stderr.write('\n')
             sys.stderr.flush()
 
+        if not message['ok'] and task:
+            self.failed_task_message = task.outputs[0]
+
     def recvTaskComplete(self, worker, message):
+        task = self.pending_[worker.pid]
+
         message['pid'] = worker.pid
         if not message['ok']:
-            self.errors_.append((worker, message))
+            self.errors_.append((worker, task, message))
             self.terminateBuild(TaskMaster.BUILD_FAILED)
             return
 
-        self.spewResult(worker, message)
+        self.spewResult(worker, task, message)
 
-        task = self.pending_[worker.pid]
         del self.pending_[worker.pid]
         if message['task_id'] != task.id:
             raise Exception('Worker {} returned wrong task id (got {}, expected {})'.format(
@@ -430,8 +450,8 @@ class TaskMaster(object):
             self.pump()
         except KeyboardInterrupt:  # :TODO: TEST!
             self.terminateBuild(TaskMaster.BUILD_INTERRUPTED)
-        for worker, message in self.errors_:
-            self.spewResult(worker, message)
+        for worker, task, message in self.errors_:
+            self.spewResult(worker, task, message)
         return self.status_
 
     def onShutdown(self):

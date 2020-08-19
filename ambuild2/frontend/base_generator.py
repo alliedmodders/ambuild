@@ -14,7 +14,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
-
 class BaseGenerator(object):
     def __init__(self, cm):
         self.cm = cm
@@ -46,3 +45,13 @@ class BaseGenerator(object):
 
     def addConfigureFile(self, context, path):
         raise Exception('Must be implemented!')
+
+    # The following methods are only needed to implement v2.2 generators.
+    def newProgramProject(self, context, name):
+        raise NotImplementedError()
+
+    def newLibraryProject(self, context, name):
+        raise NotImplementedError()
+
+    def newStaticLibraryProject(self, context, name):
+        raise NotImplementedError()

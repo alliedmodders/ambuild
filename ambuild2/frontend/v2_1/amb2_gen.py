@@ -16,12 +16,13 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
 from ambuild2 import util
-from ambuild2.frontend import amb2
+from ambuild2.frontend import amb2_gen
 from ambuild2.frontend.v2_1.cpp import detect
 
-class Generator(amb2.Generator):
+class Generator(amb2_gen.Generator):
     def __init__(self, cm):
         super(Generator, self).__init__(cm)
+        self.compiler = None
 
     def detectCompilers(self, options):
         if options is None:
@@ -34,3 +35,10 @@ class Generator(amb2.Generator):
                 self.compiler = self.base_compiler.clone()
 
         return self.compiler
+
+    def copyBuildVars(self, vars):
+        if not self.compiler:
+            return
+        for prop_name in self.compiler.vendor.extra_props:
+            key = '{0}_{1}'.format(self.compiler.vendor.name, prop_name)
+            vars[key] = self.compiler.vendor.extra_props[prop_name]

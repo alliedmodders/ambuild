@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
+from ambuild2 import util
 
 # Source nodes are files that are leaf inputs to the build system, and are not
 # generated as part of the build process.
@@ -193,13 +194,15 @@ class ToolsEnv(object):
         self.env_data = env_data  # Source of truth for equality testing.
         self.env_cmds = None
         self.tools = {}
+        self.props = {}
 
         for name, data in env_data:
             if name == 'env_cmds':
                 self.env_cmds = data
             elif name == 'tools':
-                for tool_name, tool_path in data:
-                    self.tools[tool_name] = tool_path
+                self.tools = util.BuildDictFromTuple(data)
+            elif name == 'props':
+                self.props = util.BuildDictFromTuple(data)
 
 # This compares a ToolsEnv to an env_data tuple. Any other combination is not
 # a legal comparison.

@@ -20,10 +20,11 @@ from ambuild2 import util
 from ambuild2.frontend import paths
 
 class CppNodes(object):
-    def __init__(self, output, debug_outputs, type):
+    def __init__(self, output, debug_outputs, type, target):
         self.binary = output
         self.debug = debug_outputs
         self.type = type
+        self.target = target
 
 class Dep(object):
     def __init__(self, text, node):
@@ -48,6 +49,12 @@ class Dep(object):
 
         return item
 
+def TargetSuffix(target):
+    base = '{}-{}{}'.format(target.platform, target.arch, target.subarch)
+    if target.abi:
+        return base + '-' + target.abi
+    return base
+
 class BuilderProxy(object):
     def __init__(self, builder, compiler, name):
         self.constructor_ = builder.constructor_
@@ -55,7 +62,7 @@ class BuilderProxy(object):
         self.custom = builder.custom[:]
         self.compiler = compiler
         self.name_ = name
-        self.localFolder = name
+        self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
 
     @property
     def outputFile(self):
@@ -70,10 +77,9 @@ class BuilderProxy(object):
         return Dep(text, node)
 
 class Project(object):
-    def __init__(self, constructor, compiler, name):
+    def __init__(self, constructor, name):
         super(Project, self).__init__()
         self.constructor_ = constructor
-        self.compiler = compiler
         self.name = name
         self.sources = []
         self.proxies_ = []
@@ -95,9 +101,8 @@ class Project(object):
             outputs += [builder.generate(generator, cx)]
         return outputs
 
-    def Configure(self, name, tag):
-        compiler = self.compiler.clone()
-        proxy = BuilderProxy(self, compiler, name)
+    def Configure(self, compiler, name, tag):
+        proxy = BuilderProxy(self, compiler.clone(), name)
         self.proxies_.append(proxy)
         return proxy
 
@@ -292,7 +297,7 @@ class BinaryBuilder(object):
         self.used_cxx_ = False
         self.linker_ = None
         self.modules_ = []
-        self.localFolder = name
+        self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
         self.has_code_ = False
 
     @property
@@ -317,7 +322,7 @@ class BinaryBuilder(object):
         folder_node = generator.generateFolder(cx.localFolder, self.localFolder)
         output_file, debug_file = self.link(context = cx, folder = folder_node, inputs = inputs)
 
-        return CppNodes(output_file, debug_file, self.type)
+        return CppNodes(output_file, debug_file, self.type, self.compiler.target)
 
     # Make an item that can be passed into linkflags/postlink but has an attached
     # dependency.
@@ -506,7 +511,7 @@ class BinaryBuilder(object):
         if self.linker_.family == 'msvc':
             # Note, pdb is last since we read the pdb as outputs[-1].
             self.linker_outputs += [self.name_ + '.pdb']
-        elif cx.target.platform == 'mac':
+        elif self.compiler.target.platform == 'mac':
             bundle_folder = os.path.join(self.localFolder, self.outputFile + '.dSYM')
             bundle_entry = cx.AddFolder(bundle_folder)
             bundle_layout = [
@@ -522,7 +527,7 @@ class BinaryBuilder(object):
             ]
             self.debug_entry = bundle_entry
             self.argv = ['ambuild_dsymutil_wrapper.sh', self.outputFile] + self.argv
-        elif cx.target.platform == 'linux':
+        elif self.compiler.target.platform == 'linux':
             self.linker_outputs += [self.outputFile + '.dbg']
             self.argv = ['ambuild_objcopy_wrapper.sh', self.outputFile] + self.argv
 
