@@ -101,6 +101,14 @@ class CompilerLocator(object):
         self.target_ = System(self.host_.platform, arch, subarch, abi)
         self.cross_compile_ = IsCrossCompile(self.host_, self.target_)
 
+        # Allow specifying the environment file via the environment.
+        self.vcvars_override_ = {}
+        for arch in ['x86', 'x86_64', 'arm', 'arm64', 'all']:
+            key = 'AMBUILD_VCVARS_{}'.format(arch.upper())
+            if key not in os.environ:
+                continue
+            self.vcvars_override_[arch] = os.environ[key]
+
     def detect(self):
         if 'CC' in os.environ or 'CXX' in os.environ:
             return self.detect_from_env()
@@ -168,6 +176,18 @@ class CompilerLocator(object):
         _, has_cl = FindToolsInEnv(os.environ, ['cl.exe'])
         if has_cl:
             return self.find_default_compiler()
+
+        if self.target_.arch in self.vcvars_override_:
+            cxx = self.try_msvc_bat(self.vcvars_override_[self.target_.arch])
+            if not cxx:
+                raise CompilerNotFoundException()
+            return cxx
+
+        if 'all' in self.vcvars_override_:
+            cxx = self.try_msvc_bat(self.vcvars_override_['all'], pass_arch = True)
+            if not cxx:
+                raise CompilerNotFoundException()
+            return cxx
 
         installs = msvc_utils.MSVCFinder().find_all()
         for install in installs:
