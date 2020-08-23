@@ -47,6 +47,17 @@ def DecodeArchString(arch):
 
 Architecture, SubArch = DecodeArchString(platform.machine())
 
+ALL_PLATFORMS = [
+    'windows',
+    'mac',
+    'linux',
+    'freebsd',
+    'openbsd',
+    'netbsd',
+    'solaris',
+    'cygwin',
+]
+
 def Platform():
     if IsWindows():
         return 'windows'
