@@ -46,6 +46,10 @@ kGccTuple = ('gcc', 'g++', 'gcc')
 kIntelTuple = ('icc', 'icc', 'gcc')
 kMsvcTuple = ('cl', 'cl', 'msvc')
 
+kGnuArchMap = {
+    'arm64': 'aarch64',
+}
+
 def FindToolsInEnv(env, tools):
     found = {}
     paths = env.get('PATH', '').split(';')
@@ -89,12 +93,34 @@ class CompilerLocator(object):
 
         arch, subarch = self.host_.arch, self.host_.subarch
         abi = self.host_.abi
-        if 'target_arch' in kwargs:
-            arch, subarch = util.DecodeArchString(kwargs.pop('target_arch'))
+        platform = None
+        if 'target' in kwargs:
+            target_phrase = kwargs.pop('target')
+            parts = target_phrase.split('-')
+
+            # We allow:
+            #   arch
+            #   platform-arch
+            #   arch-abi
+            #   platform-arch-abi
+            if len(parts) == 1:
+                arch = parts[0]
+            elif len(parts) == 2:
+                if parts[0] in util.ALL_PLATFORMS:
+                    platform, arch = parts
+                else:
+                    arch, abi = parts
+            elif len(parts) == 3:
+                platform, arch, abi = parts
+            else:
+                raise Exception('Target could not be parsed: {}'.format(target_phrase))
+
+            arch, subarch = util.DecodeArchString(arch)
             self.target_override_ = True
-        if 'target_abi' in kwargs:
-            abi = kwargs.pop('target_abi')
-            self.target_override_ = True
+        else:
+            if 'target_arch' in kwargs:
+                arch, subarch = util.DecodeArchString(kwargs.pop('target_arch'))
+                self.target_override_ = True
 
         self.rules_config_['arch'] = arch
         self.rules_config_['subarch'] = subarch
@@ -147,13 +173,13 @@ class CompilerLocator(object):
             raise Exception(message)
 
         if cxx.arch != cc.arch:
-            message = "C architecture {0} does not match C++ architecture {1}".format(
+            message = "C architecture \"{0}\" does not match C++ architecture \"{1}\"".format(
                 cc.arch, cxx.arch)
             util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
             raise Exception(message)
 
         if cxx.arch != self.target_.arch and self.target_override_:
-            message = "Compiler architecture {0} does not match requested architecture {1}".format(
+            message = "Compiler architecture \"{0}\" does not match requested architecture \"{1}\"".format(
                 cxx.arch, self.target_.arch)
             util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
             raise Exception(message)
@@ -248,6 +274,16 @@ class CompilerLocator(object):
         candidates = []
         if self.host_.platform == 'windows':
             candidates.append(kMsvcTuple)
+
+        if self.cross_compile_ and self.host_.platform == 'linux':
+            if self.target_.abi:
+                abi = self.target_.abi
+            else:
+                abi = 'gnu'
+            arch = kGnuArchMap.get(self.target_.arch, self.target_.arch)
+            cmd_prefix = '{}-linux-{}'.format(arch, abi)
+            candidates += [(cmd_prefix + '-gcc', cmd_prefix + '-g++', 'gcc')]
+
         candidates.extend([kClangTuple, kGccTuple, kIntelTuple])
 
         for cc_cmd, cxx_cmd, cc_family in candidates:
@@ -292,43 +328,47 @@ class CompilerLocator(object):
             flags.extend(shlex.split(os.environ.get('CXXFLAGS', '')))
 
         try:
-            return VerifyCompiler(flags, mode, cmd, assumed_family, env, abs_path), None
+            return self.verify_compiler(flags, mode, cmd, assumed_family, env, abs_path), None
         except Exception as e:
             util.con_out(util.ConsoleHeader, 'Compiler {0} for {1} failed: '.format(cmd, mode),
                          util.ConsoleRed, str(e), util.ConsoleNormal)
             return None, e
 
-def VerifyCompiler(flags, mode, cmd, assumed_family, env, abs_path):
-    base_argv = shlex.split(cmd)
-    base_argv.extend(flags)
+    def verify_compiler(self, flags, mode, cmd, assumed_family, env, abs_path):
+        base_argv = shlex.split(cmd)
+        base_argv.extend(flags)
 
-    argv = base_argv[:]
-    if abs_path is not None:
-        argv[0] = abs_path
+        argv = base_argv[:]
+        if abs_path is not None:
+            argv[0] = abs_path
 
-    verifier = Verifier(family = assumed_family, env = env, argv = argv, mode = mode)
-    info = verifier.verify()
+        verifier = Verifier(family = assumed_family,
+                            env = env,
+                            argv = argv,
+                            mode = mode,
+                            cross_compile = self.cross_compile_)
+        info = verifier.verify()
 
-    vendor, version = info['vendor'].split(' ')
-    if vendor == 'gcc':
-        v = GCC(version)
-    elif vendor == 'emscripten':
-        v = Emscripten(version)
-    elif vendor == 'apple-clang':
-        v = Clang(version, 'apple')
-    elif vendor == 'clang':
-        v = Clang(version)
-    elif vendor == 'msvc':
-        v = MSVC(version)
-    elif vendor == 'sun':
-        v = SunPro(version)
-    else:
-        raise Exception('Unknown vendor {0}'.format(vendor))
+        vendor, version = info['vendor'].split(' ')
+        if vendor == 'gcc':
+            v = GCC(version)
+        elif vendor == 'emscripten':
+            v = Emscripten(version)
+        elif vendor == 'apple-clang':
+            v = Clang(version, 'apple')
+        elif vendor == 'clang':
+            v = Clang(version)
+        elif vendor == 'msvc':
+            v = MSVC(version)
+        elif vendor == 'sun':
+            v = SunPro(version)
+        else:
+            raise Exception('Unknown vendor {0}'.format(vendor))
 
-    if info['inclusion_pattern'] is not None:
-        v.extra_props['inclusion_pattern'] = info['inclusion_pattern']
+        if info['inclusion_pattern'] is not None:
+            v.extra_props['inclusion_pattern'] = info['inclusion_pattern']
 
-    util.con_out(util.ConsoleHeader,
-                 'found {0} version {1}, {2}'.format(vendor, version,
-                                                     info['arch']), util.ConsoleNormal)
-    return CommandAndVendor(base_argv, v, info['arch'])
+        util.con_out(util.ConsoleHeader,
+                     'found {0} version {1}, {2}'.format(vendor, version,
+                                                         info['arch']), util.ConsoleNormal)
+        return CommandAndVendor(base_argv, v, info['arch'])
