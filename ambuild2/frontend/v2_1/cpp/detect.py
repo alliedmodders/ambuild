@@ -21,7 +21,7 @@ import shlex
 import subprocess
 import tempfile
 from ambuild2 import util
-from ambuild2.frontend import msvc_utils
+from ambuild2.frontend.cpp import msvc_utils
 from ambuild2.frontend.v2_1.cpp import vendor, compiler
 from ambuild2.frontend.v2_1.cpp.gcc import GCC, Clang, Emscripten
 from ambuild2.frontend.v2_1.cpp.msvc import MSVC
@@ -307,7 +307,7 @@ int main()
 
     inclusion_pattern = None
     if assumed_family == 'msvc':
-        inclusion_pattern = MSVC.DetectInclusionPattern(p.stdoutText)
+        inclusion_pattern = msvc_utils.DetectInclusionPattern(p.stdoutText)
 
     executable_argv = [executable]
     if assumed_family == 'emscripten':
