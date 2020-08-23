@@ -109,18 +109,6 @@ class MSVC(Vendor):
     def formatInclude(self, outputPath, includePath):
         return ['/I', MSVC.IncludePath(outputPath, includePath)]
 
-    @staticmethod
-    def DetectInclusionPattern(text):
-        for line in [raw.strip() for raw in text.split('\n')]:
-            m = re.match(r'(.*)\s+([A-Za-z]:\\.*stdio\.h)$', line)
-            if m is None:
-                continue
-
-            phrase = m.group(1)
-            return re.escape(phrase) + r'\s+([A-Za-z]:\\.*)$'
-
-        raise Exception('Could not find compiler inclusion pattern')
-
     ##
     # MSVC-specific properties.
     ##
