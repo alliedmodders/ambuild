@@ -43,14 +43,6 @@ Mkdir = 'mkd'
 # not have a command counterpart.
 Copy = 'cp'
 
-# FolderCopy nodes snapshot the contents of a folder - non-recursively - and
-# become dirty when files are added or removed. They automatically maintain
-# individual copy links for each file in the folder.
-#
-# To ensure proper ordering, any files in the folder that are dependent on a
-# build action, will have their copy node properly depending on that action.
-CopyFolder = 'cpa'
-
 # Link nodes are a special command node, representing a symlink, from a source
 # to a destination. On operating systems where symlinking is not available or
 # unreliable, copies may be performed instead.
@@ -65,6 +57,11 @@ Cxx = 'cxx'
 # rc.exe on Windows.
 Rc = 'rc'
 
+# Bin nodes are a helper node. They write an embedded byte sequence directly to
+# a file. They have no inputs. It is a command-like node, meaning, it has an
+# attached output node.
+BinWrite = 'bin'
+
 NodeNames = {
     Source: 'source',
     Command: 'command',
@@ -72,7 +69,6 @@ NodeNames = {
     SharedOutput: 'output',
     Mkdir: 'mkdir',
     Copy: 'copy',
-    CopyFolder: 'copy -R',
     Symlink: 'symlink',
     Cxx: 'c++',
     Rc: 'rc'
@@ -85,7 +81,7 @@ def IsCommand(type):
     return type != Output and type != Source
 
 def HasAutoDependencies(type):
-    return type == CopyFolder or type == Cxx
+    return type == Cxx
 
 NOT_DIRTY = 0
 DIRTY = 1
@@ -110,6 +106,9 @@ class Entry(object):
 
         # Command nodes may have extra data associated with them; this is
         # usually an argv serialized by Python.
+        #
+        # For binary nodes, it is a dictionary containing the file name and
+        # file contents.
         self.blob = blob
 
         # For command nodes, this is a link to a 'Mkdir' node describing its

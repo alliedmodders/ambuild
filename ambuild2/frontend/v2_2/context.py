@@ -228,6 +228,9 @@ class BuildContext(BaseContext):
     def StaticLibraryProject(self, name):
         return self.generator_.newStaticLibraryProject(self, name)
 
+    def AddOutputFile(self, path, contents):
+        return self.generator_.addOutputFile(self, path, contents)
+
 # Access to everything.
 class TopLevelBuildContext(BuildContext):
     def __init__(self, cm, parent, vars, script, sourceFolder, buildFolder):

@@ -71,6 +71,7 @@ class TaskWorker(process_manager.MessageReceiver):
             'ln': lambda message: self.doSymlink(message),
             'cp': lambda message: self.doCopy(message),
             'rc': lambda message: self.doResource(message),
+            'bin': lambda message: self.doBinaryWrite(message),
             # When updating this, add to task_argv_debug().
         }
         self.try_send({'id': 'spawned'})
@@ -211,6 +212,26 @@ class TaskWorker(process_manager.MessageReceiver):
         }
         return reply
 
+    def doBinaryWrite(self, message):
+        task_folder = message['task_folder']
+        task_data = message['task_data']
+        _, filename = os.path.split(task_data['path'])
+
+        reply = {
+            'ok': True,
+            'cmdline': self.task_argv_debug(message),
+            'stdout': '',
+            'stderr': '',
+        }
+        with util.FolderChanger(task_folder):
+            try:
+                with open(filename, 'wb') as fp:
+                    fp.write(task_data['contents'])
+            except Exception as e:
+                reply['ok'] = False
+                reply['stderr'] = str(e)
+        return reply
+
     # Adjusts any dependencies relative to the current folder, to be relative to
     # the output folder instead.
     def rewriteDeps(self, deps):
@@ -324,6 +345,8 @@ class TaskWorker(process_manager.MessageReceiver):
             elif message['task_type'] == 'ln':
                 cmd = 'ln -s'
             return '{} "{}" "{}"'.format(cmd, task_data[0], os.path.join(task_folder, task_data[1]))
+        elif message['task_type'] == 'bin':
+            return 'write {}'.format(message['task_data']['path'])
 
 class TaskMaster(object):
     BUILD_IN_PROGRESS = 0

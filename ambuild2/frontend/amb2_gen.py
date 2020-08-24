@@ -201,6 +201,9 @@ class Generator(BaseGenerator):
                 break
             components.append(name)
 
+        if not len(components):
+            return parent
+
         path = parent_path
         while len(components):
             name = components.pop()
@@ -719,6 +722,25 @@ class Generator(BaseGenerator):
                                weak_inputs = weak_inputs,
                                shared_outputs = shared_outputs,
                                env_data = env_data)
+
+    def addOutputFile(self, context, path, contents):
+        folder, filename = os.path.split(path)
+        if not filename:
+            raise Exception('Must specify a file, {} is a folder'.format(path))
+
+        folder_node = self.generateFolder(context.localFolder, folder)
+        data = {
+            'path': paths.Join(folder_node, filename),
+            'contents': contents,
+        }
+
+        _, outputs = self.addCommand(context = context,
+                                     node_type = nodetypes.BinWrite,
+                                     folder = folder_node,
+                                     data = data,
+                                     inputs = [],
+                                     outputs = [filename])
+        return outputs[0]
 
     def addConfigureFile(self, context, path):
         if not os.path.isabs(path) and context is not None:
