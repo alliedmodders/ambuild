@@ -67,7 +67,7 @@ class Vendor(object):
         raise Exception("Must be implemented")
 
     @property
-    def debugInfoArgv(self):
+    def debug_info_argv(self):
         raise Exception("Must be implemented")
 
     def parseDebugInfoType(self, debuginfo):

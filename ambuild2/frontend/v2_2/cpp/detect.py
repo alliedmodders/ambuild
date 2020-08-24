@@ -28,7 +28,6 @@ from ambuild2.frontend.system import System
 from ambuild2.frontend.v2_2.cpp import vendor, compiler
 from ambuild2.frontend.v2_2.cpp.gcc import GCC, Clang, Emscripten
 from ambuild2.frontend.v2_2.cpp.msvc import MSVC
-from ambuild2.frontend.v2_2.cpp.sunpro import SunPro
 
 class CommandAndVendor(object):
     def __init__(self, argv, vendor, arch):
@@ -360,8 +359,6 @@ class CompilerLocator(object):
             v = Clang(version)
         elif vendor == 'msvc':
             v = MSVC(version)
-        elif vendor == 'sun':
-            v = SunPro(version)
         else:
             raise Exception('Unknown vendor {0}'.format(vendor))
 
