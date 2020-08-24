@@ -49,9 +49,7 @@ class MSVC(Vendor):
 
     @property
     def debugInfoArgv(self):
-        if int(self.version_string) >= 1800:
-            return ['/Zi', '/FS']
-        return ['/Zi']
+        return ['/Z7']
 
     def parseDebugInfoType(self, debuginfo):
         if debuginfo == 'bundled':

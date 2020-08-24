@@ -464,8 +464,11 @@ class BinaryBuilder(object):
 
         # Prep shared outputs.
         self.shared_cc_outputs = []
-        if self.compiler.symbol_files and self.compiler.family == 'msvc':
-            self.shared_cc_outputs += [self.compiler.vendor.shared_pdb_name]
+        if self.compiler.family == 'msvc':
+            all_flags = set(self.compiler.cflags)
+            all_flags |= set(self.compiler.cxxflags)
+            if '/Zi' in all_flags or '/ZI' in all_flags:
+                self.shared_cc_outputs += [self.compiler.vendor.shared_pdb_name]
 
         # Prep outputs.
         self.objects = []
