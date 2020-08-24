@@ -17,6 +17,7 @@
 import os
 import re
 from ambuild2 import util
+from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
 from ambuild2.frontend.v2_2.cpp.vendor import Vendor
 
 # Microsoft Visual C++
@@ -50,6 +51,9 @@ class MSVC(Vendor):
     @property
     def debugInfoArgv(self):
         return ['/Z7']
+
+    def makePchArgv(self, source_file, pch_file, source_type):
+        return ['/showIncludes', '/nologo', '/Yc', '/c', source_file, '/Fp' + pch_file]
 
     def parseDebugInfoType(self, debuginfo):
         if debuginfo == 'bundled':
@@ -100,12 +104,22 @@ class MSVC(Vendor):
         includePath = os.path.normcase(includePath)
         outputDrive = os.path.splitdrive(outputPath)[0]
         includeDrive = os.path.splitdrive(includePath)[0]
-        if outputDrive == includeDrive:
-            return os.path.relpath(includePath, outputPath)
-        return includePath
+        if outputDrive and includeDrive and outputDrive != includeDrive:
+            return includePath
+        return os.path.relpath(includePath, outputPath)
 
-    def formatInclude(self, outputPath, includePath):
-        return ['/I', MSVC.IncludePath(outputPath, includePath)]
+    def formatInclude(self, output_path, include):
+        return ['/I', MSVC.IncludePath(output_path, include)]
+
+    def formatPchInclude(self, output_path, pch):
+        folder, header_name = os.path.split(pch.header_file.path)
+        argv = [
+            '/Fp' + MSVC.IncludePath(output_path, pch.pch_file.path),
+            '/Yu' + header_name,
+            '/I',
+            MSVC.IncludePath(output_path, folder),
+        ]
+        return argv
 
     ##
     # MSVC-specific properties.
@@ -126,3 +140,18 @@ class MSVC(Vendor):
         cl_version *= 10
 
         return 'vc{0}.pdb'.format(cl_version)
+
+    @property
+    def pch_needs_strong_deps(self):
+        return True
+
+    @property
+    def pch_needs_source_file(self):
+        return True
+
+    @property
+    def shared_pdb_flags(self):
+        return set(['/Zi', '/ZI'])
+
+    def nameForPch(self, source_file):
+        return os.path.splitext(source_file)[0] + '.pch'

@@ -16,6 +16,7 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
 from ambuild2 import util
+from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
 from ambuild2.frontend.v2_2.cpp.vendor import Vendor
 
 class GCCLookalike(Vendor):
@@ -41,11 +42,18 @@ class GCCLookalike(Vendor):
     def parseDebugInfoType(self, debuginfo):
         return debuginfo
 
-    def formatInclude(self, outputPath, includePath):
-        return ['-I', os.path.normpath(includePath)]
+    @property
+    def pch_needs_source_file(self):
+        return False
+
+    def formatInclude(self, output_path, include):
+        return ['-I', os.path.normpath(include)]
 
     def objectArgs(self, sourceFile, objFile):
         return ['-H', '-c', sourceFile, '-o', objFile]
+
+    def makePchArgv(self, source_file, obj_file, source_type):
+        return ['-H', '-c', '-x', source_type + '-header', source_file, '-o', obj_file]
 
     def staticLinkArgv(self, files, outputFile):
         return ['ar', 'rcs', outputFile] + files
@@ -84,6 +92,17 @@ class GCC(GCCLookalike):
     def like(self, name):
         return name == 'gcc'
 
+    @property
+    def pch_needs_strong_deps(self):
+        return False
+
+    def nameForPch(self, source_file):
+        return source_file + '.gch'
+
+    def formatPchInclude(self, output_path, pch):
+        local_path = os.path.relpath(pch.header_file.path, output_path)
+        return ['-include', local_path, '-I', os.path.split(local_path)[0]]
+
 class Clang(GCCLookalike):
     def __init__(self, version, vendor_prefix = None):
         # Set this first, since the constructor will need it.
@@ -106,6 +125,17 @@ class Clang(GCCLookalike):
     @property
     def debugInfoArgv(self):
         return ['-g3']
+
+    def nameForPch(self, source_file):
+        return source_file + '.pch'
+
+    def formatPchInclude(self, output_path, pch):
+        pch_path = os.path.relpath(pch.pch_file.path, output_path)
+        return ['-include-pch', pch_path, '-I', os.path.split(pch_path)[0]]
+
+    @property
+    def pch_needs_strong_deps(self):
+        return True
 
 class Emscripten(Clang):
     def __init__(self, version):
