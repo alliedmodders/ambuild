@@ -135,7 +135,7 @@ class CompilerLocator(object):
     def try_msvc_install(self, install):
         bat_file = install.vcvars[self.target_.arch]
         try:
-            env_cmds = msvc_utils.DeduceEnv(bat_file)
+            env_cmds = msvc_utils.DeduceEnv(bat_file, [])
             env = util.BuildEnv(env_cmds)
         except:
             util.con_err(util.ConsoleRed, "Could not run or analyze {}".format(bat_file),
