@@ -21,6 +21,7 @@ from ambuild2.frontend import paths
 from ambuild2.frontend.cpp import cpp_utils
 from ambuild2.frontend.v2_2.cpp.deptypes import CppNodes
 from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
+from ambuild2.util import MakeLexicalFilename
 
 class Dep(object):
     def __init__(self, text, node):
@@ -101,9 +102,6 @@ class Project(object):
         proxy = BuilderProxy(self, compiler.clone(), name)
         self.proxies_.append(proxy)
         return proxy
-
-def NameForObjectFile(file):
-    return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
 
 class ObjectFileBase(object):
     def __init__(self, parent, inputObj, outputs):
@@ -238,7 +236,7 @@ class ObjectArgvBuilder(object):
 
     def buildItem(self, inputObj, sourceName, sourceFile):
         sourceNameSansExtension, extension = os.path.splitext(sourceName)
-        encodedName = NameForObjectFile(sourceNameSansExtension)
+        encodedName = MakeLexicalFilename(sourceNameSansExtension)
 
         if extension == '.rc':
             return self.buildRcItem(inputObj, sourceFile, encodedName)
@@ -335,8 +333,8 @@ class CustomToolCommand(object):
         return self.module_.compiler
 
     @staticmethod
-    def NameForObjectFile(path):
-        return NameForObjectFile(path)
+    def MakeLexicalFilename(path):
+        return MakeLexicalFilename(path)
 
     def ComputeSourcePath(self, path):
         return ComputeSourcePath(self.module_.context, self.localFolderNode, path)
@@ -719,7 +717,7 @@ class PrecompiledHeaders(BinaryBuilderBase):
     def generate(self, generator, cx):
         header_filename = self.name_ + '.h'
         header_path = os.path.join(self.localFolder, header_filename)
-        header_guard = '_include_guard_{}'.format(NameForObjectFile(header_path))
+        header_guard = '_include_guard_{}'.format(MakeLexicalFilename(header_path))
 
         if self.source_type == 'c':
             source_filename = self.name_ + '.c'
