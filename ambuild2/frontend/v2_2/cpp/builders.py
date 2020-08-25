@@ -143,6 +143,10 @@ class RCFile(ObjectFileBase):
     def type(self):
         return 'resource'
 
+    @property
+    def object_file(self):
+        return self.outputs[0]
+
 class ObjectArgvBuilder(object):
     def __init__(self, parent):
         super(ObjectArgvBuilder, self).__init__()
