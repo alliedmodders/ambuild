@@ -39,11 +39,13 @@ class Project(object):
         self.ctor_ = ctor
         self.name_ = name
         self.sources = []
+        self.include_hotlist = []
         self.builders_ = []
 
     def Configure(self, compiler, name, tag):
         builder = self.ctor_(self, compiler.clone(), name, tag)
         builder.sources = self.sources[:]
+        builder.include_hotlist = self.include_hotlist[:]
         self.builders_ += [builder]
         return builder
 
@@ -142,6 +144,7 @@ class BinaryBuilder(object):
         self.project_ = project
         self.compiler = compiler
         self.sources = []
+        self.include_hotlist = []
         self.name_ = name
         self.tag_ = tag
 

@@ -58,6 +58,7 @@ class BuilderProxy(object):
         self.sources = builder.sources[:]
         self.custom = builder.custom[:]
         self.compiler = compiler
+        self.include_hotlist = builder.include_hotlist[:]
         self.name_ = name
         self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
 
@@ -79,6 +80,7 @@ class Project(object):
         self.constructor_ = constructor
         self.name = name
         self.sources = []
+        self.include_hotlist = []
         self.proxies_ = []
         self.builders_ = []
         self.custom = []
@@ -397,6 +399,7 @@ class BinaryBuilder(BinaryBuilderBase):
     def __init__(self, compiler, name):
         super(BinaryBuilder, self).__init__(compiler, name)
         self.custom = []
+        self.include_hotlist = []
         self.used_cxx_ = False
         self.linker_ = None
         self.modules_ = []

@@ -322,6 +322,12 @@ def export_source_files(node, xml):
             builders.add(builder)
         all_builders.add(builder)
 
+    headers = set()
+    for header in node.project.include_hotlist:
+        header_path = paths.Join(node.context.currentSourcePath, header)
+        header_path = os.path.relpath(header_path, node.context.buildFolder)
+        headers.add(header)
+
     def emit(file, kind):
         builders = files[file]
         excluded = all_builders - builders
@@ -345,3 +351,7 @@ def export_source_files(node, xml):
             _, ext = os.path.splitext(file)
             if ext == '.rc':
                 emit(file, 'ResourceCompile')
+
+    with xml.block('ItemGroup'):
+        for header in headers:
+            xml.tag('ClInclude', Include = header)
