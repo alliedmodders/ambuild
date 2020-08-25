@@ -46,7 +46,7 @@ class GCCLookalike(Vendor):
     def pch_needs_source_file(self):
         return False
 
-    def formatInclude(self, output_path, include):
+    def formatInclude(self, build_root, output_path, include):
         return ['-I', os.path.normpath(include)]
 
     def objectArgs(self, sourceFile, objFile):
@@ -99,7 +99,7 @@ class GCC(GCCLookalike):
     def nameForPch(self, source_file):
         return source_file + '.gch'
 
-    def formatPchInclude(self, output_path, pch):
+    def formatPchInclude(self, build_root, output_path, pch):
         local_path = os.path.relpath(pch.header_file.path, output_path)
         return ['-include', local_path, '-I', os.path.split(local_path)[0]]
 
@@ -129,7 +129,7 @@ class Clang(GCCLookalike):
     def nameForPch(self, source_file):
         return source_file + '.pch'
 
-    def formatPchInclude(self, output_path, pch):
+    def formatPchInclude(self, build_root, output_path, pch):
         pch_path = os.path.relpath(pch.pch_file.path, output_path)
         return ['-include-pch', pch_path, '-I', os.path.split(pch_path)[0]]
 
