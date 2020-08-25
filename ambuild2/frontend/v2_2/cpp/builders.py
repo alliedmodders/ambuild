@@ -23,29 +23,6 @@ from ambuild2.frontend.v2_2.cpp.deptypes import CppNodes
 from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
 from ambuild2.util import MakeLexicalFilename
 
-class Dep(object):
-    def __init__(self, text, node):
-        self.text = text
-        self.node = node
-
-    @staticmethod
-    def resolve(cx, builder, item):
-        if type(item) is Dep:
-            # If the dep is a file dependency (no node attached), and has a relative
-            # path, make it absolute so the linker knows where to look.
-            if item.node is None and not os.path.isabs(item.text):
-                return os.path.join(cx.currentSourcePath, item.text)
-            return item.text
-
-        if hasattr(item, 'path'):
-            if os.path.isabs(item.path):
-                return item.path
-
-            local_path = os.path.join(cx.buildFolder, builder.localFolder)
-            return os.path.relpath(item.path, local_path)
-
-        return item
-
 def TargetSuffix(target):
     base = '{}-{}{}'.format(target.platform, target.arch, target.subarch)
     if target.abi:
@@ -69,10 +46,6 @@ class BuilderProxy(object):
     @property
     def type(self):
         return self.constructor_.type
-
-    @staticmethod
-    def Dep(text, node = None):
-        return Dep(text, node)
 
 class Project(object):
     def __init__(self, constructor, name):
@@ -435,11 +408,6 @@ class BinaryBuilder(BinaryBuilderBase):
 
         return CppNodes(output_file, debug_file, self.type, self.compiler.target)
 
-    # Make an item that can be passed into linkflags/postlink but has an attached
-    # dependency.
-    def Dep(self, text, node = None):
-        return Dep(text, node)
-
     # Create a sub-component of the binary.
     def Module(self, context, name):
         module = Module(context = context, compiler = self.compiler.clone(), name = name)
@@ -452,8 +420,18 @@ class BinaryBuilder(BinaryBuilderBase):
         return self.linker_
 
     def linkFlags(self, cx):
-        argv = [Dep.resolve(cx, self, item) for item in self.compiler.linkflags]
-        argv += [Dep.resolve(cx, self, item) for item in self.compiler.postlink]
+        def resolve(item):
+            if hasattr(item, 'path'):
+                if os.path.isabs(item.path):
+                    return item.path
+
+                local_path = os.path.join(cx.buildFolder, self.localFolder)
+                return os.path.relpath(item.path, local_path)
+
+            return item
+
+        argv = [resolve(item) for item in self.compiler.linkflags]
+        argv += [resolve(item) for item in self.compiler.postlink]
         return argv
 
     def buildModules(self, cx):
@@ -627,13 +605,13 @@ class BinaryBuilder(BinaryBuilderBase):
             if not isinstance(self, StaticLibrary) and '/INCREMENTAL:NO' not in self.argv:
                 shared_outputs += [self.name_ + '.ilk']
 
-        ignore, outputs = context.AddCommand(inputs = inputs,
-                                             argv = self.argv,
-                                             outputs = self.linker_outputs,
-                                             folder = folder,
-                                             weak_inputs = self.compiler.weaklinkdeps,
-                                             shared_outputs = shared_outputs,
-                                             env_data = self.compiler.env_data)
+        outputs = context.AddCommand(inputs = inputs,
+                                     argv = self.argv,
+                                     outputs = self.linker_outputs,
+                                     folder = folder,
+                                     weak_inputs = self.compiler.weaklinkdeps,
+                                     shared_outputs = shared_outputs,
+                                     env_data = self.compiler.env_data)
         if not self.debug_entry and self.compiler.symbol_files:
             if self.linker_.behavior != 'msvc' and self.compiler.symbol_files == 'bundled':
                 self.debug_entry = outputs[0]
