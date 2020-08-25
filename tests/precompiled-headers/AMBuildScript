@@ -1,0 +1,22 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+builder.cxx = builder.DetectCxx()
+
+headers = builder.cxx.PrecompiledHeaders('all-headers', 'c++')
+headers.sources += [
+  'vector',
+  'string',
+  'map',
+  'unordered_map',
+  'unordered_set',
+  'list',
+  'utility',
+  'functional',
+]
+pch = builder.Add(headers)
+
+program = builder.cxx.Program('sample')
+program.compiler.includes += [pch]
+program.sources += [
+  'main.cpp',
+]
+builder.Add(program)

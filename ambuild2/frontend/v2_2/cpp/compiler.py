@@ -125,6 +125,9 @@ class Compiler(Cloneable):
     def StaticLibrary(self, name):
         raise Exception('Must be implemented!')
 
+    def PrecompiledHeaders(self, name, source_type):
+        raise Exception('Must be implemented')
+
     @staticmethod
     def Dep(text, node = None):
         return builders.Dep(text, node)
@@ -157,6 +160,9 @@ class CliCompiler(Compiler):
 
     def StaticLibrary(self, name):
         return builders.StaticLibrary(self.clone(), name)
+
+    def PrecompiledHeaders(self, name, source_type):
+        return builders.PrecompiledHeaders(self.clone(), name, source_type)
 
     @staticmethod
     def run_pkg_config(argv):

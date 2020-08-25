@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
+from ambuild2 import nodetypes
 from ambuild2 import util
 from ambuild2.frontend import amb2_gen
 from ambuild2.frontend.v2_0.cpp import detect
@@ -45,3 +46,31 @@ class Generator(amb2_gen.Generator):
                 self.compiler = self.base_compiler.clone()
 
         return self.compiler
+
+    def addCxxObjTask(self, cx, shared_outputs, folder, obj):
+        cxxData = {'argv': obj.argv, 'type': obj.behavior}
+        _, (cxxNode,) = self.addCommand(context = cx,
+                                        weak_inputs = obj.sourcedeps,
+                                        inputs = [obj.inputObj],
+                                        outputs = [obj.outputFile],
+                                        node_type = nodetypes.Cxx,
+                                        folder = folder,
+                                        data = cxxData,
+                                        shared_outputs = shared_outputs,
+                                        env_data = obj.env_data)
+        return cxxNode
+
+    def addCxxRcTask(self, cx, folder, obj):
+        rcData = {
+            'cl_argv': obj.cl_argv,
+            'rc_argv': obj.rc_argv,
+        }
+        _, (_, rcNode) = self.addCommand(context = cx,
+                                         weak_inputs = obj.sourcedeps,
+                                         inputs = [obj.inputObj],
+                                         outputs = [obj.preprocFile, obj.outputFile],
+                                         node_type = nodetypes.Rc,
+                                         folder = folder,
+                                         data = rcData,
+                                         env_data = obj.env_data)
+        return rcNode

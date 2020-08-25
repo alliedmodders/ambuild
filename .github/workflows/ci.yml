@@ -49,3 +49,7 @@ jobs:
         cd objdir3
         python ../tests/multiarch/configure.py
         ambuild
+        mkdir ../objdir4/
+        cd ../objdir4/
+        python ../tests/precompiled-headers/configure.py
+        ambuild

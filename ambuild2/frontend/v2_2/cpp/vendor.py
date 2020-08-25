@@ -76,6 +76,9 @@ class Vendor(object):
     def formatInclude(self, outputPath, includePath):
         raise Exception("Must be implemented")
 
+    def formatPchInclude(self, output_path, pch):
+        raise Exception("Must be implemented")
+
     def objectArgs(self, sourceFile, objFile):
         raise Exception("Must be implemented")
 
@@ -90,4 +93,18 @@ class Vendor(object):
         raise Exception("Must be implemented")
 
     def libLinkArgv(self, cmd_argv, files, linkFlags, symbolFile, outputFile):
+        raise Exception("Must be implemented")
+
+    def nameForPrecompiledHeader(self, name):
+        raise Exception("Must be implemented")
+
+    @property
+    def pch_needs_source_file(self):
+        raise Exception("Must be implemented")
+
+    @property
+    def shared_pdb_flags(self):
+        return set()
+
+    def nameForPch(self, source_file):
         raise Exception("Must be implemented")
