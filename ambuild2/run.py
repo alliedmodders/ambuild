@@ -141,7 +141,7 @@ def PrepareBuild(sourcePath, buildPath = None):
 
 class ApiVersionNotFoundException(Exception):
     def __init__(self, *args, **kwargs):
-        super(Exception, self).__init__(*args, **kwargs)
+        super(ApiVersionNotFoundException, self).__init__(*args, **kwargs)
 
 def PreparerForAPI(api):
     if api == '2.0':

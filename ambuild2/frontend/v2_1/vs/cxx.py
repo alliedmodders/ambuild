@@ -84,7 +84,7 @@ class Project(object):
 
 class VisualStudio(MSVC):
     def __init__(self, version):
-        super(MSVC, self).__init__(version)
+        super(VisualStudio, self).__init__(version)
 
     def like(self, name):
         return name == 'vs' or name == 'msvc'
