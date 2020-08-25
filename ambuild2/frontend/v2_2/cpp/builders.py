@@ -283,7 +283,7 @@ class ObjectArgvBuilder(object):
         for include in (self.compiler.includes + self.compiler.cxxincludes):
             if isinstance(include, PchNodes):
                 continue
-            rc_argv += ['/i', self.vendor.IncludePath(objectFile, include)]
+            rc_argv += ['/i', self.vendor.RcIncludePath(objectFile, include)]
         rc_argv += ['/fo' + objectFile, sourceFile]
 
         return RCFile(self, inputObj, [objectFile, encodedName + '.i'], cl_argv, rc_argv)

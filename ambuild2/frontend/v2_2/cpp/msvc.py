@@ -108,6 +108,18 @@ class MSVC(Vendor):
             return includePath
         return os.path.relpath(includePath, outputPath)
 
+    @staticmethod
+    def RcIncludePath(outputPath, includePath):
+        # Same as IncludePath, but prefer absolute paths because it breaks on
+        # relative ones...
+        outputPath = os.path.normcase(outputPath)
+        includePath = os.path.normcase(includePath)
+        outputDrive = os.path.splitdrive(outputPath)[0]
+        includeDrive = os.path.splitdrive(includePath)[0]
+        if outputDrive != includeDrive:
+            return includePath
+        return os.path.relpath(includePath, outputPath)
+
     def formatInclude(self, output_path, include):
         return ['/I', MSVC.IncludePath(output_path, include)]
 
