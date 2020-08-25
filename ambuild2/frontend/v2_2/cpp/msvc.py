@@ -95,38 +95,38 @@ class MSVC(Vendor):
         return ['/showIncludes', '/nologo', '/P', '/c', sourceFile, '/Fi' + outFile]
 
     @staticmethod
-    def IncludePath(outputPath, includePath):
+    def IncludePath(output_path, include_path):
+        assert os.path.isabs(output_path)
+
+        output_path = os.path.normcase(output_path)
+
+        if not os.path.isabs(include_path):
+            abs_include_path = os.path.join(output_path, include_path)
+        else:
+            abs_include_path = include_path
+        abs_include_path = os.path.normcase(abs_include_path)
+
         # Hack - try and get a relative path because CL, with either
         # /Zi or /ZI, combined with subprocess, apparently tries and
         # looks for paths like c:\bleh\"c:\bleh" <-- wtf
         # .. this according to Process Monitor
-        outputPath = os.path.normcase(outputPath)
-        includePath = os.path.normcase(includePath)
-        outputDrive = os.path.splitdrive(outputPath)[0]
-        includeDrive = os.path.splitdrive(includePath)[0]
-        if outputDrive and includeDrive and outputDrive != includeDrive:
-            return includePath
-        return os.path.relpath(includePath, outputPath)
+        output_drive, _ = os.path.splitdrive(output_path)
+        include_drive, _ = os.path.splitdrive(abs_include_path)
+        if output_drive != include_drive:
+            return os.path.normcase(include_path)
+        return os.path.relpath(abs_include_path, output_path)
 
-    @staticmethod
-    def RcIncludePath(outputPath, includePath):
-        # Same as IncludePath, but prefer absolute paths because it breaks on
-        # relative ones...
-        outputPath = os.path.normcase(outputPath)
-        includePath = os.path.normcase(includePath)
-        outputDrive = os.path.splitdrive(outputPath)[0]
-        includeDrive = os.path.splitdrive(includePath)[0]
-        if outputDrive != includeDrive:
-            return includePath
-        return os.path.relpath(includePath, outputPath)
-
-    def formatInclude(self, output_path, include):
+    def formatInclude(self, build_root, output_path, include):
         return ['/I', MSVC.IncludePath(output_path, include)]
 
-    def formatPchInclude(self, output_path, pch):
+    def formatPchInclude(self, build_root, output_path, pch):
         folder, header_name = os.path.split(pch.header_file.path)
+
+        # Include path calculation expects a path relative to output_path, so
+        # we need to transform it.
+        pch_rel_folder = os.path.relpath(os.path.join(build_root, pch.pch_file.path), output_path)
         argv = [
-            '/Fp' + MSVC.IncludePath(output_path, pch.pch_file.path),
+            '/Fp' + MSVC.IncludePath(output_path, pch_rel_folder),
             '/Yu' + header_name,
             '/I',
             MSVC.IncludePath(output_path, folder),

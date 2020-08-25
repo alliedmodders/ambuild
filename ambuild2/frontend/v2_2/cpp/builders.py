@@ -121,10 +121,10 @@ class RCFile(ObjectFileBase):
         return self.outputs[0]
 
 class ObjectArgvBuilder(object):
-    def __init__(self, parent):
+    def __init__(self, cx, parent):
         super(ObjectArgvBuilder, self).__init__()
+        self.cx = cx
         self.parent = parent
-        self.outputFolder = None
         self.outputPath = None
         self.localFolderNode = None
         self.vendor = None
@@ -143,10 +143,9 @@ class ObjectArgvBuilder(object):
         self.pch_nodes = []
         self.has_shared_pdb = False
 
-    def setOutputs(self, localFolderNode, outputFolder, outputPath):
-        self.outputFolder = outputFolder
-        self.outputPath = outputPath
+    def setOutputs(self, localFolderNode, outputPath):
         self.localFolderNode = localFolderNode
+        self.outputPath = outputPath
 
     def setCompiler(self, compiler, addl_include_dirs, addl_source_deps):
         self.vendor = compiler.vendor
@@ -164,10 +163,7 @@ class ObjectArgvBuilder(object):
         includes = []
         pch_includes = []
         for include in compiler.includes + addl_include_dirs:
-            if isinstance(include, PchNodes):
-                pch_includes += self.vendor.formatPchInclude(self.outputPath, include)
-            else:
-                includes += self.vendor.formatInclude(self.outputPath, include)
+            self.formatInclude(pch_includes, includes, include)
         self.cc_argv += pch_includes + includes
 
         # Set up the C++ compiler argv. Note since cxx is a superset of the C
@@ -184,10 +180,7 @@ class ObjectArgvBuilder(object):
         includes = []
         pch_includes = []
         for include in compiler.includes + compiler.cxxincludes + addl_include_dirs:
-            if isinstance(include, PchNodes):
-                pch_includes += self.vendor.formatPchInclude(self.outputPath, include)
-            else:
-                includes += self.vendor.formatInclude(self.outputPath, include)
+            self.formatInclude(pch_includes, includes, include)
             if isinstance(include, PchNodes):
                 self.addPchDependency(include)
         self.cxx_argv += pch_includes + includes
@@ -247,7 +240,7 @@ class ObjectArgvBuilder(object):
         for include in (self.compiler.includes + self.compiler.cxxincludes):
             if isinstance(include, PchNodes):
                 continue
-            cl_argv += self.vendor.formatInclude(objectFile, include)
+            self.formatInclude(None, cl_argv, include)
         cl_argv += self.vendor.preprocessArgv(sourceFile, encodedName + '.i')
 
         rc_argv = ['rc', '/nologo']
@@ -256,7 +249,7 @@ class ObjectArgvBuilder(object):
         for include in (self.compiler.includes + self.compiler.cxxincludes):
             if isinstance(include, PchNodes):
                 continue
-            rc_argv += ['/i', self.vendor.RcIncludePath(objectFile, include)]
+            rc_argv += ['/i', self.vendor.IncludePath(self.outputPath, include)]
         rc_argv += ['/fo' + objectFile, sourceFile]
 
         return RCFile(self, inputObj, [objectFile, encodedName + '.i'], cl_argv, rc_argv)
@@ -278,6 +271,12 @@ class ObjectArgvBuilder(object):
 
         argv += self.vendor.makePchArgv(source_file, pch_file, self.parent.source_type)
         return ObjectFile(self, input_obj, outputs, argv)
+
+    def formatInclude(self, pch_list, normal_list, include):
+        if isinstance(include, PchNodes):
+            pch_list += self.vendor.formatPchInclude(self.cx.buildPath, self.outputPath, include)
+        else:
+            normal_list += self.vendor.formatInclude(self.cx.buildPath, self.outputPath, include)
 
 def ComputeSourcePath(context, localFolderNode, item):
     # This is a path into the source tree.
@@ -368,9 +367,8 @@ class BinaryBuilderBase(object):
         # Local is relative to the context of the module. buildFolder is relative
         # to the build root.
         localFolder = os.path.normpath(os.path.join(self.localFolder, subfolder))
-        buildFolder = os.path.normpath(os.path.join(buildBase, subfolder))
         buildPath = os.path.normpath(os.path.join(buildPath, subfolder))
-        return localFolder, buildFolder, buildPath
+        return localFolder, buildPath
 
 class BinaryBuilder(BinaryBuilderBase):
     def __init__(self, compiler, name):
@@ -443,7 +441,7 @@ class BinaryBuilder(BinaryBuilderBase):
             self.buildModule(cx, module)
 
     def buildModule(self, cx, module):
-        localFolder, outputFolder, outputPath = self.computeModuleFolders(cx, module.context)
+        localFolder, outputPath = self.computeModuleFolders(cx, module.context)
         localFolderNode = cx.AddFolder(localFolder)
 
         must_include_builddir = False
@@ -471,8 +469,8 @@ class BinaryBuilder(BinaryBuilderBase):
         else:
             addl_include_dirs = []
 
-        builder = ObjectArgvBuilder(self)
-        builder.setOutputs(localFolderNode, outputFolder, outputPath)
+        builder = ObjectArgvBuilder(cx, self)
+        builder.setOutputs(localFolderNode, outputPath)
         builder.setCompiler(module.compiler, addl_include_dirs, addl_source_deps)
 
         # Parse all source file entries.
@@ -721,11 +719,11 @@ class PrecompiledHeaders(BinaryBuilderBase):
                                                  path = header_path,
                                                  contents = unified_header_blob)
 
-        local_folder, output_folder, output_path = self.computeModuleFolders(cx, cx)
+        local_folder, output_path = self.computeModuleFolders(cx, cx)
         local_folder_node = cx.AddFolder(local_folder)
 
-        builder = ObjectArgvBuilder(self)
-        builder.setOutputs(local_folder_node, output_folder, output_path)
+        builder = ObjectArgvBuilder(cx, self)
+        builder.setOutputs(local_folder_node, output_path)
         builder.setCompiler(self.compiler, [], [])
 
         if self.compiler.vendor.pch_needs_source_file:
