@@ -2,7 +2,20 @@ name: Python Tests
 on: [push]
 
 jobs:
-  build:
+  python_unittests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [2.7, 3.8]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Unit Tests
+        run: python -m unittest discover ambuild2 "*_test.py"
+  test_staticlib:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -38,32 +51,100 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.architecture }}
+      - name: Install AMBuild
+        run: |
+          python -m pip install --upgrade pip setuptools
+          pip install wheel
+          pip install ./
+      - name: Enable Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1.3.0
+        with:
+          arch: ${{ matrix.architecture }}
+      - name: Test with staticlib
+        uses: WildCard65/invoke-ambuild@v1.1-fin
+        with:
+          build-folder: objdir
+          project-root: tests/staticlib
+  test_modules:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-16.04, ubuntu-18.04, macos-latest, windows-2019]
+        python-version: [2.7, 3.5, 3.6, 3.7, 3.8]
+        architecture: [x64]
+        include:
+          - os: ubuntu-latest
+            python-version: 3.3
+            architecture: x64
+          - os: ubuntu-latest
+            python-version: 3.4
+            architecture: x64
+          - os: windows-2019
+            python-version: 2.7
+            architecture: x86
+          - os: windows-2019
+            python-version: 3.5
+            architecture: x86
+          - os: windows-2019
+            python-version: 3.6
+            architecture: x86
+          - os: windows-2019
+            python-version: 3.7
+            architecture: x86
+          - os: windows-2019
+            python-version: 3.8
+            architecture: x86
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.architecture }}
+      - name: Install AMBuild
+        run: |
+          python -m pip install --upgrade pip setuptools
+          pip install wheel
+          pip install ./
+      - name: Enable Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1.3.0
+        with:
+          arch: ${{ matrix.architecture }}
+      - name: Test with modules
+        uses: WildCard65/invoke-ambuild@v1.1-fin
+        with:
+          build-folder: objdir2
+          project-root: tests/modules
+  test_multiarch:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-16.04, ubuntu-18.04, macos-latest, windows-2019]
+        python-version: [2.7, 3.5, 3.6, 3.7, 3.8]
+        include:
+          - os: ubuntu-latest
+            python-version: 3.3
+          - os: ubuntu-latest
+            python-version: 3.4
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
       - name: Install Deps
         if: runner.os == 'Linux'
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get install lib32stdc++-7-dev lib32z1-dev libc6-dev-i386
           sudo apt-get install g++-multilib
-      - name: Install Python wheel
-        run: pip install wheel
-      - name: Unit Tests
-        run: python -m unittest discover ambuild2 "*_test.py"
       - name: Install AMBuild
-        run: pip install ./
-      - name: "Test with staticlib"
-        if: runner.os != 'Windows' # no choco vcvars detection on older APIs
-        uses: WildCard65/invoke-ambuild@v1.1-fin
-        with:
-          build-folder: objdir
-          project-root: tests/staticlib
-      - name: "Test with modules"
-        if: runner.os != 'Windows' # no choco vcvars detection on older APIs
-        uses: WildCard65/invoke-ambuild@v1.1-fin
-        with:
-          auto-install: false
-          build-folder: objdir2
-          project-root: tests/modules
-      - name: "Test with multiarch"
+        run: |
+          python -m pip install --upgrade pip setuptools
+          pip install wheel
+          pip install ./
+      - name: Test with multiarch
         uses: WildCard65/invoke-ambuild@v1.1-fin
         with:
           auto-install: false
