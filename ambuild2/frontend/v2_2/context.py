@@ -175,13 +175,15 @@ class BuildContext(BaseContext):
         return self.generator_.addSource(self, source_path)
 
     def AddSymlink(self, source, output_path):
-        return self.generator_.addSymlink(self, source, output_path)
+        _, (entry,) = self.generator_.addSymlink(self, source, output_path)
+        return entry
 
     def AddFolder(self, folder):
         return self.generator_.addFolder(self, folder)
 
     def AddCopy(self, source, output_path):
-        return self.generator_.addCopy(self, source, output_path)
+        _, (entry,) = self.generator_.addCopy(self, source, output_path)
+        return entry
 
     def AddCommand(self,
                    inputs,
@@ -192,15 +194,16 @@ class BuildContext(BaseContext):
                    weak_inputs = [],
                    shared_outputs = [],
                    env_data = None):
-        return self.generator_.addShellCommand(self,
-                                               inputs,
-                                               argv,
-                                               outputs,
-                                               folder = folder,
-                                               dep_type = dep_type,
-                                               weak_inputs = weak_inputs,
-                                               shared_outputs = shared_outputs,
-                                               env_data = env_data)
+        _, entries = self.generator_.addShellCommand(self,
+                                                     inputs,
+                                                     argv,
+                                                     outputs,
+                                                     folder = folder,
+                                                     dep_type = dep_type,
+                                                     weak_inputs = weak_inputs,
+                                                     shared_outputs = shared_outputs,
+                                                     env_data = env_data)
+        return entries
 
     def Context(self, name):
         return self.cm.Context(name)
@@ -227,6 +230,9 @@ class BuildContext(BaseContext):
 
     def StaticLibraryProject(self, name):
         return self.generator_.newStaticLibraryProject(self, name)
+
+    def AddOutputFile(self, path, contents):
+        return self.generator_.addOutputFile(self, path, contents)
 
 # Access to everything.
 class TopLevelBuildContext(BuildContext):

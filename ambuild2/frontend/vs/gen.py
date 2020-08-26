@@ -43,14 +43,14 @@ class Generator(BaseGenerator):
         if self.cm.options.vs_version in SupportedVersions:
             self.vs_version = int(self.cm.options.vs_version)
         else:
-            if self.options.vs_version not in YearMap:
+            if self.cm.options.vs_version not in YearMap:
                 util.con_err(
                     util.ConsoleRed,
-                    'Unsupported Visual Studio version: {0}'.format(self.options.vs_version),
+                    'Unsupported Visual Studio version: {0}'.format(self.cm.options.vs_version),
                     util.ConsoleNormal)
                 raise Exception('Unsupported Visual Studio version: {0}'.format(
-                    self.options.vs_version))
-            self.vs_version = YearMap[self.options.vs_version]
+                    self.cm.options.vs_version))
+            self.vs_version = YearMap[self.cm.options.vs_version]
 
         self.cacheFile = os.path.join(self.cm.buildPath, '.cache')
         try:

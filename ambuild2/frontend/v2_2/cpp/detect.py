@@ -21,13 +21,13 @@ import shlex
 import subprocess
 import tempfile
 from ambuild2 import util
-from ambuild2.frontend import cpp_rules
-from ambuild2.frontend import msvc_utils
+from ambuild2.frontend.cpp import cpp_rules
+from ambuild2.frontend.cpp import msvc_utils
+from ambuild2.frontend.cpp.verify import Verifier
 from ambuild2.frontend.system import System
 from ambuild2.frontend.v2_2.cpp import vendor, compiler
 from ambuild2.frontend.v2_2.cpp.gcc import GCC, Clang, Emscripten
 from ambuild2.frontend.v2_2.cpp.msvc import MSVC
-from ambuild2.frontend.v2_2.cpp.sunpro import SunPro
 
 class CommandAndVendor(object):
     def __init__(self, argv, vendor, arch):
@@ -44,6 +44,10 @@ kClangTuple = ('clang', 'clang++', 'gcc')
 kGccTuple = ('gcc', 'g++', 'gcc')
 kIntelTuple = ('icc', 'icc', 'gcc')
 kMsvcTuple = ('cl', 'cl', 'msvc')
+
+kGnuArchMap = {
+    'arm64': 'aarch64',
+}
 
 def FindToolsInEnv(env, tools):
     found = {}
@@ -88,18 +92,48 @@ class CompilerLocator(object):
 
         arch, subarch = self.host_.arch, self.host_.subarch
         abi = self.host_.abi
-        if 'target_arch' in kwargs:
-            arch, subarch = util.DecodeArchString(kwargs.pop('target_arch'))
+        platform = None
+        if 'target' in kwargs:
+            target_phrase = kwargs.pop('target')
+            parts = target_phrase.split('-')
+
+            # We allow:
+            #   arch
+            #   platform-arch
+            #   arch-abi
+            #   platform-arch-abi
+            if len(parts) == 1:
+                arch = parts[0]
+            elif len(parts) == 2:
+                if parts[0] in util.ALL_PLATFORMS:
+                    platform, arch = parts
+                else:
+                    arch, abi = parts
+            elif len(parts) == 3:
+                platform, arch, abi = parts
+            else:
+                raise Exception('Target could not be parsed: {}'.format(target_phrase))
+
+            arch, subarch = util.DecodeArchString(arch)
             self.target_override_ = True
-        if 'target_abi' in kwargs:
-            abi = kwargs.pop('target_abi')
-            self.target_override_ = True
+        else:
+            if 'target_arch' in kwargs:
+                arch, subarch = util.DecodeArchString(kwargs.pop('target_arch'))
+                self.target_override_ = True
 
         self.rules_config_['arch'] = arch
         self.rules_config_['subarch'] = subarch
         self.rules_config_['abi'] = abi
         self.target_ = System(self.host_.platform, arch, subarch, abi)
         self.cross_compile_ = IsCrossCompile(self.host_, self.target_)
+
+        # Allow specifying the environment file via the environment.
+        self.vcvars_override_ = {}
+        for arch in ['x86', 'x86_64', 'arm', 'arm64', 'all']:
+            key = 'AMBUILD_VCVARS_{}'.format(arch.upper())
+            if key not in os.environ:
+                continue
+            self.vcvars_override_[arch] = os.environ[key]
 
     def detect(self):
         if 'CC' in os.environ or 'CXX' in os.environ:
@@ -138,13 +172,13 @@ class CompilerLocator(object):
             raise Exception(message)
 
         if cxx.arch != cc.arch:
-            message = "C architecture {0} does not match C++ architecture {1}".format(
+            message = "C architecture \"{0}\" does not match C++ architecture \"{1}\"".format(
                 cc.arch, cxx.arch)
             util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
             raise Exception(message)
 
         if cxx.arch != self.target_.arch and self.target_override_:
-            message = "Compiler architecture {0} does not match requested architecture {1}".format(
+            message = "Compiler architecture \"{0}\" does not match requested architecture \"{1}\"".format(
                 cxx.arch, self.target_.arch)
             util.con_err(util.ConsoleRed, message, util.ConsoleNormal)
             raise Exception(message)
@@ -168,6 +202,18 @@ class CompilerLocator(object):
         _, has_cl = FindToolsInEnv(os.environ, ['cl.exe'])
         if has_cl:
             return self.find_default_compiler()
+
+        if self.target_.arch in self.vcvars_override_:
+            cxx = self.try_msvc_bat(self.vcvars_override_[self.target_.arch])
+            if not cxx:
+                raise CompilerNotFoundException()
+            return cxx
+
+        if 'all' in self.vcvars_override_:
+            cxx = self.try_msvc_bat(self.vcvars_override_['all'], pass_arch = True)
+            if not cxx:
+                raise CompilerNotFoundException()
+            return cxx
 
         installs = msvc_utils.MSVCFinder().find_all()
         for install in installs:
@@ -227,6 +273,16 @@ class CompilerLocator(object):
         candidates = []
         if self.host_.platform == 'windows':
             candidates.append(kMsvcTuple)
+
+        if self.cross_compile_ and self.host_.platform == 'linux':
+            if self.target_.abi:
+                abi = self.target_.abi
+            else:
+                abi = 'gnu'
+            arch = kGnuArchMap.get(self.target_.arch, self.target_.arch)
+            cmd_prefix = '{}-linux-{}'.format(arch, abi)
+            candidates += [(cmd_prefix + '-gcc', cmd_prefix + '-g++', 'gcc')]
+
         candidates.extend([kClangTuple, kGccTuple, kIntelTuple])
 
         for cc_cmd, cxx_cmd, cc_family in candidates:
@@ -271,148 +327,45 @@ class CompilerLocator(object):
             flags.extend(shlex.split(os.environ.get('CXXFLAGS', '')))
 
         try:
-            return VerifyCompiler(flags, mode, cmd, assumed_family, env, abs_path), None
+            return self.verify_compiler(flags, mode, cmd, assumed_family, env, abs_path), None
         except Exception as e:
             util.con_out(util.ConsoleHeader, 'Compiler {0} for {1} failed: '.format(cmd, mode),
                          util.ConsoleRed, str(e), util.ConsoleNormal)
             return None, e
 
-def VerifyCompiler(flags, mode, cmd, assumed_family, env, abs_path):
-    base_argv = shlex.split(cmd)
-    base_argv.extend(flags)
+    def verify_compiler(self, flags, mode, cmd, assumed_family, env, abs_path):
+        base_argv = shlex.split(cmd)
+        base_argv.extend(flags)
 
-    argv = base_argv[:]
-    if abs_path is not None:
-        argv[0] = abs_path
-    if mode == 'CXX':
-        filename = 'test.cpp'
-    else:
-        filename = 'test.c'
-    file = open(filename, 'w')
-    file.write("""
-#include <stdio.h>
-#include <stdlib.h>
+        argv = base_argv[:]
+        if abs_path is not None:
+            argv[0] = abs_path
 
-int main()
-{
-#if defined __ICC
-  printf("icc %d\\n", __ICC);
-#elif defined(__EMSCRIPTEN__)
-  printf("emscripten %d.%d\\n", __clang_major__, __clang_minor__);
-#elif defined __clang__
-# if defined(__clang_major__) && defined(__clang_minor__)
-#  if defined(__apple_build_version__)
-    printf("apple-clang %d.%d\\n", __clang_major__, __clang_minor__);
-#  else   
-    printf("clang %d.%d\\n", __clang_major__, __clang_minor__);
-#  endif
-# else
-  printf("clang 1.%d\\n", __GNUC_MINOR__);
-# endif
-#elif defined __GNUC__
-  printf("gcc %d.%d\\n", __GNUC__, __GNUC_MINOR__);
-#elif defined _MSC_VER
-  printf("msvc %d\\n", _MSC_VER);
-#elif defined __TenDRA__
-  printf("tendra 0\\n");
-#elif defined __SUNPRO_C
-  printf("sun %x\\n", __SUNPRO_C);
-#elif defined __SUNPRO_CC
-  printf("sun %x\\n", __SUNPRO_CC);
-#else
-#error "Unrecognized compiler!"
-#endif
-#if defined __cplusplus
-  printf("CXX\\n");
-#else
-  printf("CC\\n");
-#endif
-#if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64_) || \\
-    defined(_M_X64) || defined(_M_AMD64)
-  printf("x86_64\\n");
-#elif defined(__aarch64__)
-  printf("arm64\\n");
-#elif defined(i386) || defined(__i386) || defined(__i386__) || defined(__i686__) || \\
-      defined(__i386) || defined(_M_IX86)
-  printf("x86\\n");
-#elif defined(__arm__) || defined(_M_ARM)
-  printf("arm\\n");
-#else
-  printf("unknown\\n");
-#endif
-  exit(0);
-}
-""")
-    file.close()
+        verifier = Verifier(family = assumed_family,
+                            env = env,
+                            argv = argv,
+                            mode = mode,
+                            cross_compile = self.cross_compile_)
+        info = verifier.verify()
 
-    executable = 'test'
-    if mode == 'CXX':
-        executable += 'p'
-    if assumed_family == 'emscripten':
-        executable += '.js'
-    else:
-        executable += util.ExecutableSuffix
+        vendor, version = info['vendor'].split(' ')
+        if vendor == 'gcc':
+            v = GCC(version)
+        elif vendor == 'emscripten':
+            v = Emscripten(version)
+        elif vendor == 'apple-clang':
+            v = Clang(version, 'apple')
+        elif vendor == 'clang':
+            v = Clang(version)
+        elif vendor == 'msvc':
+            v = MSVC(version)
+        else:
+            raise Exception('Unknown vendor {0}'.format(vendor))
 
-    # Make sure the exe is gone.
-    if os.path.exists(executable):
-        os.unlink(executable)
+        if info['inclusion_pattern'] is not None:
+            v.extra_props['inclusion_pattern'] = info['inclusion_pattern']
 
-    argv.extend([filename, '-o', executable])
-
-    # For MSVC, we need to detect the inclusion pattern for foreign-language
-    # systems.
-    if assumed_family == 'msvc':
-        argv += ['-nologo', '-showIncludes']
-
-    util.con_out(util.ConsoleHeader,
-                 'Checking {0} compiler (vendor test {1})... '.format(mode, assumed_family),
-                 util.ConsoleBlue, '{0}'.format(argv), util.ConsoleNormal)
-
-    p = util.CreateProcess(argv, env = env, no_raise = False)
-    if util.WaitForProcess(p) != 0:
-        raise Exception('compiler failed with return code {0}'.format(p.returncode))
-
-    inclusion_pattern = None
-    if assumed_family == 'msvc':
-        inclusion_pattern = MSVC.DetectInclusionPattern(p.stdoutText)
-
-    executable_argv = [executable]
-    if assumed_family == 'emscripten':
-        exe = 'node'
-        executable_argv[0:0] = [exe]
-    else:
-        exe = util.MakePath('.', executable)
-
-    p = util.CreateProcess(executable_argv, executable = exe, env = env)
-    if p == None:
-        raise Exception('failed to create executable with {0}'.format(cmd))
-    if util.WaitForProcess(p) != 0:
-        raise Exception('executable failed with return code {0}'.format(p.returncode))
-    lines = p.stdoutText.splitlines()
-    if len(lines) != 3:
-        raise Exception('invalid executable output')
-    if lines[1] != mode:
-        raise Exception('requested {0} compiler, found {1}'.format(mode, lines[1]))
-
-    vendor, version = lines[0].split(' ')
-    if vendor == 'gcc':
-        v = GCC(version)
-    elif vendor == 'emscripten':
-        v = Emscripten(version)
-    elif vendor == 'apple-clang':
-        v = Clang(version, 'apple')
-    elif vendor == 'clang':
-        v = Clang(version)
-    elif vendor == 'msvc':
-        v = MSVC(version)
-    elif vendor == 'sun':
-        v = SunPro(version)
-    else:
-        raise Exception('Unknown vendor {0}'.format(vendor))
-
-    if inclusion_pattern is not None:
-        v.extra_props['inclusion_pattern'] = inclusion_pattern
-
-    util.con_out(util.ConsoleHeader, 'found {0} version {1}, {2}'.format(vendor, version, lines[2]),
-                 util.ConsoleNormal)
-    return CommandAndVendor(base_argv, v, lines[2])
+        util.con_out(util.ConsoleHeader,
+                     'found {0} version {1}, {2}'.format(vendor, version,
+                                                         info['arch']), util.ConsoleNormal)
+        return CommandAndVendor(base_argv, v, info['arch'])

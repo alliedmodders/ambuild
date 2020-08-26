@@ -201,6 +201,9 @@ class Generator(BaseGenerator):
                 break
             components.append(name)
 
+        if not len(components):
+            return parent
+
         path = parent_path
         while len(components):
             name = components.pop()
@@ -576,34 +579,6 @@ class Generator(BaseGenerator):
             else:
                 inputs.append(item)
 
-    def addCxxObjTask(self, cx, shared_outputs, folder, obj):
-        cxxData = {'argv': obj.argv, 'type': obj.behavior}
-        _, (cxxNode,) = self.addCommand(context = cx,
-                                        weak_inputs = obj.sourcedeps,
-                                        inputs = [obj.inputObj],
-                                        outputs = [obj.outputFile],
-                                        node_type = nodetypes.Cxx,
-                                        folder = folder,
-                                        data = cxxData,
-                                        shared_outputs = shared_outputs,
-                                        env_data = obj.env_data)
-        return cxxNode
-
-    def addCxxRcTask(self, cx, folder, obj):
-        rcData = {
-            'cl_argv': obj.cl_argv,
-            'rc_argv': obj.rc_argv,
-        }
-        _, (_, rcNode) = self.addCommand(context = cx,
-                                         weak_inputs = obj.sourcedeps,
-                                         inputs = [obj.inputObj],
-                                         outputs = [obj.preprocFile, obj.outputFile],
-                                         node_type = nodetypes.Rc,
-                                         folder = folder,
-                                         data = rcData,
-                                         env_data = obj.env_data)
-        return rcNode
-
     def addFileOp(self, cmd, context, source, output_path):
         # Try to detect if our output_path is actually a folder, via trailing
         # slash or '.'/'' indicating the context folder.
@@ -720,6 +695,25 @@ class Generator(BaseGenerator):
                                shared_outputs = shared_outputs,
                                env_data = env_data)
 
+    def addOutputFile(self, context, path, contents):
+        folder, filename = os.path.split(path)
+        if not filename:
+            raise Exception('Must specify a file, {} is a folder'.format(path))
+
+        folder_node = self.generateFolder(context.localFolder, folder)
+        data = {
+            'path': paths.Join(folder_node, filename),
+            'contents': contents,
+        }
+
+        _, outputs = self.addCommand(context = context,
+                                     node_type = nodetypes.BinWrite,
+                                     folder = folder_node,
+                                     data = data,
+                                     inputs = [],
+                                     outputs = [filename])
+        return outputs[0]
+
     def addConfigureFile(self, context, path):
         if not os.path.isabs(path) and context is not None:
             path = os.path.join(context.currentSourcePath, path)
@@ -727,3 +721,32 @@ class Generator(BaseGenerator):
 
         self.old_scripts_.discard(path)
         self.db.add_or_update_script(path)
+
+    # This whole interface is a gross hack. It should be moved into builders.py.
+    def addCxxObjTask(self, cx, shared_outputs, obj):
+        cxxData = {'argv': obj.argv, 'type': obj.behavior}
+        _, output_nodes = self.addCommand(context = cx,
+                                          weak_inputs = obj.sourcedeps,
+                                          inputs = [obj.inputObj] + obj.extra_inputs,
+                                          outputs = obj.outputs,
+                                          node_type = nodetypes.Cxx,
+                                          folder = obj.folderNode,
+                                          data = cxxData,
+                                          shared_outputs = shared_outputs,
+                                          env_data = obj.env_data)
+        return output_nodes
+
+    def addCxxRcTask(self, cx, obj):
+        rcData = {
+            'cl_argv': obj.cl_argv,
+            'rc_argv': obj.rc_argv,
+        }
+        _, (_, rcNode) = self.addCommand(context = cx,
+                                         weak_inputs = obj.sourcedeps,
+                                         inputs = [obj.inputObj] + obj.extra_inputs,
+                                         outputs = obj.outputs,
+                                         node_type = nodetypes.Rc,
+                                         folder = obj.folderNode,
+                                         data = rcData,
+                                         env_data = obj.env_data)
+        return rcNode

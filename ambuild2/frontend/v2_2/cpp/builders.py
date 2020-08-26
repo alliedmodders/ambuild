@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -18,36 +18,10 @@ import subprocess
 import re, os
 from ambuild2 import util
 from ambuild2.frontend import paths
-
-class CppNodes(object):
-    def __init__(self, output, debug_outputs, type, target):
-        self.binary = output
-        self.debug = debug_outputs
-        self.type = type
-        self.target = target
-
-class Dep(object):
-    def __init__(self, text, node):
-        self.text = text
-        self.node = node
-
-    @staticmethod
-    def resolve(cx, builder, item):
-        if type(item) is Dep:
-            # If the dep is a file dependency (no node attached), and has a relative
-            # path, make it absolute so the linker knows where to look.
-            if item.node is None and not os.path.isabs(item.text):
-                return os.path.join(cx.currentSourcePath, item.text)
-            return item.text
-
-        if hasattr(item, 'path'):
-            if os.path.isabs(item.path):
-                return item.path
-
-            local_path = os.path.join(cx.buildFolder, builder.localFolder)
-            return os.path.relpath(item.path, local_path)
-
-        return item
+from ambuild2.frontend.cpp import cpp_utils
+from ambuild2.frontend.v2_2.cpp.deptypes import CppNodes
+from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
+from ambuild2.util import MakeLexicalFilename
 
 def TargetSuffix(target):
     base = '{}-{}{}'.format(target.platform, target.arch, target.subarch)
@@ -61,6 +35,7 @@ class BuilderProxy(object):
         self.sources = builder.sources[:]
         self.custom = builder.custom[:]
         self.compiler = compiler
+        self.include_hotlist = builder.include_hotlist[:]
         self.name_ = name
         self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
 
@@ -72,16 +47,13 @@ class BuilderProxy(object):
     def type(self):
         return self.constructor_.type
 
-    @staticmethod
-    def Dep(text, node = None):
-        return Dep(text, node)
-
 class Project(object):
     def __init__(self, constructor, name):
         super(Project, self).__init__()
         self.constructor_ = constructor
         self.name = name
         self.sources = []
+        self.include_hotlist = []
         self.proxies_ = []
         self.builders_ = []
         self.custom = []
@@ -106,25 +78,23 @@ class Project(object):
         self.proxies_.append(proxy)
         return proxy
 
-def NameForObjectFile(file):
-    return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
-
 class ObjectFileBase(object):
-    def __init__(self, parent, inputObj, outputFile):
+    def __init__(self, parent, inputObj, outputs):
         super(ObjectFileBase, self).__init__()
         self.env_data = parent.env_data
         self.folderNode = parent.localFolderNode
         self.inputObj = inputObj
-        self.outputFile = outputFile
         self.sourcedeps = parent.sourcedeps
+        self.extra_inputs = parent.extra_inputs
+        self.outputs = outputs
 
     @property
     def type(self):
         raise Exception("Must be implemented!")
 
 class ObjectFile(ObjectFileBase):
-    def __init__(self, parent, inputObj, outputFile, argv):
-        super(ObjectFile, self).__init__(parent, inputObj, outputFile)
+    def __init__(self, parent, inputObj, outputs, argv):
+        super(ObjectFile, self).__init__(parent, inputObj, outputs)
         self.argv = argv
         self.behavior = parent.compiler.vendor.behavior
 
@@ -132,10 +102,13 @@ class ObjectFile(ObjectFileBase):
     def type(self):
         return 'object'
 
+    @property
+    def object_file(self):
+        return self.outputs[0]
+
 class RCFile(ObjectFileBase):
-    def __init__(self, parent, inputObj, preprocFile, outputFile, cl_argv, rc_argv):
-        super(RCFile, self).__init__(parent, inputObj, outputFile)
-        self.preprocFile = preprocFile
+    def __init__(self, parent, inputObj, outputs, cl_argv, rc_argv):
+        super(RCFile, self).__init__(parent, inputObj, outputs)
         self.cl_argv = cl_argv
         self.rc_argv = rc_argv
 
@@ -143,10 +116,15 @@ class RCFile(ObjectFileBase):
     def type(self):
         return 'resource'
 
+    @property
+    def object_file(self):
+        return self.outputs[0]
+
 class ObjectArgvBuilder(object):
-    def __init__(self):
+    def __init__(self, cx, parent):
         super(ObjectArgvBuilder, self).__init__()
-        self.outputFolder = None
+        self.cx = cx
+        self.parent = parent
         self.outputPath = None
         self.localFolderNode = None
         self.vendor = None
@@ -159,11 +137,15 @@ class ObjectArgvBuilder(object):
         self.has_code = False
         self.sourcedeps = []
         self.env_data = None
+        self.extra_inputs = []
+        self.has_c_pch_ = False
+        self.has_cxx_pch_ = False
+        self.pch_nodes = []
+        self.has_shared_pdb = False
 
-    def setOutputs(self, localFolderNode, outputFolder, outputPath):
-        self.outputFolder = outputFolder
-        self.outputPath = outputPath
+    def setOutputs(self, localFolderNode, outputPath):
         self.localFolderNode = localFolderNode
+        self.outputPath = outputPath
 
     def setCompiler(self, compiler, addl_include_dirs, addl_source_deps):
         self.vendor = compiler.vendor
@@ -176,10 +158,16 @@ class ObjectArgvBuilder(object):
             self.cc_argv += self.vendor.debugInfoArgv
         self.cc_argv += compiler.c_only_flags
         self.cc_argv += [self.vendor.definePrefix + define for define in compiler.defines]
-        for include in compiler.includes + addl_include_dirs:
-            self.cc_argv += self.vendor.formatInclude(self.outputPath, include)
 
-        # Set up the C++ compiler argv.
+        # Ensure PCH includes come first.
+        includes = []
+        pch_includes = []
+        for include in compiler.includes + addl_include_dirs:
+            self.formatInclude(pch_includes, includes, include)
+        self.cc_argv += pch_includes + includes
+
+        # Set up the C++ compiler argv. Note since cxx is a superset of the C
+        # environment, we do additional checks here since all flags are available.
         self.cxx_argv = compiler.cxx_argv[:]
         self.cxx_argv += compiler.cflags
         if compiler.symbol_files is not None:
@@ -187,17 +175,40 @@ class ObjectArgvBuilder(object):
         self.cxx_argv += compiler.cxxflags
         self.cxx_argv += [self.vendor.definePrefix + define for define in compiler.defines]
         self.cxx_argv += [self.vendor.definePrefix + define for define in compiler.cxxdefines]
+
+        # Ensure PCH includes come first.
+        includes = []
+        pch_includes = []
         for include in compiler.includes + compiler.cxxincludes + addl_include_dirs:
-            self.cxx_argv += self.vendor.formatInclude(self.outputPath, include)
+            self.formatInclude(pch_includes, includes, include)
+            if isinstance(include, PchNodes):
+                self.addPchDependency(include)
+        self.cxx_argv += pch_includes + includes
+
+        all_flags = set(self.cxx_argv + self.cc_argv)
+        self.has_shared_pdb |= len(self.vendor.shared_pdb_flags & all_flags) != 0
 
         self.env_data = compiler.env_data
 
         # Set up source dependencies.
         self.sourcedeps += compiler.sourcedeps + addl_source_deps
 
+    def addPchDependency(self, pch):
+        deps = [pch.header_file, pch.pch_file]
+        if self.vendor.pch_needs_strong_deps:
+            self.extra_inputs += deps
+        else:
+            self.sourcedeps += deps
+
+        if pch.source_type == 'c':
+            self.has_c_pch_ = True
+        elif pch.source_type == 'c++':
+            self.has_cxx_pch_ = True
+        self.pch_nodes.append(pch)
+
     def buildItem(self, inputObj, sourceName, sourceFile):
         sourceNameSansExtension, extension = os.path.splitext(sourceName)
-        encodedName = NameForObjectFile(sourceNameSansExtension)
+        encodedName = MakeLexicalFilename(sourceNameSansExtension)
 
         if extension == '.rc':
             return self.buildRcItem(inputObj, sourceFile, encodedName)
@@ -207,14 +218,18 @@ class ObjectArgvBuilder(object):
         self.has_code = True
 
         if extension == '.c':
+            if self.has_cxx_pch_:
+                raise Exception('C source file depends on a C++ precompiled header')
             argv = self.cc_argv[:]
         else:
+            if self.has_c_pch_:
+                raise Exception('C++ source file depends on a C precompiled header')
             argv = self.cxx_argv[:]
             self.used_cxx = True
 
         objectFile = encodedName + self.vendor.objSuffix
         argv += self.vendor.objectArgs(sourceFile, objectFile)
-        return ObjectFile(self, inputObj, objectFile, argv)
+        return ObjectFile(self, inputObj, [objectFile], argv)
 
     def buildRcItem(self, inputObj, sourceFile, encodedName):
         objectFile = encodedName + '.res'
@@ -223,17 +238,45 @@ class ObjectArgvBuilder(object):
         cl_argv = self.cc_argv[:]
         cl_argv += [self.vendor.definePrefix + define for define in defines]
         for include in (self.compiler.includes + self.compiler.cxxincludes):
-            cl_argv += self.vendor.formatInclude(objectFile, include)
+            if isinstance(include, PchNodes):
+                continue
+            self.formatInclude(None, cl_argv, include)
         cl_argv += self.vendor.preprocessArgv(sourceFile, encodedName + '.i')
 
         rc_argv = ['rc', '/nologo']
         for define in defines:
             rc_argv += ['/d', define]
         for include in (self.compiler.includes + self.compiler.cxxincludes):
-            rc_argv += ['/i', self.vendor.IncludePath(objectFile, include)]
+            if isinstance(include, PchNodes):
+                continue
+            rc_argv += ['/i', self.vendor.IncludePath(self.outputPath, include)]
         rc_argv += ['/fo' + objectFile, sourceFile]
 
-        return RCFile(self, inputObj, encodedName + '.i', objectFile, cl_argv, rc_argv)
+        return RCFile(self, inputObj, [objectFile, encodedName + '.i'], cl_argv, rc_argv)
+
+    def buildPchItem(self, input_obj, source_file):
+        if self.parent.source_type == 'c':
+            argv = self.cc_argv[:]
+        elif self.parent.source_type == 'c++':
+            argv = self.cxx_argv[:]
+            self.used_cxx = True
+
+        _, filename = os.path.split(source_file)
+
+        pch_file = self.vendor.nameForPch(filename)
+        outputs = [pch_file]
+
+        if self.vendor.pch_needs_source_file:
+            outputs += [os.path.splitext(filename)[0] + self.vendor.objSuffix]
+
+        argv += self.vendor.makePchArgv(source_file, pch_file, self.parent.source_type)
+        return ObjectFile(self, input_obj, outputs, argv)
+
+    def formatInclude(self, pch_list, normal_list, include):
+        if isinstance(include, PchNodes):
+            pch_list += self.vendor.formatPchInclude(self.cx.buildPath, self.outputPath, include)
+        else:
+            normal_list += self.vendor.formatInclude(self.cx.buildPath, self.outputPath, include)
 
 def ComputeSourcePath(context, localFolderNode, item):
     # This is a path into the source tree.
@@ -268,8 +311,8 @@ class CustomToolCommand(object):
         return self.module_.compiler
 
     @staticmethod
-    def NameForObjectFile(path):
-        return NameForObjectFile(path)
+    def MakeLexicalFilename(path):
+        return MakeLexicalFilename(path)
 
     def ComputeSourcePath(self, path):
         return ComputeSourcePath(self.module_.context, self.localFolderNode, path)
@@ -287,18 +330,57 @@ class Module(object):
         self.sources = []
         self.custom = []
 
-class BinaryBuilder(object):
+class BinaryBuilderBase(object):
     def __init__(self, compiler, name):
-        super(BinaryBuilder, self).__init__()
         self.compiler = compiler
-        self.sources = []
-        self.custom = []
         self.name_ = name
+        self.sources = []
+        self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
+
+    # Compute the build folder.
+    def getBuildFolder(self, builder):
+        return os.path.join(builder.buildFolder, self.localFolder)
+
+    def computeModuleFolders(self, cx, module_context):
+        buildBase = self.getBuildFolder(cx)
+        buildPath = os.path.join(cx.buildPath, buildBase)
+
+        if module_context.sourceFolder == '' and cx.sourceFolder == '':
+            # Special degenerate case that fails os.path.relpath().
+            subfolder = ''
+        elif paths.IsSubPath(module_context.sourceFolder, cx.sourceFolder):
+            # If this module is a subpath of the original context, we use the difference.
+            subfolder = os.path.relpath(module_context.sourceFolder, cx.sourceFolder)
+            if subfolder == '.':
+                subfolder = ''
+        else:
+            # Otherwise... do our best approximation and use a replica of the source
+            # folder path. This is not ideal since we could have a collision, if for
+            # example we compile:
+            #   toplevel/module1/crab.cc -> toplevel/toplevel.so/module1/crab.o
+            #   module1/crab.cc          -> toplevel/toplevel.so/module1/crab.o
+            #
+            # This is bad organization on the project's part, so hopefully we don't
+            # have to make a workaround for it.
+            subfolder = module_context.sourceFolder
+
+        # Local is relative to the context of the module. buildFolder is relative
+        # to the build root.
+        localFolder = os.path.normpath(os.path.join(self.localFolder, subfolder))
+        buildPath = os.path.normpath(os.path.join(buildPath, subfolder))
+        return localFolder, buildPath
+
+class BinaryBuilder(BinaryBuilderBase):
+    def __init__(self, compiler, name):
+        super(BinaryBuilder, self).__init__(compiler, name)
+        self.custom = []
+        self.include_hotlist = []
         self.used_cxx_ = False
         self.linker_ = None
         self.modules_ = []
-        self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
         self.has_code_ = False
+        self.pch_nodes_ = []
+        self.has_shared_pdb_ = False
 
     @property
     def outputFile(self):
@@ -313,21 +395,20 @@ class BinaryBuilder(object):
         # Add object files.
         for obj in self.objects:
             if obj.type == 'object':
-                inputs.append(
-                    generator.addCxxObjTask(cx, self.shared_cc_outputs, obj.folderNode, obj))
+                cxx_nodes = generator.addCxxObjTask(cx, self.shared_cc_outputs, obj)
+                assert len(cxx_nodes) == 1
+                inputs.append(cxx_nodes[0])
             elif obj.type == 'resource':
-                inputs.append(generator.addCxxRcTask(cx, obj.folderNode, obj))
+                inputs.append(generator.addCxxRcTask(cx, obj))
 
+        return self.generate_linker_output(generator, cx, inputs)
+
+    def generate_linker_output(self, generator, cx, inputs):
         # Add the link step.
         folder_node = generator.generateFolder(cx.localFolder, self.localFolder)
         output_file, debug_file = self.link(context = cx, folder = folder_node, inputs = inputs)
 
         return CppNodes(output_file, debug_file, self.type, self.compiler.target)
-
-    # Make an item that can be passed into linkflags/postlink but has an attached
-    # dependency.
-    def Dep(self, text, node = None):
-        return Dep(text, node)
 
     # Create a sub-component of the binary.
     def Module(self, context, name):
@@ -340,13 +421,19 @@ class BinaryBuilder(object):
     def linker(self):
         return self.linker_
 
-    # Compute the build folder.
-    def getBuildFolder(self, builder):
-        return os.path.join(builder.buildFolder, self.localFolder)
-
     def linkFlags(self, cx):
-        argv = [Dep.resolve(cx, self, item) for item in self.compiler.linkflags]
-        argv += [Dep.resolve(cx, self, item) for item in self.compiler.postlink]
+        def resolve(item):
+            if hasattr(item, 'path'):
+                if os.path.isabs(item.path):
+                    return item.path
+
+                local_path = os.path.join(cx.buildFolder, self.localFolder)
+                return os.path.relpath(item.path, local_path)
+
+            return item
+
+        argv = [resolve(item) for item in self.compiler.linkflags]
+        argv += [resolve(item) for item in self.compiler.postlink]
         return argv
 
     def buildModules(self, cx):
@@ -354,7 +441,7 @@ class BinaryBuilder(object):
             self.buildModule(cx, module)
 
     def buildModule(self, cx, module):
-        localFolder, outputFolder, outputPath = self.computeModuleFolders(cx, module)
+        localFolder, outputPath = self.computeModuleFolders(cx, module.context)
         localFolderNode = cx.AddFolder(localFolder)
 
         must_include_builddir = False
@@ -382,8 +469,8 @@ class BinaryBuilder(object):
         else:
             addl_include_dirs = []
 
-        builder = ObjectArgvBuilder()
-        builder.setOutputs(localFolderNode, outputFolder, outputPath)
+        builder = ObjectArgvBuilder(cx, self)
+        builder.setOutputs(localFolderNode, outputPath)
         builder.setCompiler(module.compiler, addl_include_dirs, addl_source_deps)
 
         # Parse all source file entries.
@@ -419,41 +506,13 @@ class BinaryBuilder(object):
 
             self.objects.append(obj_item)
 
-        # Propagate the used_cxx bit.
+        # Propagate builder stuff.
         if builder.used_cxx:
             self.used_cxx_ = True
         if builder.has_code:
             self.has_code_ = True
-
-    def computeModuleFolders(self, cx, module):
-        buildBase = self.getBuildFolder(cx)
-        buildPath = os.path.join(cx.buildPath, buildBase)
-
-        if module.context.sourceFolder == '' and cx.sourceFolder == '':
-            # Special degenerate case that fails os.path.relpath().
-            subfolder = ''
-        elif paths.IsSubPath(module.context.sourceFolder, cx.sourceFolder):
-            # If this module is a subpath of the original context, we use the difference.
-            subfolder = os.path.relpath(module.context.sourceFolder, cx.sourceFolder)
-            if subfolder == '.':
-                subfolder = ''
-        else:
-            # Otherwise... do our best approximation and use a replica of the source
-            # folder path. This is not ideal since we could have a collision, if for
-            # example we compile:
-            #   toplevel/module1/crab.cc -> toplevel/toplevel.so/module1/crab.o
-            #   module1/crab.cc          -> toplevel/toplevel.so/module1/crab.o
-            #
-            # This is bad organization on the project's part, so hopefully we don't
-            # have to make a workaround for it.
-            subfolder = module.context.sourceFolder
-
-        # Local is relative to the context of the module. buildFolder is relative
-        # to the build root.
-        localFolder = os.path.normpath(os.path.join(self.localFolder, subfolder))
-        buildFolder = os.path.normpath(os.path.join(buildBase, subfolder))
-        buildPath = os.path.normpath(os.path.join(buildPath, subfolder))
-        return localFolder, buildFolder, buildPath
+        self.pch_nodes_ += builder.pch_nodes
+        self.has_shared_pdb_ |= builder.has_shared_pdb
 
     def finish(self, cx):
         # Wrap sources into an initial module.
@@ -464,7 +523,7 @@ class BinaryBuilder(object):
 
         # Prep shared outputs.
         self.shared_cc_outputs = []
-        if self.compiler.symbol_files and self.compiler.family == 'msvc':
+        if self.has_shared_pdb_:
             self.shared_cc_outputs += [self.compiler.vendor.shared_pdb_name]
 
         # Prep outputs.
@@ -484,10 +543,19 @@ class BinaryBuilder(object):
         files = []
         localBuildFolder = self.getBuildFolder(cx)
         for obj in self.objects:
-            objPath = os.path.join(obj.folderNode.path, obj.outputFile)
+            objPath = os.path.join(obj.folderNode.path, obj.object_file)
             files.append(os.path.relpath(objPath, localBuildFolder))
 
-        self.argv = self.generateBinary(cx, files)
+        if self.linker_.pch_needs_source_file:
+            pch_objects = set([pch.object_file for pch in self.pch_nodes_])
+            for entry in pch_objects:
+                files.append(os.path.relpath(entry.path, localBuildFolder))
+
+        self.compute_link_step(cx, files)
+
+    def compute_link_step(self, cx, files):
+        self.argv = self.compute_link_argv(cx, files)
+
         self.linker_outputs = [self.outputFile]
         self.debug_entry = None
 
@@ -539,13 +607,13 @@ class BinaryBuilder(object):
             if not isinstance(self, StaticLibrary) and '/INCREMENTAL:NO' not in self.argv:
                 shared_outputs += [self.name_ + '.ilk']
 
-        ignore, outputs = context.AddCommand(inputs = inputs,
-                                             argv = self.argv,
-                                             outputs = self.linker_outputs,
-                                             folder = folder,
-                                             weak_inputs = self.compiler.weaklinkdeps,
-                                             shared_outputs = shared_outputs,
-                                             env_data = self.compiler.env_data)
+        outputs = context.AddCommand(inputs = inputs,
+                                     argv = self.argv,
+                                     outputs = self.linker_outputs,
+                                     folder = folder,
+                                     weak_inputs = self.compiler.weaklinkdeps,
+                                     shared_outputs = shared_outputs,
+                                     env_data = self.compiler.env_data)
         if not self.debug_entry and self.compiler.symbol_files:
             if self.linker_.behavior != 'msvc' and self.compiler.symbol_files == 'bundled':
                 self.debug_entry = outputs[0]
@@ -565,7 +633,7 @@ class Program(BinaryBuilder):
     def type(self):
         return 'program'
 
-    def generateBinary(self, cx, files):
+    def compute_link_argv(self, cx, files):
         return self.compiler.vendor.programLinkArgv(
             cmd_argv = self.linker_argv_,
             files = files,
@@ -585,7 +653,7 @@ class Library(BinaryBuilder):
     def type(self):
         return 'library'
 
-    def generateBinary(self, cx, files):
+    def compute_link_argv(self, cx, files):
         return self.compiler.vendor.libLinkArgv(
             cmd_argv = self.linker_argv_,
             files = files,
@@ -605,8 +673,75 @@ class StaticLibrary(BinaryBuilder):
     def type(self):
         return 'static'
 
-    def generateBinary(self, cx, files):
+    def compute_link_argv(self, cx, files):
         return self.linker_.staticLinkArgv(files, self.outputFile)
 
     def perform_symbol_steps(self, cx):
         pass
+
+class PrecompiledHeaders(BinaryBuilderBase):
+    def __init__(self, compiler, name, source_type):
+        super(PrecompiledHeaders, self).__init__(compiler, name)
+        self.source_type_ = source_type.lower()
+        if self.source_type_ not in ['c', 'c++']:
+            raise Exception('Precompiled header source type must be "c" or "c++"')
+
+    @property
+    def type(self):
+        return 'precompiled-headers'
+
+    @property
+    def source_type(self):
+        return self.source_type_
+
+    def finish(self, cx):
+        pass
+
+    def generate(self, generator, cx):
+        header_filename = self.name_ + '.h'
+        header_path = os.path.join(self.localFolder, header_filename)
+        header_guard = '_include_guard_{}'.format(MakeLexicalFilename(header_path))
+
+        if self.source_type == 'c':
+            source_filename = self.name_ + '.c'
+        else:
+            source_filename = self.name_ + '.cpp'
+        source_path = os.path.join(self.localFolder, source_filename)
+        source_text = cpp_utils.CreateSingleIncludeSource(header_filename)
+        source_blob = source_text.encode('utf-8')
+        source_entry = generator.addOutputFile(context = cx,
+                                               path = source_path,
+                                               contents = source_blob)
+
+        unified_header_text = cpp_utils.CreateUnifiedHeader(header_guard, self.sources)
+        unified_header_blob = unified_header_text.encode('utf-8')
+        unified_header = generator.addOutputFile(context = cx,
+                                                 path = header_path,
+                                                 contents = unified_header_blob)
+
+        local_folder, output_path = self.computeModuleFolders(cx, cx)
+        local_folder_node = cx.AddFolder(local_folder)
+
+        builder = ObjectArgvBuilder(cx, self)
+        builder.setOutputs(local_folder_node, output_path)
+        builder.setCompiler(self.compiler, [], [])
+
+        if self.compiler.vendor.pch_needs_source_file:
+            item = builder.buildPchItem(source_entry, source_filename)
+            item.sourcedeps += [unified_header]
+        else:
+            item = builder.buildPchItem(unified_header, header_filename)
+
+        shared_cc_outputs = []
+        if builder.has_shared_pdb:
+            shared_cc_outputs += [self.compiler.vendor.shared_pdb_name]
+
+        nodes = generator.addCxxObjTask(cx, shared_outputs = shared_cc_outputs, obj = item)
+
+        pch_entry = nodes[0]
+        if self.compiler.vendor.pch_needs_source_file:
+            obj_entry = nodes[1]
+        else:
+            obj_entry = nodes[0]
+
+        return PchNodes(local_folder_node, unified_header, pch_entry, obj_entry, self.source_type)

@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -67,13 +67,16 @@ class Vendor(object):
         raise Exception("Must be implemented")
 
     @property
-    def debugInfoArgv(self):
+    def debug_info_argv(self):
         raise Exception("Must be implemented")
 
     def parseDebugInfoType(self, debuginfo):
         raise Exception("Must be implemented")
 
     def formatInclude(self, outputPath, includePath):
+        raise Exception("Must be implemented")
+
+    def formatPchInclude(self, output_path, pch):
         raise Exception("Must be implemented")
 
     def objectArgs(self, sourceFile, objFile):
@@ -90,4 +93,18 @@ class Vendor(object):
         raise Exception("Must be implemented")
 
     def libLinkArgv(self, cmd_argv, files, linkFlags, symbolFile, outputFile):
+        raise Exception("Must be implemented")
+
+    def nameForPrecompiledHeader(self, name):
+        raise Exception("Must be implemented")
+
+    @property
+    def pch_needs_source_file(self):
+        raise Exception("Must be implemented")
+
+    @property
+    def shared_pdb_flags(self):
+        return set()
+
+    def nameForPch(self, source_file):
         raise Exception("Must be implemented")

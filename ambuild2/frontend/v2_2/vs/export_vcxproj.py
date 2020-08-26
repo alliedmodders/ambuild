@@ -17,6 +17,7 @@
 import os, re
 from ambuild2 import util
 from ambuild2.frontend import paths
+from ambuild2.frontend.cpp import cpp_utils
 from ambuild2.frontend.v2_2.cpp.builders import Dep
 from ambuild2.frontend.version import Version
 from ambuild2.frontend.vs.xmlbuilder import XmlBuilder
@@ -145,10 +146,27 @@ def sanitize_val_defines(defines):
         new_defines.append('{0}={1}'.format(key, val))
     return new_defines
 
+def make_unified_header(builder, name, sources):
+    path = os.path.join(builder.localFolder, name + '.h')
+    guard = '_include_' + util.MakeLexicalFilename(name)
+    text = cpp_utils.CreateUnifiedHeader(guard, sources)
+    with open(path, 'wb') as fp:
+        fp.write(text.encode('utf-8'))
+    return path
+
 def export_configuration_options(node, xml, builder):
+    from ambuild2.frontend.v2_2.vs.cxx import PchNodes
+
     compiler = builder.compiler
 
-    includes = ['%(AdditionalIncludeDirectories)'] + compiler.includes + compiler.cxxincludes
+    includes = ['%(AdditionalIncludeDirectories)']
+    for include in compiler.includes + compiler.cxxincludes:
+        if isinstance(include, PchNodes):
+            path = make_unified_header(builder, include.name, include.sources)
+            includes.append(os.path.split(path)[0])
+        else:
+            includes.append(include)
+
     all_defines = compiler.defines + compiler.cxxdefines
     simple_defines = ['%(PreprocessorDefinitions)'
                      ] + [option for option in all_defines if '=' not in option]
@@ -304,6 +322,12 @@ def export_source_files(node, xml):
             builders.add(builder)
         all_builders.add(builder)
 
+    headers = set()
+    for header in node.project.include_hotlist:
+        header_path = paths.Join(node.context.currentSourcePath, header)
+        header_path = os.path.relpath(header_path, node.context.buildFolder)
+        headers.add(header)
+
     def emit(file, kind):
         builders = files[file]
         excluded = all_builders - builders
@@ -327,3 +351,7 @@ def export_source_files(node, xml):
             _, ext = os.path.splitext(file)
             if ext == '.rc':
                 emit(file, 'ResourceCompile')
+
+    with xml.block('ItemGroup'):
+        for header in headers:
+            xml.tag('ClInclude', Include = header)

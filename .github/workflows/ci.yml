@@ -44,30 +44,27 @@ jobs:
           sudo dpkg --add-architecture i386
           sudo apt-get install lib32stdc++-7-dev lib32z1-dev libc6-dev-i386
           sudo apt-get install g++-multilib
-      - name: Update Python packaging tools
-        run: |
-          python -m pip install --upgrade pip setuptools
-          pip install wheel
+      - name: Install Python wheel
+        run: pip install wheel
       - name: Unit Tests
         run: python -m unittest discover ambuild2 "*_test.py"
       - name: Install AMBuild
         run: pip install ./
       - name: "Test with staticlib"
         if: runner.os != 'Windows' # no choco vcvars detection on older APIs
-        uses: WildCard65/invoke-ambuild@v1.0-fin
+        uses: WildCard65/invoke-ambuild@v1.1-fin
         with:
-          auto-install: false
           build-folder: objdir
           project-root: tests/staticlib
       - name: "Test with modules"
         if: runner.os != 'Windows' # no choco vcvars detection on older APIs
-        uses: WildCard65/invoke-ambuild@v1.0-fin
+        uses: WildCard65/invoke-ambuild@v1.1-fin
         with:
           auto-install: false
           build-folder: objdir2
           project-root: tests/modules
       - name: "Test with multiarch"
-        uses: WildCard65/invoke-ambuild@v1.0-fin
+        uses: WildCard65/invoke-ambuild@v1.1-fin
         with:
           auto-install: false
           build-folder: objdir3

@@ -96,8 +96,6 @@ class Context(object):
         api_version = Version(self.db.query_var('api_version'))
         assert api_version is not None
 
-        from ambuild2.frontend.amb2 import Generator
-
         if api_version >= '2.2':
             from ambuild2.frontend.v2_2.context_manager import ContextManager
         elif api_version >= '2.1':

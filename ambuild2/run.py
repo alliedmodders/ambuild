@@ -20,35 +20,36 @@ from optparse import OptionParser
 from ambuild2 import util
 from ambuild2.context import Context
 
-DEFAULT_API = '2.1.1'
+DEFAULT_API = '2.2'
 CURRENT_API = '2.2'
 
-SampleScript = """# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
-builder.DetectCxx()
-builder.cxx.cflags += [
-  '-Wall',
-  '-Werror'
-]
+SampleScript = """# vim: set sts=4 ts=8 sw=4 tw=99 et ft=python:
+builder.cxx = builder.DetectCxx()
+if builder.cxx.like('gcc'):
+    builder.cxx.cflags += [
+        '-Wall',
+        '-Werror'
+    ]
 
 program = builder.cxx.Program('sample')
 program.sources += [
-  'main.cpp',
+    'main.cpp',
 ]
 builder.Add(program)
 """
 
-SampleConfigure = """# vim: set sts=2 ts=8 sw=2 tw=99 et:
+SampleConfigure = """# vim: set sts=4 ts=8 sw=4 tw=99 et:
 API_VERSION = '{DEFAULT_API}'
 
 import sys
 try:
-  from ambuild2 import run
-  if not run.HasAPI(API_VERSION):
-    raise Exception()
+    from ambuild2 import run
+    if not run.HasAPI(API_VERSION):
+        raise Exception()
 except:
-  sys.stderr.write('AMBuild {{0}} must be installed to build this project.\\n'.format(API_VERSION))
-  sys.stderr.write('http://www.alliedmods.net/ambuild\\n')
-  sys.exit(1)
+    sys.stderr.write('AMBuild {{0}} must be installed to build this project.\\n'.format(API_VERSION))
+    sys.stderr.write('http://www.alliedmods.net/ambuild\\n')
+    sys.exit(1)
 
 builder = run.BuildParser(sourcePath = sys.path[0], api=API_VERSION)
 builder.Configure()
@@ -141,7 +142,7 @@ def PrepareBuild(sourcePath, buildPath = None):
 
 class ApiVersionNotFoundException(Exception):
     def __init__(self, *args, **kwargs):
-        super(Exception, self).__init__(*args, **kwargs)
+        super(ApiVersionNotFoundException, self).__init__(*args, **kwargs)
 
 def PreparerForAPI(api):
     if api == '2.0':

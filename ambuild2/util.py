@@ -47,6 +47,17 @@ def DecodeArchString(arch):
 
 Architecture, SubArch = DecodeArchString(platform.machine())
 
+ALL_PLATFORMS = [
+    'windows',
+    'mac',
+    'linux',
+    'freebsd',
+    'openbsd',
+    'netbsd',
+    'solaris',
+    'cygwin',
+]
+
 def Platform():
     if IsWindows():
         return 'windows'
@@ -626,3 +637,7 @@ def BuildDictFromTuple(tup):
     for key, value in tup:
         obj[key] = value
     return obj
+
+# Replace anything from a filename that doesn't convert to an identifier.
+def MakeLexicalFilename(file):
+    return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])

@@ -715,7 +715,6 @@ class Database(object):
       node = self.import_node(row[0], row[1:])
       aggregate(node)
 
-  # Find the list of commands that generate this shared output.
   def query_commands(self, aggregate):
     query = """
       select id, type, stamp, dirty, path, folder, data, env_id

@@ -4,3 +4,4 @@ tests/*/obj-*/
 *.pyc
 *.*~
 objdir
+*.o

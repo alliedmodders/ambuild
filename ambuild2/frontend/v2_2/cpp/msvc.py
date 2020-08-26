@@ -1,4 +1,4 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 #
 # This file is part of AMBuild.
 #
@@ -17,6 +17,7 @@
 import os
 import re
 from ambuild2 import util
+from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
 from ambuild2.frontend.v2_2.cpp.vendor import Vendor
 
 # Microsoft Visual C++
@@ -49,9 +50,10 @@ class MSVC(Vendor):
 
     @property
     def debugInfoArgv(self):
-        if int(self.version_string) >= 1800:
-            return ['/Zi', '/FS']
-        return ['/Zi']
+        return ['/Z7']
+
+    def makePchArgv(self, source_file, pch_file, source_type):
+        return ['/showIncludes', '/nologo', '/Yc', '/c', source_file, '/Fp' + pch_file]
 
     def parseDebugInfoType(self, debuginfo):
         if debuginfo == 'bundled':
@@ -93,33 +95,43 @@ class MSVC(Vendor):
         return ['/showIncludes', '/nologo', '/P', '/c', sourceFile, '/Fi' + outFile]
 
     @staticmethod
-    def IncludePath(outputPath, includePath):
+    def IncludePath(output_path, include_path):
+        assert os.path.isabs(output_path)
+
+        output_path = os.path.normcase(output_path)
+
+        if not os.path.isabs(include_path):
+            abs_include_path = os.path.join(output_path, include_path)
+        else:
+            abs_include_path = include_path
+        abs_include_path = os.path.normcase(abs_include_path)
+
         # Hack - try and get a relative path because CL, with either
         # /Zi or /ZI, combined with subprocess, apparently tries and
         # looks for paths like c:\bleh\"c:\bleh" <-- wtf
         # .. this according to Process Monitor
-        outputPath = os.path.normcase(outputPath)
-        includePath = os.path.normcase(includePath)
-        outputDrive = os.path.splitdrive(outputPath)[0]
-        includeDrive = os.path.splitdrive(includePath)[0]
-        if outputDrive == includeDrive:
-            return os.path.relpath(includePath, outputPath)
-        return includePath
+        output_drive, _ = os.path.splitdrive(output_path)
+        include_drive, _ = os.path.splitdrive(abs_include_path)
+        if output_drive != include_drive:
+            return os.path.normcase(include_path)
+        return os.path.relpath(abs_include_path, output_path)
 
-    def formatInclude(self, outputPath, includePath):
-        return ['/I', MSVC.IncludePath(outputPath, includePath)]
+    def formatInclude(self, build_root, output_path, include):
+        return ['/I', MSVC.IncludePath(output_path, include)]
 
-    @staticmethod
-    def DetectInclusionPattern(text):
-        for line in [raw.strip() for raw in text.split('\n')]:
-            m = re.match(r'(.*)\s+([A-Za-z]:\\.*stdio\.h)$', line)
-            if m is None:
-                continue
+    def formatPchInclude(self, build_root, output_path, pch):
+        folder, header_name = os.path.split(pch.header_file.path)
 
-            phrase = m.group(1)
-            return re.escape(phrase) + r'\s+([A-Za-z]:\\.*)$'
-
-        raise Exception('Could not find compiler inclusion pattern')
+        # Include path calculation expects a path relative to output_path, so
+        # we need to transform it.
+        pch_rel_folder = os.path.relpath(os.path.join(build_root, pch.pch_file.path), output_path)
+        argv = [
+            '/Fp' + MSVC.IncludePath(output_path, pch_rel_folder),
+            '/Yu' + header_name,
+            '/I',
+            MSVC.IncludePath(output_path, folder),
+        ]
+        return argv
 
     ##
     # MSVC-specific properties.
@@ -140,3 +152,18 @@ class MSVC(Vendor):
         cl_version *= 10
 
         return 'vc{0}.pdb'.format(cl_version)
+
+    @property
+    def pch_needs_strong_deps(self):
+        return True
+
+    @property
+    def pch_needs_source_file(self):
+        return True
+
+    @property
+    def shared_pdb_flags(self):
+        return set(['/Zi', '/ZI'])
+
+    def nameForPch(self, source_file):
+        return os.path.splitext(source_file)[0] + '.pch'

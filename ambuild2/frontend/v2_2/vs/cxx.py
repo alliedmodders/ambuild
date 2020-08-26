@@ -39,11 +39,13 @@ class Project(object):
         self.ctor_ = ctor
         self.name_ = name
         self.sources = []
+        self.include_hotlist = []
         self.builders_ = []
 
     def Configure(self, compiler, name, tag):
         builder = self.ctor_(self, compiler.clone(), name, tag)
         builder.sources = self.sources[:]
+        builder.include_hotlist = self.include_hotlist[:]
         self.builders_ += [builder]
         return builder
 
@@ -93,7 +95,7 @@ class Project(object):
 
 class VisualStudio(MSVC):
     def __init__(self, version):
-        super(MSVC, self).__init__(version)
+        super(VisualStudio, self).__init__(version)
 
     def like(self, name):
         return name == 'vs' or name == 'msvc'
@@ -130,6 +132,9 @@ class Compiler(compiler.Compiler):
     def StaticLibrary(self, name):
         return Project(StaticLibrary, name).default(self)
 
+    def PrecompiledHeaders(self, name, source_type):
+        return PrecompiledHeaders(self, name)
+
     def like(self, name):
         return name == 'msvc'
 
@@ -139,6 +144,7 @@ class BinaryBuilder(object):
         self.project_ = project
         self.compiler = compiler
         self.sources = []
+        self.include_hotlist = []
         self.name_ = name
         self.tag_ = tag
 
@@ -206,3 +212,20 @@ class StaticLibrary(BinaryBuilder):
     @property
     def configurationType(self):
         return 'StaticLibrary'
+
+class PchNodes(object):
+    def __init__(self, name, sources):
+        self.name = name
+        self.sources = sources
+
+class PrecompiledHeaders(BinaryBuilder):
+    def __init__(self, compiler, name):
+        self.compiler = compiler
+        self.name_ = name
+        self.sources = []
+
+    def finish(self, cx):
+        pass
+
+    def generate(self, generator, cx):
+        return PchNodes(self.name_, self.sources)
