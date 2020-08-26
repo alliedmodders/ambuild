@@ -56,6 +56,7 @@ jobs:
           pip install wheel
           pip install ./
       - name: Enable Developer Command Prompt
+        if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1.3.0
         with:
           arch: ${{ matrix.architecture }}
@@ -106,6 +107,7 @@ jobs:
           pip install wheel
           pip install ./
       - name: Enable Developer Command Prompt
+        if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1.3.0
         with:
           arch: ${{ matrix.architecture }}
