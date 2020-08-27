@@ -1,12 +1,13 @@
-# vim: set ts=8 sts=2 sw=2 tw=99 et:
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
 import errno
 import multiprocessing as mp
 import shutil
 import os, sys
 import traceback
-from ambuild2 import util
+from ambuild2 import make_parser
 from ambuild2 import nodetypes
 from ambuild2 import process_manager
+from ambuild2 import util
 
 class Task(object):
     def __init__(self, id, entry, outputs):
@@ -260,6 +261,12 @@ class TaskWorker(process_manager.MessageReceiver):
         cc_type = task_data['type']
         argv = task_data['argv']
 
+        if 'deps' in task_data:
+            dep_type, dep_info = task_data['deps']
+        else:
+            dep_type = cc_type
+            dep_info = None
+
         env = None
         if tools_env is not None:
             if tools_env.env_cmds is not None:
@@ -269,19 +276,7 @@ class TaskWorker(process_manager.MessageReceiver):
 
         with util.FolderChanger(task_folder):
             p, out, err = util.Execute(argv, env = env)
-            if cc_type == 'gcc':
-                err, deps = util.ParseGCCDeps(err)
-            elif cc_type == 'msvc':
-                inclusion_pattern = GetMsvcInclusionPattern(self.vars, tools_env)
-                out, deps = util.ParseMSVCDeps(out, inclusion_pattern)
-            elif cc_type == 'sun':
-                err, deps = util.ParseSunDeps(err)
-            elif cc_type == 'fxc':
-                out, deps = util.ParseFXCDeps(out)
-            else:
-                raise Exception('unknown compiler type')
-
-            paths = self.rewriteDeps(deps)
+            out, err, paths = self.parseDependencies(tools_env, out, err, dep_type, dep_info)
 
         reply = {
             'ok': p.returncode == 0,
@@ -291,6 +286,23 @@ class TaskWorker(process_manager.MessageReceiver):
             'deps': paths,
         }
         return reply
+
+    def parseDependencies(self, tools_env, out, err, dep_type, dep_info):
+        if dep_type == 'md':
+            with open(dep_info) as fp:
+                deps = make_parser.ParseDependencyFile(dep_info, fp)
+        elif dep_type == 'gcc':
+            err, deps = util.ParseGCCDeps(err)
+        elif dep_type == 'msvc':
+            inclusion_pattern = GetMsvcInclusionPattern(self.vars, tools_env)
+            out, deps = util.ParseMSVCDeps(out, inclusion_pattern)
+        elif dep_type == 'fxc':
+            out, deps = util.ParseFXCDeps(out)
+        else:
+            raise Exception('unknown dependency type')
+
+        paths = self.rewriteDeps(deps)
+        return out, err, paths
 
     def doResource(self, message):
         task_folder = message['task_folder']

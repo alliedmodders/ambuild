@@ -78,23 +78,24 @@ class Project(object):
         self.proxies_.append(proxy)
         return proxy
 
-class ObjectFileBase(object):
+class ObjectFileTaskBase(object):
     def __init__(self, parent, inputObj, outputs):
-        super(ObjectFileBase, self).__init__()
+        super(ObjectFileTaskBase, self).__init__()
         self.env_data = parent.env_data
         self.folderNode = parent.localFolderNode
         self.inputObj = inputObj
         self.sourcedeps = parent.sourcedeps
         self.extra_inputs = parent.extra_inputs
         self.outputs = outputs
+        self.dep_info = None
 
     @property
     def type(self):
         raise Exception("Must be implemented!")
 
-class ObjectFile(ObjectFileBase):
+class ObjectFileTask(ObjectFileTaskBase):
     def __init__(self, parent, inputObj, outputs, argv):
-        super(ObjectFile, self).__init__(parent, inputObj, outputs)
+        super(ObjectFileTask, self).__init__(parent, inputObj, outputs)
         self.argv = argv
         self.behavior = parent.compiler.vendor.behavior
 
@@ -106,9 +107,9 @@ class ObjectFile(ObjectFileBase):
     def object_file(self):
         return self.outputs[0]
 
-class RCFile(ObjectFileBase):
+class RCFileTask(ObjectFileTaskBase):
     def __init__(self, parent, inputObj, outputs, cl_argv, rc_argv):
-        super(RCFile, self).__init__(parent, inputObj, outputs)
+        super(RCFileTask, self).__init__(parent, inputObj, outputs)
         self.cl_argv = cl_argv
         self.rc_argv = rc_argv
 
@@ -217,19 +218,30 @@ class ObjectArgvBuilder(object):
     def buildCxxItem(self, inputObj, sourceFile, encodedName, extension):
         self.has_code = True
 
+        task = ObjectFileTask(self, inputObj, [], [])
+
         if extension == '.c':
             if self.has_cxx_pch_:
                 raise Exception('C source file depends on a C++ precompiled header')
-            argv = self.cc_argv[:]
+            task.argv += self.cc_argv
         else:
             if self.has_c_pch_:
                 raise Exception('C++ source file depends on a C precompiled header')
-            argv = self.cxx_argv[:]
+            task.argv += self.cxx_argv
             self.used_cxx = True
 
         objectFile = encodedName + self.vendor.objSuffix
-        argv += self.vendor.objectArgs(sourceFile, objectFile)
-        return ObjectFile(self, inputObj, [objectFile], argv)
+        task.outputs += [objectFile]
+
+        if self.vendor.emits_dependency_file:
+            dep_file = encodedName + '.d'
+            task.outputs += [dep_file]
+            task.argv += self.vendor.dependencyArgv(dep_file)
+            task.dep_info = ('md', dep_file)
+
+        task.argv += self.vendor.objectArgs(sourceFile, objectFile)
+
+        return task
 
     def buildRcItem(self, inputObj, sourceFile, encodedName):
         objectFile = encodedName + '.res'
@@ -243,6 +255,9 @@ class ObjectArgvBuilder(object):
             self.formatInclude(None, cl_argv, include)
         cl_argv += self.vendor.preprocessArgv(sourceFile, encodedName + '.i')
 
+        # Don't need this, yet, since Windows doesn't use this.
+        assert not self.vendor.emits_dependency_files
+
         rc_argv = ['rc', '/nologo']
         for define in defines:
             rc_argv += ['/d', define]
@@ -252,25 +267,33 @@ class ObjectArgvBuilder(object):
             rc_argv += ['/i', self.vendor.IncludePath(self.outputPath, include)]
         rc_argv += ['/fo' + objectFile, sourceFile]
 
-        return RCFile(self, inputObj, [objectFile, encodedName + '.i'], cl_argv, rc_argv)
+        return RCFileTask(self, inputObj, [objectFile, encodedName + '.i'], cl_argv, rc_argv)
 
     def buildPchItem(self, input_obj, source_file):
+        task = ObjectFileTask(self, input_obj, [], [])
+
         if self.parent.source_type == 'c':
-            argv = self.cc_argv[:]
+            task.argv += self.cc_argv
         elif self.parent.source_type == 'c++':
-            argv = self.cxx_argv[:]
+            task.argv += self.cxx_argv
             self.used_cxx = True
 
         _, filename = os.path.split(source_file)
-
         pch_file = self.vendor.nameForPch(filename)
-        outputs = [pch_file]
+        task.outputs += [pch_file]
 
         if self.vendor.pch_needs_source_file:
-            outputs += [os.path.splitext(filename)[0] + self.vendor.objSuffix]
+            task.outputs += [os.path.splitext(filename)[0] + self.vendor.objSuffix]
 
-        argv += self.vendor.makePchArgv(source_file, pch_file, self.parent.source_type)
-        return ObjectFile(self, input_obj, outputs, argv)
+        task.argv += self.vendor.makePchArgv(source_file, pch_file, self.parent.source_type)
+
+        if self.vendor.emits_dependency_file:
+            dep_file = filename + '.d'
+            task.outputs += [dep_file]
+            task.argv += self.vendor.dependencyArgv(dep_file)
+            task.dep_info = ('md', dep_file)
+
+        return task
 
     def formatInclude(self, pch_list, normal_list, include):
         if isinstance(include, PchNodes):
@@ -396,7 +419,10 @@ class BinaryBuilder(BinaryBuilderBase):
         for obj in self.objects:
             if obj.type == 'object':
                 cxx_nodes = generator.addCxxObjTask(cx, self.shared_cc_outputs, obj)
-                assert len(cxx_nodes) == 1
+                if self.compiler.vendor.emits_dependency_file:
+                    assert len(cxx_nodes) == 2
+                else:
+                    assert len(cxx_nodes) == 1
                 inputs.append(cxx_nodes[0])
             elif obj.type == 'resource':
                 inputs.append(generator.addCxxRcTask(cx, obj))

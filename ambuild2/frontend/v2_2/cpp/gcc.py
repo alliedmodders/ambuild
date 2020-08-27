@@ -49,11 +49,19 @@ class GCCLookalike(Vendor):
     def formatInclude(self, build_root, output_path, include):
         return ['-I', os.path.normpath(include)]
 
+    # We could use -MF -, but trying to parse something as idiosyncratic as Make
+    # is probably best done when absolutely nothing else might be interspersed.
+    def emits_dependency_file(self):
+        return True
+
+    def dependencyArgv(self, out_file):
+        return ['-MD', '-MF', out_file]
+
     def objectArgs(self, sourceFile, objFile):
-        return ['-H', '-c', sourceFile, '-o', objFile]
+        return ['-c', sourceFile, '-o', objFile]
 
     def makePchArgv(self, source_file, obj_file, source_type):
-        return ['-H', '-c', '-x', source_type + '-header', source_file, '-o', obj_file]
+        return ['-c', '-x', source_type + '-header', source_file, '-o', obj_file]
 
     def staticLinkArgv(self, files, outputFile):
         return ['ar', 'rcs', outputFile] + files
