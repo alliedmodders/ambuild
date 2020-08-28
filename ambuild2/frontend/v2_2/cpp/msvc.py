@@ -153,10 +153,15 @@ class MSVC(Vendor):
 
         return 'vc{0}.pdb'.format(cl_version)
 
+    # cl.exe /showIncludes does not show anything at all for precompiled headers,
+    # so the only way we can build a proper dependency is by rebuilding every
+    # source file that *might* use the PCH, whether or not it actually does.
     @property
     def pch_needs_strong_deps(self):
         return True
 
+    # cl.exe precompiles source files, technically, not headers. So we need to
+    # link against something.
     @property
     def pch_needs_source_file(self):
         return True
@@ -167,3 +172,7 @@ class MSVC(Vendor):
 
     def nameForPch(self, source_file):
         return os.path.splitext(source_file)[0] + '.pch'
+
+    @property
+    def emits_dependency_file(self):
+        return False

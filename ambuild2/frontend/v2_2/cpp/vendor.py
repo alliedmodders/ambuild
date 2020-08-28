@@ -108,3 +108,11 @@ class Vendor(object):
 
     def nameForPch(self, source_file):
         raise Exception("Must be implemented")
+
+    @property
+    def emits_dependency_file(self):
+        raise Exception("Must be implemented")
+
+    # If emits_dependency_file is True, this must be implemented.
+    def dependencyArgv(self, out_file):
+        raise Exception("Must be implemented")
