@@ -165,7 +165,7 @@ class Database(object):
     except:
       version = 1
 
-    latest_version = 5
+    latest_version = 6
     if version == latest_version:
       return
     if version > latest_version:

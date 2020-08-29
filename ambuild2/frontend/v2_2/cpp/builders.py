@@ -256,7 +256,7 @@ class ObjectArgvBuilder(object):
         cl_argv += self.vendor.preprocessArgv(sourceFile, encodedName + '.i')
 
         # Don't need this, yet, since Windows doesn't use this.
-        assert not self.vendor.emits_dependency_files
+        assert not self.vendor.emits_dependency_file
 
         rc_argv = ['rc', '/nologo']
         for define in defines:
