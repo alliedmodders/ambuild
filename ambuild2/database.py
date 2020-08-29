@@ -272,6 +272,7 @@ class Database(object):
 
   def upgrade_to_v6(self):
     self.cn.execute("CREATE UNIQUE INDEX IF NOT EXISTS node_path ON nodes(path)")
+    self.cn.execute("INSERT OR REPLACE INTO vars (key, val) VALUES ('db_version', ?)", (6,))
     self.cn.commit()
     return 6
 
