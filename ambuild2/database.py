@@ -108,6 +108,8 @@ def CreateDatabase(path):
       env_id INTEGER PRIMARY KEY,               \
       data BLOB NOT NULL,                       \
       stamp REAL NOT NULL DEFAULT 0.0)",
+
+    "CREATE UNIQUE INDEX IF NOT EXISTS node_path ON nodes(path)",
   ]
   for query in queries:
     cn.execute(query)
@@ -187,6 +189,9 @@ class Database(object):
     if version == 4:
       version = self.upgrade_to_v5()
 
+    if version == 5:
+      version = self.upgrade_to_v6()
+
   def upgrade_to_v2(self):
     queries = [
       "create table if not exists vars(           \
@@ -264,6 +269,11 @@ class Database(object):
     self.cn.execute("INSERT OR REPLACE INTO vars (key, val) VALUES ('db_version', ?)", (5,))
     self.cn.commit()
     return 5
+
+  def upgrade_to_v6(self):
+    self.cn.execute("CREATE UNIQUE INDEX IF NOT EXISTS node_path ON nodes(path)")
+    self.cn.commit()
+    return 6
 
   def query_var(self, var):
     cursor = self.cn.execute("select val from vars where key = ?", (var,))
