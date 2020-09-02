@@ -73,7 +73,7 @@ def CreateDatabase(path):
       val varchar(255)                          \
     )",
 
-    "insert into vars (key, val) values ('db_version', '5')",
+    "insert into vars (key, val) values ('db_version', '6')",
 
     "create index if not exists outgoing_edge on edges(outgoing)",
     "create index if not exists incoming_edge on edges(incoming)",
