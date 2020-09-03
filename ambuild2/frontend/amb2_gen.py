@@ -724,7 +724,13 @@ class Generator(BaseGenerator):
 
     # This whole interface is a gross hack. It should be moved into builders.py.
     def addCxxObjTask(self, cx, shared_outputs, obj):
-        cxxData = {'argv': obj.argv, 'type': obj.behavior}
+        cxxData = {
+            'argv': obj.argv,
+            'type': obj.behavior,
+        }
+        if obj.dep_info:
+            cxxData['deps'] = obj.dep_info
+
         _, output_nodes = self.addCommand(context = cx,
                                           weak_inputs = obj.sourcedeps,
                                           inputs = [obj.inputObj] + obj.extra_inputs,

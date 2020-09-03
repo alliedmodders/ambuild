@@ -1,2 +1,3 @@
 ambuild/*
 ambuild2/database.py
+ambuild2/third_party/*
