@@ -61,7 +61,7 @@ jobs:
         with:
           arch: ${{ matrix.architecture }}
       - name: Test with staticlib
-        uses: WildCard65/invoke-ambuild@v1.1-fin
+        uses: WildCard65/invoke-ambuild@v2.0-fin
         with:
           build-folder: objdir
           project-root: tests/staticlib
@@ -112,7 +112,7 @@ jobs:
         with:
           arch: ${{ matrix.architecture }}
       - name: Test with modules
-        uses: WildCard65/invoke-ambuild@v1.1-fin
+        uses: WildCard65/invoke-ambuild@v2.0-fin
         with:
           build-folder: objdir2
           project-root: tests/modules
@@ -146,7 +146,7 @@ jobs:
           pip install wheel
           pip install ./
       - name: Test with multiarch
-        uses: WildCard65/invoke-ambuild@v1.1-fin
+        uses: WildCard65/invoke-ambuild@v2.0-fin
         with:
           build-folder: objdir3
           project-root: tests/multiarch
