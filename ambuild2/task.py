@@ -276,7 +276,7 @@ class TaskWorker(process_manager.MessageReceiver):
 
         with util.FolderChanger(task_folder):
             p, out, err = util.Execute(argv, env = env)
-            out, err, paths = self.parseDependencies(tools_env, out, err, dep_type, dep_info)
+            out, err, paths = self.parseDependencies(p, tools_env, out, err, dep_type, dep_info)
 
         reply = {
             'ok': p.returncode == 0,
@@ -287,10 +287,15 @@ class TaskWorker(process_manager.MessageReceiver):
         }
         return reply
 
-    def parseDependencies(self, tools_env, out, err, dep_type, dep_info):
+    def parseDependencies(self, p, tools_env, out, err, dep_type, dep_info):
         if dep_type == 'md':
-            with open(dep_info) as fp:
-                deps = make_parser.ParseDependencyFile(dep_info, fp)
+            try:
+                with open(dep_info) as fp:
+                    deps = make_parser.ParseDependencyFile(dep_info, fp)
+            except:
+                if p.returncode == 0:
+                    raise
+                deps = []
         elif dep_type == 'gcc':
             err, deps = util.ParseGCCDeps(err)
         elif dep_type == 'msvc':
