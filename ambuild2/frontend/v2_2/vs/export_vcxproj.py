@@ -18,7 +18,6 @@ import os, re
 from ambuild2 import util
 from ambuild2.frontend import paths
 from ambuild2.frontend.cpp import cpp_utils
-from ambuild2.frontend.v2_2.cpp.builders import Dep
 from ambuild2.frontend.version import Version
 from ambuild2.frontend.vs.xmlbuilder import XmlBuilder
 
@@ -290,7 +289,9 @@ def export_configuration_options(node, xml, builder):
                 if m is not None:
                     machine = m.group(1)
             else:
-                libs.append(Dep.resolve(node.context, builder, flag))
+                local_path = os.path.join(node.context.buildFolder, builder.localFolder)
+                local_path = os.path.relpath(flag.path, local_path)
+                libs.append(local_path)
 
         if '/WX' in link_flags:
             xml.tag('TreatLinkerWarningAsErrors', 'true')
