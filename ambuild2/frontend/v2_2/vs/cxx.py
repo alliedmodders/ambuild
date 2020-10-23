@@ -20,7 +20,6 @@ from ambuild2.frontend import paths
 from ambuild2.frontend.system import System
 from ambuild2.frontend.v2_2.cpp import compiler
 from ambuild2.frontend.v2_2.cpp.builders import CppNodes
-from ambuild2.frontend.v2_2.cpp.builders import Dep
 from ambuild2.frontend.v2_2.cpp.msvc import MSVC
 from ambuild2.frontend.v2_2.vs import export_vcxproj
 from ambuild2.frontend.v2_2.vs import nodes
@@ -147,9 +146,6 @@ class BinaryBuilder(object):
         self.include_hotlist = []
         self.name_ = name
         self.tag_ = tag
-
-    def Dep(self, text, node = None):
-        return Dep(text, node)
 
     @property
     def localFolder(self):
