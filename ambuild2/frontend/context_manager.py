@@ -31,7 +31,7 @@ class ContextManager(object):
         self.contextStack_ = []
         self.generator = None
         self.db = None
-        self.refactoring = False
+        self.refactoring = getattr(options, 'refactor', False)
 
     # Nonce.
     ALWAYS_DIRTY = object()

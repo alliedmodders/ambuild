@@ -64,6 +64,11 @@ class Preparer(object):
                                   action = 'store_true',
                                   dest = "vs_split",
                                   default = False)
+        self.options.add_argument('--refactor',
+                                  dest = "refactor",
+                                  action = "store_true",
+                                  default = False,
+                                  help = "Abort the build if the dependency graph would change.")
 
     @staticmethod
     def default_build_folder(prep):
