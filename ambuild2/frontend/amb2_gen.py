@@ -362,11 +362,13 @@ class Generator(BaseGenerator):
         self.db.change_to_output(entry, kind)
         return entry
 
-    def parseInput(self, context, source):
+    def parseInput(self, context, source, only_if_exists = False):
         if util.IsString(source):
             if not os.path.isabs(source):
                 source = os.path.join(context.currentSourcePath, source)
             source = os.path.normpath(source)
+            if only_if_exists and not os.path.exists(source):
+                return
 
             entry = self.db.query_path(source)
             if not entry:
@@ -562,11 +564,17 @@ class Generator(BaseGenerator):
 
     def parseCxxDeps(self, context, binary, inputs, items):
         for val in items:
-            if util.IsString(val):
-                continue
-
             if type(val) is nodetypes.Entry:
                 item = val
+            elif util.IsString(val):
+                if val.startswith('-'):
+                    continue
+                # Needed to parse linker files as deps. We should probably do
+                # something better, but it's not clear what (is there something
+                # like include path printing but for the linker?)
+                item = self.parseInput(context, val, only_if_exists = True)
+                if item is None:
+                    continue
             elif util.IsLambda(val.node):
                 item = val.node(context, binary)
             elif val.node is None:

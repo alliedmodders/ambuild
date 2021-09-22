@@ -49,6 +49,10 @@ class Compiler(Cloneable):
         # An array of nodes which should be weak dependencies on each linker
         # command.
         'weaklinkdeps',
+
+        # An array of nodes which should be strong dependencies on each linker
+        # command.
+        'linkdeps',
     ]
 
     def __init__(self, vendor, target, options = None):
