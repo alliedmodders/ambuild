@@ -633,7 +633,7 @@ class BinaryBuilder(BinaryBuilderBase):
             if not isinstance(self, StaticLibrary) and '/INCREMENTAL:NO' not in self.argv:
                 shared_outputs += [self.name_ + '.ilk']
 
-        outputs = context.AddCommand(inputs = inputs,
+        outputs = context.AddCommand(inputs = inputs + self.compiler.linkdeps,
                                      argv = self.argv,
                                      outputs = self.linker_outputs,
                                      folder = folder,
