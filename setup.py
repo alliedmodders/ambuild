@@ -63,7 +63,7 @@ if __name__ == '__main__':
           author_email = 'dvander@alliedmods.net',
           url = 'http://www.alliedmods.net/ambuild',
           packages = find_packages(),
-          python_requires = '>=2.6',
+          python_requires = '>=3.3',
           entry_points = {'console_scripts': ['ambuild = ambuild2.run:cli_run']},
           scripts = amb_scripts,
           zip_safe = False)

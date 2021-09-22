@@ -1,6 +1,6 @@
 AMBuild is a lightweight build system designed for performance and accuracy. It is geared toward C/C++ projects which require programmatic flexibility in their builds and precise control over C/C++ compiler flags.
 
-AMBuild requires either Python 3 or Python 2.7.
+AMBuild requires Python 3.3 or higher.
 
 For more information, see: https://wiki.alliedmods.net/AMBuild
 
@@ -32,7 +32,7 @@ AMBuild 1 is installed alongside AMBuild 2 for backward compatibility, however i
 
 # Contributing
 
-AMBuild is written in Python. All changes must be Python 2.7 compatible, since it is used on some very old machines.
+AMBuild is written in Python.
 
 Code is formatted using YAPF. If GitHub tells you there are style issues, you can use "yapf -r -i ." to fix them. You can get YAPF with pip ("pip install yapf").
 
