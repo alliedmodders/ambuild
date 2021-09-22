@@ -119,6 +119,15 @@ class ContextManager(context_manager.ContextManager):
         scriptGlobals = self.execContext(cx)
         return scriptGlobals.get('rvalue', None)
 
+    def callBuilder(self, parent, fun):
+        cx = BuildContext(cm = self,
+                          parent = parent,
+                          vars = copy.copy(parent.vars_),
+                          script = parent.script_,
+                          sourceFolder = parent.sourceFolder,
+                          buildFolder = parent.buildFolder)
+        return fun(cx)
+
     def execContext(self, context):
         code = self.compileScript(context.script_)
 

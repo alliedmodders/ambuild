@@ -153,6 +153,9 @@ class BuildContext(BaseContext):
         if self.buildFolder:
             self.buildFolder = os.path.normpath(self.buildFolder)
 
+    def CallBuilder(self, fun):
+        return self.cm.callBuilder(self, fun)
+
     def Build(self, path, vars = None):
         return self.cm.runBuildScript(self, path, vars or {})
 
