@@ -120,6 +120,9 @@ class ContextManager(context_manager.ContextManager):
         return scriptGlobals.get('rvalue', None)
 
     def callBuilder(self, parent, fun):
+        if parent is not self.contextStack_[-1]:
+            raise Exception('Can only create child build contexts of the currently active context')
+
         cx = BuildContext(cm = self,
                           parent = parent,
                           vars = copy.copy(parent.vars_),
@@ -129,7 +132,7 @@ class ContextManager(context_manager.ContextManager):
 
         self.pushContext(cx)
         try:
-            rvalue = fun(cx)
+            rvalue = fun(cx.proxy_)
         finally:
             self.popContext()
         return rvalue
