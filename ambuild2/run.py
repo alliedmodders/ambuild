@@ -20,8 +20,8 @@ from optparse import OptionParser
 from ambuild2 import util
 from ambuild2.context import Context
 
-DEFAULT_API = '2.2.1'
-CURRENT_API = '2.2.1'
+DEFAULT_API = '2.2.2'
+CURRENT_API = '2.2.2'
 
 SampleScript = """# vim: set sts=4 ts=8 sw=4 tw=99 et ft=python:
 builder.cxx = builder.DetectCxx()

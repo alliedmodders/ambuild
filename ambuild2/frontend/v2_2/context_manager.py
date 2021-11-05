@@ -126,7 +126,13 @@ class ContextManager(context_manager.ContextManager):
                           script = parent.script_,
                           sourceFolder = parent.sourceFolder,
                           buildFolder = parent.buildFolder)
-        return fun(cx)
+
+        self.pushContext(cx)
+        try:
+            rvalue = fun(cx)
+        finally:
+            self.popContext()
+        return rvalue
 
     def execContext(self, context):
         code = self.compileScript(context.script_)
