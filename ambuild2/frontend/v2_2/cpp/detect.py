@@ -212,12 +212,15 @@ class CompilerLocator(object):
 
         for candidate in candidates:
             argv = [candidate, '--version']
-            p = util.CreateProcess(argv, no_raise = False)
-            if util.WaitForProcess(p) == 0:
-                return [candidate]
-            util.con_err(util.ConsoleRed,
-                         '{} failed with return code {}'.format(tool_name,
-                                                                p.returncode), util.ConsoleNormal)
+            try:
+                p = util.CreateProcess(argv, no_raise = False)
+                if util.WaitForProcess(p) == 0:
+                    return [candidate]
+                rc = p.returncode
+            except:
+                rc = -1
+            util.con_err(util.ConsoleRed, '{} failed with return code {}'.format(tool_name, rc),
+                         util.ConsoleNormal)
         raise CompilerNotFoundException(
             'Unable to find a suitable candidate for {}'.format(tool_name))
 

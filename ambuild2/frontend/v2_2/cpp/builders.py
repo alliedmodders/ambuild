@@ -600,20 +600,20 @@ class BinaryBuilder(BinaryBuilderBase):
         shared_outputs = []
         if self.linker_.behavior == 'msvc':
             if link_type != 'static' and '/INCREMENTAL:NO' not in step.argv:
-                shared_outputs += [step.name + '.ilk']
+                shared_outputs += [step.base_name + '.ilk']
 
         if self.linker_.behavior == 'msvc':
             if self.type == 'library' and self.has_code_:
                 # In theory, .dlls should have exports, so MSVC will generate these
                 # files. If this turns out not to be true, we may have to get fancier.
-                step.outputs += [step.name + '.lib']
-                step.outputs += [step.name + '.exp']
+                step.outputs += [step.base_name + '.lib']
+                step.outputs += [step.base_name + '.exp']
 
         if self.linker_.like('emscripten'):
             if isinstance(self, Program):
                 # This might not be correct if the user is actually still using asm.js,
                 # we would need to look for `-s WASM=0` in the linker args to check.
-                step.outputs += [step.name + '.wasm']
+                step.outputs += [step.base_name + '.wasm']
 
         if self.compiler.symbol_files == 'separate' and link_type != 'static':
             self.performSymbolSteps(cx, step)
