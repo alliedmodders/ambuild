@@ -180,7 +180,10 @@ class CompilerLocator(object):
             if 'tools' in kv:
                 tools = {'{}.exe'.format(k): v for k, v in kv['tools']}
         if tools is None:
-            tools = FindToolsInEnv(os.environ, ['lib.exe', 'link.exe'])
+            tools, ok = FindToolsInEnv(os.environ, ['lib.exe', 'link.exe'])
+            if not ok:
+                tools = {}
+
         if 'lib.exe' not in tools:
             raise CompilerNotFoundException('Unable to find LIB.EXE')
         if 'link.exe' not in tools:
