@@ -16,11 +16,12 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 
 class CppNodes(object):
-    def __init__(self, output, debug_outputs, type, target):
+    def __init__(self, output, debug_outputs, type, target, static_binary = None):
         self.binary = output
         self.debug = debug_outputs
         self.type = type
         self.target = target
+        self.static_binary = static_binary
 
 class PchNodes(object):
     def __init__(self, folder, header_file, pch_file, object_file, source_type):

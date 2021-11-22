@@ -26,7 +26,7 @@ from ambuild2.frontend.cpp.verify import Verifier
 from ambuild2.frontend.system import System
 from ambuild2.frontend.v2_2.cpp import vendor, compiler
 from ambuild2.frontend.v2_2.cpp.gcc import GCC, Clang, Emscripten, GccLinker, GccArchiver
-from ambuild2.frontend.v2_2.cpp.msvc import MSVC
+from ambuild2.frontend.v2_2.cpp.msvc import MSVC, MsvcLinker, MsvcArchiver
 
 class CommandAndVendor(object):
     def __init__(self, argv, vendor, arch):
@@ -174,16 +174,19 @@ class CompilerLocator(object):
         cli.linker = MsvcLinker()
         cli.archiver = MsvcArchiver()
 
-        if cli.env_data and 'tools' in cli.env_data:
-            tools = {'{}.exe'.format(k): v for k, v in cli.env_data['tools']}
-        else:
+        tools = None
+        if cli.env_data:
+            kv = {k: v for k, v in cli.env_data}
+            if 'tools' in kv:
+                tools = {'{}.exe'.format(k): v for k, v in kv['tools']}
+        if tools is None:
             tools = FindToolsInEnv(os.environ, ['lib.exe', 'link.exe'])
         if 'lib.exe' not in tools:
             raise CompilerNotFoundException('Unable to find LIB.EXE')
         if 'link.exe' not in tools:
             raise CompilerNotFoundException('Unable to find LINK.EXE')
-        cli.linker_argv = tools['link.exe']
-        cli.archiver_argv = tools['lib.exe']
+        cli.linker_argv = [tools['link.exe']]
+        cli.archiver_argv = [tools['lib.exe']]
 
     def detect_gcc_tools(self, cli):
         cli.linker = GccLinker()
