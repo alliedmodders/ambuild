@@ -190,11 +190,17 @@ class CompilerLocator(object):
 
     def detect_gcc_tools(self, cli):
         cli.linker = GccLinker()
-        cli.linker_argv = self.detect_gcc_tool('ld', 'LD', ['ld', 'gold', 'lld'])
-        cli.archiver = GccArchiver()
-        cli.archiver_argv = self.detect_gcc_tool('ar', 'AR', ['ar'])
+        cli.linker_argv = self.detect_gcc_tool('ld', 'LD', ['ld', 'gold', 'lld'], ['-v'])
 
-    def detect_gcc_tool(self, tool_name, env_name, commands = []):
+        if util.Platform() == 'linux':
+            ar_argv = ['V']
+        else:
+            ar_argv = ['-V']
+
+        cli.archiver = GccArchiver()
+        cli.archiver_argv = self.detect_gcc_tool('ar', 'AR', ['ar'], ar_argv)
+
+    def detect_gcc_tool(self, tool_name, env_name, commands, check_argv):
         candidates = []
         if env_name in os.environ:
             candidates += [os.environ[env_name]]
@@ -211,10 +217,14 @@ class CompilerLocator(object):
             candidates += commands
 
         for candidate in candidates:
-            argv = [candidate, '--version']
+            argv = [candidate] + check_argv
             try:
                 p = util.CreateProcess(argv, no_raise = False)
                 if util.WaitForProcess(p) == 0:
+                    return [candidate]
+                if tool_name == 'ar' and util.Platform() == 'mac':
+                    # A failure (versus a FileNotFoundException) is the best we
+                    # can do for now, there's no --version.
                     return [candidate]
                 rc = p.returncode
             except:
