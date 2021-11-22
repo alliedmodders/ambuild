@@ -18,7 +18,7 @@ import os
 import re
 from ambuild2 import util
 from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
-from ambuild2.frontend.v2_2.cpp.vendor import Vendor
+from ambuild2.frontend.v2_2.cpp.vendor import Archiver, Linker, Vendor
 
 # Microsoft Visual C++
 class MSVC(Vendor):
@@ -62,9 +62,6 @@ class MSVC(Vendor):
 
     def objectArgs(self, sourceFile, objFile):
         return ['/showIncludes', '/nologo', '/c', sourceFile, '/Fo' + objFile]
-
-    def staticLinkArgv(self, files, outputFile):
-        return ['lib', '/OUT:' + outputFile] + files
 
     def programLinkArgv(self, cmd_argv, files, linkFlags, symbolFile, outputFile):
         argv = cmd_argv + files
@@ -176,3 +173,20 @@ class MSVC(Vendor):
     @property
     def emits_dependency_file(self):
         return False
+
+class MsvcLinker(Linker):
+    def __init__(self):
+        super(MsvcLinker, self).__init__()
+
+    def like(self, name):
+        return name == 'msvc'
+
+class MsvcArchiver(Archiver):
+    def __init__(self):
+        super(MsvcArchiver, self).__init__()
+
+    def like(self, name):
+        return name == 'msvc'
+
+    def makeArgv(self, base_argv, files, outputFile):
+        return base_argv + ['/OUT:' + outputFile] + files

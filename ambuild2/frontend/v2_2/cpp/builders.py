@@ -41,7 +41,7 @@ class BuilderProxy(object):
 
     @property
     def outputFile(self):
-        return self.constructor_.buildName(self.compiler, self.name_)
+        return self.constructor_.outputFile
 
     @property
     def type(self):
@@ -393,6 +393,15 @@ class BinaryBuilderBase(object):
         buildPath = os.path.normpath(os.path.join(buildPath, subfolder))
         return localFolder, buildPath
 
+class LinkerStep(object):
+    def __init__(self, base_name, type):
+        self.base_name = base_name
+        self.type = type
+        self.argv = []
+        self.outputs = []
+        self.debug_entry = None
+        self.shared_outputs = []
+
 class BinaryBuilder(BinaryBuilderBase):
     def __init__(self, compiler, name):
         super(BinaryBuilder, self).__init__(compiler, name)
@@ -407,7 +416,7 @@ class BinaryBuilder(BinaryBuilderBase):
 
     @property
     def outputFile(self):
-        return self.buildName(self.compiler, self.name_)
+        return self.computeLinkerOutputFile(self.name_, self.type)
 
     def generate(self, generator, cx):
         # Find dependencies
@@ -427,14 +436,7 @@ class BinaryBuilder(BinaryBuilderBase):
             elif obj.type == 'resource':
                 inputs.append(generator.addCxxRcTask(cx, obj))
 
-        return self.generate_linker_output(generator, cx, inputs)
-
-    def generate_linker_output(self, generator, cx, inputs):
-        # Add the link step.
-        folder_node = generator.generateFolder(cx.localFolder, self.localFolder)
-        output_file, debug_file = self.link(context = cx, folder = folder_node, inputs = inputs)
-
-        return CppNodes(output_file, debug_file, self.type, self.compiler.target)
+        return self.link(generator, cx, inputs)
 
     # Create a sub-component of the binary.
     def Module(self, context, name):
@@ -577,34 +579,51 @@ class BinaryBuilder(BinaryBuilderBase):
             for entry in pch_objects:
                 files.append(os.path.relpath(entry.path, localBuildFolder))
 
-        self.compute_link_step(cx, files)
+        # Build static libraries for shared libraries.
+        self.static_link_step = None
+        if self.type == 'library':
+            static_name = self.name_
+            if self.type == 'library' and self.linker_.behavior == 'msvc':
+                # Need to decorate the name since MSVC generates a .lib for dlls.
+                output_file = self.name_ + '_static'
+            self.static_link_step = self.computeLinkStep(cx, files, static_name, 'static')
 
-    def compute_link_step(self, cx, files):
-        self.argv = self.compute_link_argv(cx, files)
+        self.link_step = self.computeLinkStep(cx, files, self.name_, self.type)
 
-        self.linker_outputs = [self.outputFile]
-        self.debug_entry = None
+    def computeLinkStep(self, cx, files, name, link_type):
+        step = LinkerStep(name, link_type)
+        step.argv = self.computeLinkerArgv(cx, files, name, link_type)
+        step.outputs = [self.computeLinkerOutputFile(name, link_type)]
+
+        # The existence of .ilk files on Windows does not seem reliable, so we
+        # treat it as "shared" which does not participate in the DAG (yet).
+        shared_outputs = []
+        if self.linker_.behavior == 'msvc':
+            if link_type != 'static' and '/INCREMENTAL:NO' not in step.argv:
+                shared_outputs += [step.base_name + '.ilk']
 
         if self.linker_.behavior == 'msvc':
-            if isinstance(self, Library) and self.has_code_:
+            if self.type == 'library' and self.has_code_:
                 # In theory, .dlls should have exports, so MSVC will generate these
                 # files. If this turns out not to be true, we may have to get fancier.
-                self.linker_outputs += [self.name_ + '.lib']
-                self.linker_outputs += [self.name_ + '.exp']
+                step.outputs += [step.base_name + '.lib']
+                step.outputs += [step.base_name + '.exp']
 
         if self.linker_.like('emscripten'):
             if isinstance(self, Program):
                 # This might not be correct if the user is actually still using asm.js,
                 # we would need to look for `-s WASM=0` in the linker args to check.
-                self.linker_outputs += [self.name_ + '.wasm']
+                step.outputs += [step.base_name + '.wasm']
 
-        if self.compiler.symbol_files == 'separate':
-            self.perform_symbol_steps(cx)
+        if self.compiler.symbol_files == 'separate' and link_type != 'static':
+            self.performSymbolSteps(cx, step)
 
-    def perform_symbol_steps(self, cx):
+        return step
+
+    def performSymbolSteps(self, cx, step):
         if self.linker_.family == 'msvc':
             # Note, pdb is last since we read the pdb as outputs[-1].
-            self.linker_outputs += [self.name_ + '.pdb']
+            step.outputs += [self.name_ + '.pdb']
         elif self.compiler.target.platform == 'mac':
             bundle_folder = os.path.join(self.localFolder, self.outputFile + '.dSYM')
             bundle_entry = cx.AddFolder(bundle_folder)
@@ -615,32 +634,65 @@ class BinaryBuilder(BinaryBuilderBase):
             ]
             for folder in bundle_layout:
                 cx.AddFolder(os.path.join(bundle_folder, folder))
-            self.linker_outputs += [
+            step.outputs += [
                 self.outputFile + '.dSYM/Contents/Info.plist',
                 self.outputFile + '.dSYM/Contents/Resources/DWARF/' + self.outputFile
             ]
-            self.debug_entry = bundle_entry
-            self.argv = ['ambuild_dsymutil_wrapper.sh', self.outputFile] + self.argv
+            step.debug_entry = bundle_entry
+            step.argv = ['ambuild_dsymutil_wrapper.sh', self.outputFile] + step.argv
         elif self.compiler.target.platform == 'linux':
-            self.linker_outputs += [self.outputFile + '.dbg']
-            self.argv = ['ambuild_objcopy_wrapper.sh', self.outputFile] + self.argv
+            step.outputs += [self.outputFile + '.dbg']
+            step.argv = ['ambuild_objcopy_wrapper.sh', self.outputFile] + self.argv
 
-    def link(self, context, folder, inputs):
-        # The existence of .ilk files on Windows does not seem reliable, so we
-        # treat it as "shared" which does not participate in the DAG (yet).
-        shared_outputs = []
-        if self.linker_.behavior == 'msvc':
-            if not isinstance(self, StaticLibrary) and '/INCREMENTAL:NO' not in self.argv:
-                shared_outputs += [self.name_ + '.ilk']
+    def computeLinkerOutputFile(self, name, link_type):
+        if link_type == 'program':
+            return self.compiler.vendor.nameForExecutable(name)
+        elif link_type == 'library':
+            return self.compiler.vendor.nameForSharedLibrary(name)
+        elif link_type == 'static':
+            return self.compiler.vendor.nameForStaticLibrary(name)
+        raise Exception('Unknown link type: {}'.format(link_type))
 
+    def computeLinkerArgv(self, cx, files, name, link_type):
+        output_file = self.computeLinkerOutputFile(name, link_type)
+        if link_type == 'program':
+            return self.compiler.vendor.programLinkArgv(
+                cmd_argv = self.linker_argv_,
+                files = files,
+                linkFlags = self.linkFlags(cx),
+                symbolFile = name if self.compiler.symbol_files else None,
+                outputFile = output_file)
+        elif link_type == 'library':
+            return self.compiler.vendor.libLinkArgv(
+                cmd_argv = self.linker_argv_,
+                files = files,
+                linkFlags = self.linkFlags(cx),
+                symbolFile = name if self.compiler.symbol_files else None,
+                outputFile = output_file)
+        elif link_type == 'static':
+            return self.compiler.archiver.makeArgv(self.compiler.archiver_argv, files, output_file)
+
+    def link(self, generator, cx, inputs):
+        folder_node = generator.generateFolder(cx.localFolder, self.localFolder)
+
+        static_output_file = None
+        if self.static_link_step is not None:
+            static_output_file = self.addLinkStep(cx, folder_node, inputs, self.static_link_step)
+
+        output_file, debug_file = self.addLinkStep(cx, folder_node, inputs, self.link_step)
+
+        return CppNodes(output_file, debug_file, self.type, self.compiler.target,
+                        static_output_file)
+
+    def addLinkStep(self, context, folder, inputs, step):
         outputs = context.AddCommand(inputs = inputs + self.compiler.linkdeps,
-                                     argv = self.argv,
-                                     outputs = self.linker_outputs,
+                                     argv = step.argv,
+                                     outputs = step.outputs,
                                      folder = folder,
                                      weak_inputs = self.compiler.weaklinkdeps,
-                                     shared_outputs = shared_outputs,
+                                     shared_outputs = step.shared_outputs,
                                      env_data = self.compiler.env_data)
-        if not self.debug_entry and self.compiler.symbol_files:
+        if not step.debug_entry and self.compiler.symbol_files:
             if self.linker_.behavior != 'msvc' and self.compiler.symbol_files == 'bundled':
                 self.debug_entry = outputs[0]
             else:
@@ -651,59 +703,25 @@ class Program(BinaryBuilder):
     def __init__(self, compiler, name):
         super(Program, self).__init__(compiler, name)
 
-    @staticmethod
-    def buildName(compiler, name):
-        return compiler.vendor.nameForExecutable(name)
-
     @property
     def type(self):
         return 'program'
-
-    def compute_link_argv(self, cx, files):
-        return self.compiler.vendor.programLinkArgv(
-            cmd_argv = self.linker_argv_,
-            files = files,
-            linkFlags = self.linkFlags(cx),
-            symbolFile = self.name_ if self.compiler.symbol_files else None,
-            outputFile = self.outputFile)
 
 class Library(BinaryBuilder):
     def __init__(self, compiler, name):
         super(Library, self).__init__(compiler, name)
 
-    @staticmethod
-    def buildName(compiler, name):
-        return compiler.vendor.nameForSharedLibrary(name)
-
     @property
     def type(self):
         return 'library'
-
-    def compute_link_argv(self, cx, files):
-        return self.compiler.vendor.libLinkArgv(
-            cmd_argv = self.linker_argv_,
-            files = files,
-            linkFlags = self.linkFlags(cx),
-            symbolFile = self.name_ if self.compiler.symbol_files else None,
-            outputFile = self.outputFile)
 
 class StaticLibrary(BinaryBuilder):
     def __init__(self, compiler, name):
         super(StaticLibrary, self).__init__(compiler, name)
 
-    @staticmethod
-    def buildName(compiler, name):
-        return compiler.vendor.nameForStaticLibrary(name)
-
     @property
     def type(self):
         return 'static'
-
-    def compute_link_argv(self, cx, files):
-        return self.linker_.staticLinkArgv(files, self.outputFile)
-
-    def perform_symbol_steps(self, cx):
-        pass
 
 class PrecompiledHeaders(BinaryBuilderBase):
     def __init__(self, compiler, name, source_type):

@@ -82,11 +82,6 @@ class Vendor(object):
     def objectArgs(self, sourceFile, objFile):
         raise Exception("Must be implemented")
 
-    # Note: this should return a complete initial argv, not partial.
-    # AMBuild does not detect AR/LIB separately yet.
-    def staticLinkArgv(self, files, outputFile):
-        raise Exception("Must be implemented")
-
     # For this and libLinkArgv(), the symbolFile should not have an extension.
     # The vendor chooses the extension if it supports symbol files at all.
     def programLinkArgv(self, cmd_argv, files, linkFlags, symbolFile, outputFile):
@@ -115,4 +110,18 @@ class Vendor(object):
 
     # If emits_dependency_file is True, this must be implemented.
     def dependencyArgv(self, out_file):
+        raise Exception("Must be implemented")
+
+class Linker(object):
+    def __init__(self):
+        super(Linker, self).__init__()
+
+    def like(self, name):
+        raise Exception("Must be implemented")
+
+class Archiver(object):
+    def __init__(self):
+        super(Archiver, self).__init__()
+
+    def like(self, name):
         raise Exception("Must be implemented")
