@@ -18,7 +18,6 @@ from __future__ import print_function
 import os
 import re
 import shlex
-import subprocess
 import tempfile
 from ambuild2 import util
 from ambuild2.frontend.cpp import cpp_rules
@@ -26,7 +25,7 @@ from ambuild2.frontend.cpp import msvc_utils
 from ambuild2.frontend.cpp.verify import Verifier
 from ambuild2.frontend.system import System
 from ambuild2.frontend.v2_2.cpp import vendor, compiler
-from ambuild2.frontend.v2_2.cpp.gcc import GCC, Clang, Emscripten
+from ambuild2.frontend.v2_2.cpp.gcc import GCC, Clang, Emscripten, GccLinker, GccArchiver
 from ambuild2.frontend.v2_2.cpp.msvc import MSVC
 
 class CommandAndVendor(object):
@@ -136,6 +135,15 @@ class CompilerLocator(object):
             self.vcvars_override_[arch] = os.environ[key]
 
     def detect(self):
+        cli = self.detect_cxx()
+
+        if cli.vendor.like('msvc'):
+            self.detect_msvc_tools(cli)
+        else:
+            self.detect_gcc_tools(cli)
+        return cli
+
+    def detect_cxx(self):
         if 'CC' in os.environ or 'CXX' in os.environ:
             return self.detect_from_env()
 
@@ -161,6 +169,54 @@ class CompilerLocator(object):
             raise CompilerNotFoundException('Unable to find a suitable C++ compiler')
 
         return self.create_cli(cc, cxx)
+
+    def detect_msvc_tools(self, cli):
+        cli.linker = MsvcLinker()
+        cli.archiver = MsvcArchiver()
+
+        if cli.env_data and 'tools' in cli.env_data:
+            tools = {'{}.exe'.format(k): v for k, v in cli.env_data['tools']}
+        else:
+            tools = FindToolsInEnv(os.environ, ['lib.exe', 'link.exe'])
+        if 'lib.exe' not in tools:
+            raise CompilerNotFoundException('Unable to find LIB.EXE')
+        if 'link.exe' not in tools:
+            raise CompilerNotFoundException('Unable to find LINK.EXE')
+        cli.linker_argv = tools['link.exe']
+        cli.archiver_argv = tools['lib.exe']
+
+    def detect_gcc_tools(self, cli):
+        cli.linker = GccLinker()
+        cli.linker_argv = self.detect_gcc_tool('ld', 'LD', ['ld', 'gold', 'lld'])
+        cli.archiver = GccArchiver()
+        cli.archiver_argv = self.detect_gcc_tool('ar', 'AR', ['ar'])
+
+    def detect_gcc_tool(self, tool_name, env_name, commands = []):
+        candidates = []
+        if env_name in os.environ:
+            candidates += [os.environ[env_name]]
+        elif self.cross_compile_ and self.host_.platform == 'linux':
+            if self.target_.abi:
+                abi = self.target_.abi
+            else:
+                abi = 'gnu'
+            arch = kGnuArchMap.get(self.target_.arch, self.target_.arch)
+            for command in commands:
+                candidates += ['{}-linux-{}-{}'.format(arch, abi, tool_name)]
+            candidates += commands
+        else:
+            candidates += commands
+
+        for candidate in candidates:
+            argv = [candidate, '--version']
+            p = util.CreateProcess(argv, no_raise = False)
+            if util.WaitForProcess(p) == 0:
+                return argv
+            util.con_err(util.ConsoleRed,
+                         '{} failed with return code {}'.format(tool_name, p.returncode),
+                         util.ConsoleNormal)
+        raise CompilerNotFoundException(
+                'Unable to find a suitable candidate for {}'.format(tool_name))
 
     def create_cli(self, cc, cxx, env_data = None):
         # Ensure that the two compilers have the same vendor.
@@ -243,7 +299,7 @@ class CompilerLocator(object):
                          util.ConsoleNormal)
             return None
 
-        necessary_tools = ['cl.exe', 'rc.exe', 'lib.exe']
+        necessary_tools = ['cl.exe', 'rc.exe', 'lib.exe', 'link.exe']
         tools, _ = FindToolsInEnv(env, necessary_tools)
         for tool in necessary_tools:
             if tool not in tools:
@@ -262,6 +318,7 @@ class CompilerLocator(object):
             ('cl', tools['cl.exe']),
             ('rc', tools['rc.exe']),
             ('lib', tools['lib.exe']),
+            ('link', tools['link.exe']),
         )
         env_data = {
             'env_cmds': env_cmds,

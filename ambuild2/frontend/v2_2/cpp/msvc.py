@@ -18,7 +18,7 @@ import os
 import re
 from ambuild2 import util
 from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
-from ambuild2.frontend.v2_2.cpp.vendor import Vendor
+from ambuild2.frontend.v2_2.cpp.vendor import Archiver, Linker, Vendor
 
 # Microsoft Visual C++
 class MSVC(Vendor):
@@ -176,3 +176,17 @@ class MSVC(Vendor):
     @property
     def emits_dependency_file(self):
         return False
+
+class MsvcLinker(Linker):
+    def __init__(self):
+        super(MsvcLinker, self).__init__()
+
+    def like(self, name):
+        return name == 'msvc'
+
+class MsvcArchiver(Archiver):
+    def __init__(self):
+        super(MsvcArchiver, self).__init__()
+
+    def like(self, name):
+        return name == 'msvc'

@@ -116,3 +116,17 @@ class Vendor(object):
     # If emits_dependency_file is True, this must be implemented.
     def dependencyArgv(self, out_file):
         raise Exception("Must be implemented")
+
+class Linker(object):
+    def __init__(self):
+        super(Linker, self).__init__()
+
+    def like(self, name):
+        raise Exception("Must be implemented")
+
+class Archiver(object):
+    def __init__(self):
+        super(Archiver, self).__init__()
+
+    def like(self, name):
+        raise Exception("Must be implemented")

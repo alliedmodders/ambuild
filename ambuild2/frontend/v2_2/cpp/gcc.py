@@ -17,7 +17,7 @@
 import os
 from ambuild2 import util
 from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
-from ambuild2.frontend.v2_2.cpp.vendor import Vendor
+from ambuild2.frontend.v2_2.cpp.vendor import Archiver, Linker, Vendor
 
 class GCCLookalike(Vendor):
     def __init__(self, version):
@@ -176,3 +176,17 @@ class Emscripten(Clang):
 
     def staticLinkArgv(self, files, outputFile):
         return ['emar', 'rcs', outputFile] + files
+
+class GccLinker(Linker):
+    def __init__(self):
+        super(GccLinker, self).__init__()
+
+    def like(self, name):
+        return name == 'gcc'
+
+class GccArchiver(Archiver):
+    def __init__(self):
+        super(GccArchiver, self).__init__()
+
+    def like(self, name):
+        return name == 'gcc'

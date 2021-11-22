@@ -668,8 +668,9 @@ class Program(BinaryBuilder):
             outputFile = self.outputFile)
 
 class Library(BinaryBuilder):
-    def __init__(self, compiler, name):
+    def __init__(self, compiler, name, build_static = False):
         super(Library, self).__init__(compiler, name)
+        self.build_static = build_static
 
     @staticmethod
     def buildName(compiler, name):
