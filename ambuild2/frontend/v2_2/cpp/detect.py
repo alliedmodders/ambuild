@@ -216,10 +216,10 @@ class CompilerLocator(object):
             if util.WaitForProcess(p) == 0:
                 return [candidate]
             util.con_err(util.ConsoleRed,
-                         '{} failed with return code {}'.format(tool_name, p.returncode),
-                         util.ConsoleNormal)
+                         '{} failed with return code {}'.format(tool_name,
+                                                                p.returncode), util.ConsoleNormal)
         raise CompilerNotFoundException(
-                'Unable to find a suitable candidate for {}'.format(tool_name))
+            'Unable to find a suitable candidate for {}'.format(tool_name))
 
     def create_cli(self, cc, cxx, env_data = None):
         # Ensure that the two compilers have the same vendor.
