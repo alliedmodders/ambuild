@@ -211,7 +211,7 @@ class CompilerLocator(object):
             argv = [candidate, '--version']
             p = util.CreateProcess(argv, no_raise = False)
             if util.WaitForProcess(p) == 0:
-                return argv
+                return [candidate]
             util.con_err(util.ConsoleRed,
                          '{} failed with return code {}'.format(tool_name, p.returncode),
                          util.ConsoleNormal)

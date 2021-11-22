@@ -63,9 +63,6 @@ class MSVC(Vendor):
     def objectArgs(self, sourceFile, objFile):
         return ['/showIncludes', '/nologo', '/c', sourceFile, '/Fo' + objFile]
 
-    def staticLinkArgv(self, files, outputFile):
-        return ['lib', '/OUT:' + outputFile] + files
-
     def programLinkArgv(self, cmd_argv, files, linkFlags, symbolFile, outputFile):
         argv = cmd_argv + files
         argv += ['/link']
@@ -190,3 +187,6 @@ class MsvcArchiver(Archiver):
 
     def like(self, name):
         return name == 'msvc'
+
+    def makeArgv(self, base_argv, files, outputFile):
+        return base_argv + ['/OUT:' + outputFile] + files

@@ -701,7 +701,7 @@ class StaticLibrary(BinaryBuilder):
         return 'static'
 
     def compute_link_argv(self, cx, files):
-        return self.linker_.staticLinkArgv(files, self.outputFile)
+        return self.compiler.archiver.makeArgv(self.compiler.archiver_argv, files, self.outputFile)
 
     def perform_symbol_steps(self, cx):
         pass

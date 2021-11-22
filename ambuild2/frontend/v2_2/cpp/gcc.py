@@ -63,9 +63,6 @@ class GCCLookalike(Vendor):
     def makePchArgv(self, source_file, obj_file, source_type):
         return ['-c', '-x', source_type + '-header', source_file, '-o', obj_file]
 
-    def staticLinkArgv(self, files, outputFile):
-        return ['ar', 'rcs', outputFile] + files
-
     def programLinkArgv(self, cmd_argv, files, linkFlags, symbolFile, outputFile):
         return cmd_argv + files + linkFlags + ['-o', outputFile]
 
@@ -174,9 +171,6 @@ class Emscripten(Clang):
     def debugInfoArgv(self):
         return []
 
-    def staticLinkArgv(self, files, outputFile):
-        return ['emar', 'rcs', outputFile] + files
-
 class GccLinker(Linker):
     def __init__(self):
         super(GccLinker, self).__init__()
@@ -190,3 +184,6 @@ class GccArchiver(Archiver):
 
     def like(self, name):
         return name == 'gcc'
+
+    def makeArgv(self, base_argv, files, outputFile):
+        return base_argv + ['rcs', outputFile] + files
