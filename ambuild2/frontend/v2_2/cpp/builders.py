@@ -579,13 +579,13 @@ class BinaryBuilder(BinaryBuilderBase):
             for entry in pch_objects:
                 files.append(os.path.relpath(entry.path, localBuildFolder))
 
-        # Build static libraries for shared libraries.
+        # Build static libraries for shared libraries. This feature is currently disabled.
         self.static_link_step = None
-        if self.type == 'library':
+        if self.type == 'library' and False:
             static_name = self.name_
             if self.type == 'library' and self.linker_.behavior == 'msvc':
                 # Need to decorate the name since MSVC generates a .lib for dlls.
-                output_file = self.name_ + '_static'
+                static_name = self.name_ + '_static'
             self.static_link_step = self.computeLinkStep(cx, files, static_name, 'static')
 
         self.link_step = self.computeLinkStep(cx, files, self.name_, self.type)
@@ -597,10 +597,10 @@ class BinaryBuilder(BinaryBuilderBase):
 
         # The existence of .ilk files on Windows does not seem reliable, so we
         # treat it as "shared" which does not participate in the DAG (yet).
-        shared_outputs = []
+        step.shared_outputs = []
         if self.linker_.behavior == 'msvc':
             if link_type != 'static' and '/INCREMENTAL:NO' not in step.argv:
-                shared_outputs += [step.base_name + '.ilk']
+                step.shared_outputs += [step.base_name + '.ilk']
 
         if self.linker_.behavior == 'msvc':
             if self.type == 'library' and self.has_code_:
