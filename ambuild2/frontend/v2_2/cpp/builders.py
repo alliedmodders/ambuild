@@ -642,7 +642,7 @@ class BinaryBuilder(BinaryBuilderBase):
             step.argv = ['ambuild_dsymutil_wrapper.sh', self.outputFile] + step.argv
         elif self.compiler.target.platform == 'linux':
             step.outputs += [self.outputFile + '.dbg']
-            step.argv = ['ambuild_objcopy_wrapper.sh', self.outputFile] + self.argv
+            step.argv = ['ambuild_objcopy_wrapper.sh', self.outputFile] + step.argv
 
     def computeLinkerOutputFile(self, name, link_type):
         if link_type == 'program':
