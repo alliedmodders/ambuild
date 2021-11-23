@@ -694,10 +694,10 @@ class BinaryBuilder(BinaryBuilderBase):
                                      env_data = self.compiler.env_data)
         if not step.debug_entry and self.compiler.symbol_files:
             if self.linker_.behavior != 'msvc' and self.compiler.symbol_files == 'bundled':
-                self.debug_entry = outputs[0]
+                step.debug_entry = outputs[0]
             else:
-                self.debug_entry = outputs[-1]
-        return outputs[0], self.debug_entry
+                step.debug_entry = outputs[-1]
+        return outputs[0], step.debug_entry
 
 class Program(BinaryBuilder):
     def __init__(self, compiler, name):
