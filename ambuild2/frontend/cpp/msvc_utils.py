@@ -74,8 +74,12 @@ class MSVCFinder(object):
             'json',
             '-products',
             '*',
+            '-prerelease',
+            '-requiresAny',
             '-requires',
             'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+            'Microsoft.VisualStudio.Component.VC.Tools.ARM',
+            'Microsoft.VisualStudio.Component.VC.Tools.ARM64',
             '-utf8',
         ]
         try:
@@ -103,6 +107,11 @@ class MSVCFinder(object):
                 candidates.append(('x86_64', 'vcvars64.bat'))
                 candidates.append(('arm', 'vcvarsamd64_arm.bat'))
                 candidates.append(('arm64', 'vcvarsamd64_arm64.bat'))
+            elif cpu == 'arm64':
+                candidates.append(('x86', 'vcvarsarm64_x86.bat'))
+                candidates.append(('x86_64', 'vcvarsarm64_amd64.bat'))
+                candidates.append(('arm', 'vcvarsarm64_arm.bat'))
+                candidates.append(('arm64', 'vcvarsarm64.bat'))
 
             for target, bat_file in candidates:
                 path = os.path.join(build_path, bat_file)
