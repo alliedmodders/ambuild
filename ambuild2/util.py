@@ -21,11 +21,11 @@ INSTALLED_BY_PIP_OR_SETUPTOOLS = True
 
 def NormalizeArchString(arch):
     # We normalize platforms across different operating systems.
-    if arch in ['x86_64', 'AMD64', 'x64', 'amd64']:
+    if arch.lower() in ['x86_64', 'x64', 'amd64']:
         return 'x86_64'
-    if arch in ['x86', 'i386', 'i686', 'x32', 'ia32']:
+    if arch.lower() in ['x86', 'i386', 'i686', 'x32', 'ia32']:
         return 'x86'
-    if arch.startswith('arm64') or arch.startswith('armv8') or arch.startswith('aarch64'):
+    if arch.lower().startswith(('arm64', 'armv8', 'aarch64')):
         return 'arm64'
     if not arch:
         return 'unknown'
@@ -33,17 +33,10 @@ def NormalizeArchString(arch):
 
 # Advanced version - split into (arch, subarch).
 def DecodeArchString(arch):
-    if arch.lower() in ['x86_64', 'x64', 'amd64']:
-        return 'x86_64', ''
-    if arch.lower() in ['x86', 'i386', 'i686', 'x32', 'ia32']:
-        return 'x86', ''
-    if arch.startswith('arm64') or arch.startswith('armv8') or arch.startswith('aarch64'):
-        return 'arm64', ''
-    if arch.startswith('arm'):
-        return 'arm', arch[len('arm'):]
-    if not arch:
-        return 'unknown', ''
-    return arch, ''
+    normalized_arch = NormalizeArchString(arch)
+    if normalized_arch.startswith('arm') and normalized_arch != 'arm64':
+        return 'arm', arch.lower()[len('arm'):]
+    return normalized_arch, ''
 
 Architecture, SubArch = DecodeArchString(platform.machine())
 
