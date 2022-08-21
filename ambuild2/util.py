@@ -437,7 +437,7 @@ elif IsWindows():
         std = None
         if fp == sys.stdout:
             std = STD_OUTPUT_HANDLE
-        elif fp == sys.stdin:
+        elif fp == sys.stderr:
             std = STD_ERROR_HANDLE
         if std is None:
             return
