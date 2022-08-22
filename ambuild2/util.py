@@ -38,8 +38,6 @@ def DecodeArchString(arch):
         return 'arm', arch.lower()[len('arm'):]
     return normalized_arch, ''
 
-Architecture, SubArch = DecodeArchString(platform.machine())
-
 ALL_PLATFORMS = [
     'windows',
     'mac',
@@ -157,6 +155,142 @@ if IsWindows():
     StaticLibPrefix = ''
 else:
     StaticLibPrefix = 'lib'
+
+if IsWindows():
+    import ctypes
+    from ctypes import wintypes
+
+    class WinAPI():
+        # Constants for PE file machine types.
+        IMAGE_FILE_MACHINE_UNKNOWN = 0
+        IMAGE_FILE_MACHINE_I386 = 0x014C
+        IMAGE_FILE_MACHINE_ARMNT = 0x01C4
+        IMAGE_FILE_MACHINE_AMD64 = 0x8664
+        IMAGE_FILE_MACHINE_ARM64 = 0xAA64
+
+        # Create simplistic bidirectional dictionary from list of pairs.
+        def bidict(kv_pairs):
+            return dict([(entry[1], entry[0]) for entry in kv_pairs] + kv_pairs)
+
+        # Create dictionary bidirectionally mapping PE machine types to architecture strings.
+        kMachineTypes = bidict([
+            (IMAGE_FILE_MACHINE_UNKNOWN, 'unknown'),
+            (IMAGE_FILE_MACHINE_I386, 'x86'),
+            (IMAGE_FILE_MACHINE_AMD64, 'x86_64'),
+            (IMAGE_FILE_MACHINE_ARMNT, 'arm'),
+            (IMAGE_FILE_MACHINE_ARM64, 'arm64'),
+        ])
+
+        # Specifies the ways in which an architecture of code can run on a host operating system.
+        # Used by GetMachineTypeAttributes.
+        class MachineAttributes():
+            Unset = 0
+            UserEnabled = 0x1
+            KernelEnabled = 0x2
+            Wow64Container = 0x4
+
+        # Queries if the specified architecture is supported on the current system, either natively
+        # or by any form of compatibility or emulation layer.
+        @classmethod
+        def GetMachineTypeAttributes(cls, machine):
+            try:
+                func = ctypes.windll.kernel32.GetMachineTypeAttributes
+            except Exception as e:
+                raise RuntimeError('GetMachineTypeAttributes not supported') from e
+
+            func.argtypes = [wintypes.USHORT, ctypes.POINTER(ctypes.c_int)]
+            func.restype = ctypes.HRESULT
+
+            machine_attributes = ctypes.c_int(cls.MachineAttributes.Unset)
+            result = func(machine, ctypes.byref(machine_attributes))
+
+            return result, machine_attributes.value
+
+        # Determines which architectures are supported (under WOW64) on the given machine
+        # architecture.
+        @classmethod
+        def IsWow64GuestMachineSupported(cls, machine):
+            try:
+                func = ctypes.windll.kernel32.IsWow64GuestMachineSupported
+            except Exception as e:
+                raise RuntimeError('IsWow64GuestMachineSupported not supported') from e
+
+            func.argtypes = [wintypes.USHORT, ctypes.POINTER(wintypes.BOOL)]
+            func.restype = ctypes.HRESULT
+
+            machine_supported = wintypes.BOOL(0)
+            result = func(machine, ctypes.byref(machine_supported))
+
+            return result, machine_supported.value != 0
+
+        # Determines whether the specified process is running under WOW64; also returns additional
+        # machine process and architecture information.
+        @classmethod
+        def IsWow64Process2(cls, current_process):
+            try:
+                func = ctypes.windll.kernel32.IsWow64Process2
+            except Exception as e:
+                raise RuntimeError('IsWow64Process2 not supported') from e
+
+            func.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(wintypes.USHORT),
+                ctypes.POINTER(wintypes.USHORT)
+            ]
+            func.restype = wintypes.BOOL
+
+            process_machine = wintypes.USHORT(0)
+            native_machine = wintypes.USHORT(0)
+            result = func(current_process, ctypes.byref(process_machine),
+                          ctypes.byref(native_machine))
+
+            return result != 0, process_machine.value, native_machine.value
+
+    # Determines whether the given arch should be able to run on the host system.
+    def IsArchExecutable(arch):
+        # In the best case, this is the same as the current architecture.
+        if Architecture == arch:
+            return True
+
+        # Next try an API available on Windows 11 build 22000 and later.
+        try:
+            result, machine_attributes = WinAPI.GetMachineTypeAttributes(WinAPI.kMachineTypes[arch])
+            if result == 0:
+                return (
+                    machine_attributes &
+                    WinAPI.MachineAttributes.UserEnabled) == WinAPI.MachineAttributes.UserEnabled
+        except RuntimeError:
+            pass
+
+        # Then try an API supported on Windows 10 version 1709 and later.
+        try:
+            result, machine_supported = WinAPI.IsWow64GuestMachineSupported(
+                WinAPI.kMachineTypes[arch])
+            if result == 0:
+                return machine_supported
+        except RuntimeError:
+            pass
+
+        # Assume that at least x86 binaries can run in the absence of the above the APIs.
+        return arch == 'x86' and Architecture == 'x86_64' or Architecture.startswith('arm')
+
+    def GetNativeArch():
+        # First try an API available on Windows 10 version 1511 and later.
+        try:
+            result, process_machine, native_machine = WinAPI.IsWow64Process2(0)
+            if result and native_machine in WinAPI.kMachineTypes:
+                return WinAPI.kMachineTypes[native_machine]
+        except RuntimeError:
+            pass
+
+        # Fall back to whatever Python reports.
+        return platform.machine()
+else:
+
+    def GetNativeArch():
+        return platform.machine()
+
+Architecture, SubArch = DecodeArchString(GetNativeArch())
 
 def WaitForProcess(process):
     out, err = process.communicate()

@@ -96,26 +96,26 @@ class MSVCFinder(object):
 
             candidates = []
 
-            cpu = util.NormalizeArchString(platform.machine())
-            if cpu == 'x86':
-                candidates.append(('x86', 'vcvars32.bat'))
-                candidates.append(('x86_64', 'vcvarsx86_amd64.bat'))
-                candidates.append(('arm', 'vcvarsx86_arm.bat'))
-                candidates.append(('arm64', 'vcvarsx86_arm64.bat'))
-            elif cpu == 'x86_64':
-                candidates.append(('x86', 'vcvarsamd64_x86.bat'))
-                candidates.append(('x86_64', 'vcvars64.bat'))
-                candidates.append(('arm', 'vcvarsamd64_arm.bat'))
-                candidates.append(('arm64', 'vcvarsamd64_arm64.bat'))
-            elif cpu == 'arm64':
+            # Prefer native tools but fallback to other executable architectures if not available.
+            if util.IsArchExecutable('arm64'):
                 candidates.append(('x86', 'vcvarsarm64_x86.bat'))
                 candidates.append(('x86_64', 'vcvarsarm64_amd64.bat'))
                 candidates.append(('arm', 'vcvarsarm64_arm.bat'))
                 candidates.append(('arm64', 'vcvarsarm64.bat'))
+            if util.IsArchExecutable('x86_64'):
+                candidates.append(('x86', 'vcvarsamd64_x86.bat'))
+                candidates.append(('x86_64', 'vcvars64.bat'))
+                candidates.append(('arm', 'vcvarsamd64_arm.bat'))
+                candidates.append(('arm64', 'vcvarsamd64_arm64.bat'))
+            if util.IsArchExecutable('x86'):
+                candidates.append(('x86', 'vcvars32.bat'))
+                candidates.append(('x86_64', 'vcvarsx86_amd64.bat'))
+                candidates.append(('arm', 'vcvarsx86_arm.bat'))
+                candidates.append(('arm64', 'vcvarsx86_arm64.bat'))
 
             for target, bat_file in candidates:
                 path = os.path.join(build_path, bat_file)
-                if os.path.exists(path):
+                if target not in install.vcvars and os.path.exists(path):
                     install.vcvars[target] = path
 
             if len(install.vcvars):
@@ -135,19 +135,19 @@ class MSVCFinder(object):
 
         candidates = []
 
-        cpu = util.NormalizeArchString(platform.machine())
-        if cpu == 'x86':
-            candidates.append(('x86', 'vcvars32.bat'))
-            candidates.append(('x86_64', os.path.join('x86_amd64', 'vcvarsx86_amd64.bat')))
-            candidates.append(('arm', os.path.join('arm', 'vcvarsx86_arm.bat')))
-        elif cpu == 'x86_64':
+        # Prefer native tools but fallback to other executable architectures if not available.
+        if util.IsArchExecutable('x86_64'):
             candidates.append(('x86', os.path.join('amd64_x86', 'vcvarsamd64_x86.bat')))
             candidates.append(('x86_64', os.path.join('amd64', 'vcvars64.bat')))
             candidates.append(('arm', os.path.join('amd64_arm', 'vcvarsamd64_arm.bat')))
+        if util.IsArchExecutable('x86'):
+            candidates.append(('x86', 'vcvars32.bat'))
+            candidates.append(('x86_64', os.path.join('x86_amd64', 'vcvarsx86_amd64.bat')))
+            candidates.append(('arm', os.path.join('arm', 'vcvarsx86_arm.bat')))
 
         for target, bat_file in candidates:
             path = os.path.join(path_value, 'bin', bat_file)
-            if os.path.exists(path):
+            if target not in install.vcvars and os.path.exists(path):
                 install.vcvars[target] = path
 
         if len(install.vcvars):
