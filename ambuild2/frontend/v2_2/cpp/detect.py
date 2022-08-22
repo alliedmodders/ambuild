@@ -291,7 +291,10 @@ class CompilerLocator(object):
             return cxx
 
         installs = msvc_utils.MSVCFinder().find_all()
+        ignore_prerelease = not self.gen_options_.vs_prerelease
         for install in installs:
+            if install.prerelease and ignore_prerelease:
+                continue
             if self.force_msvc_version_ and install.version != self.force_msvc_version_:
                 continue
             if self.target_.arch in install.vcvars:

@@ -33,8 +33,9 @@ except:
         winreg = None
 
 class MSVCInstall(object):
-    def __init__(self, version, path):
+    def __init__(self, version, path, prerelease = False):
         self.version = Version(version)
+        self.prerelease = prerelease
         self.path = path
         self.vcvars = {}
 
@@ -90,8 +91,9 @@ class MSVCFinder(object):
         for obj in data:
             version_parts = obj['installationVersion'].split('.')
             version = version_parts[0] + '.0'
+            prerelease = obj['isPrerelease']
             install_path = obj['installationPath']
-            install = MSVCInstall(version, os.path.join(install_path, 'VC'))
+            install = MSVCInstall(version, os.path.join(install_path, 'VC'), prerelease)
             build_path = os.path.join(install.path, 'Auxiliary', 'Build')
 
             candidates = []
