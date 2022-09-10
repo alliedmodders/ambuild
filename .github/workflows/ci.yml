@@ -7,33 +7,37 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: [3.3, 3.8]
+        python-version: ['3.3', '3.8']
         os: [ubuntu-20.04, macos-latest, windows-2019]
         exclude:
          - os: macos-latest
-           python-version: 3.3
-         - os: windows-2019
-           python-version: 3.3
+           python-version: '3.3'
+         - os: ubuntu-20.04
+           python-version: '3.3'
 
     steps:
-    - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Install Pip
+      if: runner.os == 'Windows' && matrix.python-version == '3.3'
+      shell: cmd
+      run: curl https://bootstrap.pypa.io/pip/3.3/get-pip.py | python
     - name: Install Deps
       if: runner.os == 'Linux'
       run: |
         sudo dpkg --add-architecture i386
         sudo apt-get install lib32stdc++-7-dev lib32z1-dev libc6-dev-i386
         sudo apt-get install g++-multilib
+    - uses: actions/checkout@v3
     - name: Unit Tests
       run: |
         python -m unittest discover ambuild2 "*_test.py"
     - name: Smoke Tests 1
       if: runner.os != 'Windows' # no choco vcvars detection on older APIs
       run: |
-        pip install .
+        python -m pip install .
         mkdir objdir1
         cd objdir1
         python ../tests/staticlib/configure.py
@@ -44,7 +48,7 @@ jobs:
         ambuild
     - name: Smoke Tests 2
       run: |
-        pip install .
+        python -m pip install .
         mkdir objdir3
         cd objdir3
         python ../tests/multiarch/configure.py
