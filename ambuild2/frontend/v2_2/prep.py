@@ -64,6 +64,12 @@ class Preparer(object):
                                   action = 'store_true',
                                   dest = "vs_split",
                                   default = False)
+        self.options.add_argument(
+            "--vs-prerelease",
+            action = "store_true",
+            dest = "vs_prerelease",
+            default = False,
+            help = "Consider prerelease versions when detecting installations of Visual Studio.")
         self.options.add_argument('--refactor',
                                   dest = "refactor",
                                   action = "store_true",

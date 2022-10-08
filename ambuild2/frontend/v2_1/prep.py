@@ -70,6 +70,12 @@ class Preparer(object):
                                 dest = "vs_split",
                                 default = False,
                                 help = SUPPRESS_HELP)
+        self.options.add_option(
+            "--vs-prerelease",
+            action = "store_true",
+            dest = "vs_prerelease",
+            default = False,
+            help = "Consider prerelease versions when detecting installations of Visual Studio.")
 
     @staticmethod
     def default_build_folder(prep):
