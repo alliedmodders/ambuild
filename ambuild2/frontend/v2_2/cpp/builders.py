@@ -23,11 +23,10 @@ from ambuild2.frontend.v2_2.cpp.deptypes import CppNodes
 from ambuild2.frontend.v2_2.cpp.deptypes import PchNodes
 from ambuild2.util import MakeLexicalFilename
 
-def TargetSuffix(target):
-    base = '{}-{}{}'.format(target.platform, target.arch, target.subarch)
-    if target.abi:
-        return base + '-' + target.abi
-    return base
+def TargetSuffix(compiler):
+    if compiler.variant:
+        return compiler.variant
+    return compiler.default_variant
 
 class BuilderProxy(object):
     def __init__(self, builder, compiler, name):
@@ -37,7 +36,7 @@ class BuilderProxy(object):
         self.compiler = compiler
         self.include_hotlist = builder.include_hotlist[:]
         self.name_ = name
-        self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
+        self.localFolder = os.path.join(name, TargetSuffix(compiler))
 
     @property
     def outputFile(self):
@@ -358,7 +357,7 @@ class BinaryBuilderBase(object):
         self.compiler = compiler
         self.name_ = name
         self.sources = []
-        self.localFolder = os.path.join(name, TargetSuffix(compiler.target))
+        self.localFolder = os.path.join(name, TargetSuffix(compiler))
 
     # Compute the build folder.
     def getBuildFolder(self, builder):

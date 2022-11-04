@@ -59,6 +59,10 @@ class Compiler(Cloneable):
         'linker',
         'archiver',
         'symbol_files_',
+
+        # Variant name for multi-target builds. If none, a default is chosen
+        # based on the target.
+        'variant',
     ]
 
     def __init__(self, vendor, target, options = None):
@@ -66,6 +70,7 @@ class Compiler(Cloneable):
         self.target = target
         self.linker = None
         self.archiver = None
+        self.variant = None
         for attr in self.attrs_:
             setattr(self, attr, [])
         if getattr(options, 'symbol_files', False):
@@ -117,6 +122,15 @@ class Compiler(Cloneable):
     @property
     def symbol_files(self):
         return self.symbol_files_
+
+    # Returns the default variant string.
+    @property
+    def default_variant(self):
+        target = self.target
+        base = '{}-{}{}'.format(target.platform, target.arch, target.subarch)
+        if target.abi:
+            return base + '-' + target.abi
+        return base
 
     # Sets how symbol files are generated. Must be 'bundled' or 'separate'.
     # Default is 'bundled' if the underlying compiler supports it. If the vendor
