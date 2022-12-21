@@ -21,6 +21,7 @@ from ambuild2.frontend.system import System
 from ambuild2.frontend.v2_2.cpp import compiler
 from ambuild2.frontend.v2_2.cpp.builders import CppNodes
 from ambuild2.frontend.v2_2.cpp.msvc import MSVC
+from ambuild2.frontend.v2_2.cpp.vendor import Linker
 from ambuild2.frontend.v2_2.vs import export_vcxproj
 from ambuild2.frontend.v2_2.vs import nodes
 from ambuild2.frontend.version import Version
@@ -99,10 +100,18 @@ class VisualStudio(MSVC):
     def like(self, name):
         return name == 'vs' or name == 'msvc'
 
+class VsLinker(Linker):
+    def __init__(self):
+        super(VsLinker, self).__init__()
+
+    def like(self, name):
+        return name == 'msvc'
+
 class Compiler(compiler.Compiler):
     def __init__(self, vendor, target_arch = 'x86'):
         target = System('windows', target_arch)
         super(Compiler, self).__init__(vendor, target)
+        self.linker = VsLinker()
 
     def clone(self):
         cc = Compiler(self.vendor)
@@ -160,6 +169,9 @@ class BinaryBuilder(object):
     @property
     def outputFile(self):
         return self.buildOutputName(self.name_)
+
+    def Module(self, context, name):
+        return self
 
 class Program(BinaryBuilder):
     def __init__(self, project, compiler, name, tag):

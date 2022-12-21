@@ -25,7 +25,7 @@ class Generator(vs_gen.Generator):
 
     # Overridden.
     def detectCompilers(self, **kwargs):
-        return cxx.Compiler(self.vs_vendor, kwargs.pop('target_arch', None))
+        return cxx.Compiler(self.vs_vendor, kwargs.pop('target_arch', 'x86'))
 
     def newProgramProject(self, context, name):
         return cxx.Project(cxx.Program, name)
