@@ -114,7 +114,7 @@ class Compiler(compiler.Compiler):
         self.linker = VsLinker()
 
     def clone(self):
-        cc = Compiler(self.vendor)
+        cc = Compiler(self.vendor, self.target.arch)
         cc.inherit(self)
         return cc
 

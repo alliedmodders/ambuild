@@ -82,16 +82,23 @@ def export_body(cm, node, xml):
     with xml.block('ImportGroup', Label = 'ExtensionTargets'):
         pass
 
+def get_target_platform(builder):
+    platform = 'Win32'
+    if builder.compiler.target.arch == 'x86_64':
+        platform = 'x64'
+    return platform
+
 def condition_for(builder):
-    full_tag = '{0}|Win32'.format(builder.tag_)
+    full_tag = '{0}|{1}'.format(builder.tag_, get_target_platform(builder))
     return "'$(Configuration)|$(Platform)'=='{0}'".format(full_tag)
 
 def export_configuration_headers(node, xml):
     for builder in node.project.builders_:
-        full_tag = '{0}|Win32'.format(builder.tag_)
+        platform = get_target_platform(builder)
+        full_tag = '{0}|{1}'.format(builder.tag_, platform)
         with xml.block('ProjectConfiguration', Include = full_tag):
             xml.tag('Configuration', builder.tag_)
-            xml.tag('Platform', 'Win32')
+            xml.tag('Platform', platform)
 
 def export_configuration_properties(node, xml):
     for builder in node.project.builders_:
@@ -268,7 +275,10 @@ def export_configuration_options(node, xml, builder):
         # Parse link flags.
         libs = ['%(AdditionalDependencies)']
         ignore_libs = ['%(IgnoreSpecificDefaultLibraries)']
+
         machine = 'X86'
+        if compiler.target.arch == 'x86_64':
+            machine = 'X64'
         subsystem = 'Windows'
         for flag in link_flags:
             if util.IsString(flag):

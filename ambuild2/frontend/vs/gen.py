@@ -149,6 +149,10 @@ class Generator(BaseGenerator):
         return obj
 
     # Overridden.
+    def addCopy(self, context, source, output_path):
+        return (None, (None,))
+
+    # Overridden.
     def addShellCommand(self,
                         context,
                         inputs,
