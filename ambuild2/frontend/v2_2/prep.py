@@ -57,6 +57,10 @@ class Preparer(object):
             dest = "symbol_files",
             default = False,
             help = "Split debugging symbols from binaries into separate symbol files.")
+        self.options.add_argument(
+            "-o", "--out",
+            default = None,
+            help = "Specify the out/build directory.")
 
         # Generator specific options.
         self.options.add_argument("--vs-version", type = str, dest = "vs_version", default = "14")
@@ -107,7 +111,9 @@ class Preparer(object):
         source_abspath = os.path.normpath(os.path.abspath(self.sourcePath))
         build_abspath = os.path.normpath(os.path.abspath(self.buildPath))
         if source_abspath == build_abspath:
-            if util.IsString(self.default_build_folder):
+            if args.out:
+                objfolder = args.out
+            elif util.IsString(self.default_build_folder):
                 objfolder = self.default_build_folder
             else:
                 objfolder = self.default_build_folder(self)
