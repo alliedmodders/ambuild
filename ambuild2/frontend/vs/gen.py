@@ -22,7 +22,7 @@ from ambuild2.frontend import paths
 from ambuild2.frontend.vs import nodes
 from ambuild2.frontend.base_generator import BaseGenerator
 
-SupportedVersions = ['10', '11', '12', '14', '15', '16']
+SupportedVersions = ['10', '11', '12', '14', '15', '16', '17']
 YearMap = {
     '2010': 10,
     '2012': 11,
@@ -30,6 +30,7 @@ YearMap = {
     '2015': 14,
     '2017': 15,
     '2019': 16,
+    '2022': 17,
 }
 
 class Generator(BaseGenerator):
