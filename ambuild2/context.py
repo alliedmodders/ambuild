@@ -16,7 +16,7 @@
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import time
 import traceback
-import os, sys, imp
+import os, sys
 from ambuild2 import util, database, damage
 from ambuild2.builder import Builder
 from ambuild2.frontend.version import Version
