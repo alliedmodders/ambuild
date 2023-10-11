@@ -42,7 +42,7 @@ class ContextManager(context_manager.ContextManager):
 
     def importScript(self, context, file, vars = None):
         path = os.path.normpath(os.path.join(context.sourcePath, file))
-        self.addConfigureFile(context, path)
+        self.generator.addConfigureFile(context, path)
 
         new_vars = copy.copy(vars or {})
         new_vars['builder'] = context

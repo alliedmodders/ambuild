@@ -74,7 +74,7 @@ class ContextManager(context_manager.ContextManager):
 
         # Get the absolute script path.
         scriptPath = os.path.join(self.sourcePath, scriptFile)
-        self.addConfigureFile(parent, scriptPath)
+        self.generator.addConfigureFile(parent, scriptPath)
 
         # Make the new context.
         cx = EmptyContext(self, parent, vars, scriptPath)
