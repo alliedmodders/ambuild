@@ -108,12 +108,14 @@ class Preparer(object):
         if options.no_color:
             util.DisableConsoleColors()
 
+        if args.out:
+           build_abspath = os.path.normpath(os.path.abspath(args.out))
+        else:
+           build_abspath = os.path.normpath(os.path.abspath(self.buildPath))
         source_abspath = os.path.normpath(os.path.abspath(self.sourcePath))
-        build_abspath = os.path.normpath(os.path.abspath(self.buildPath))
+
         if source_abspath == build_abspath:
-            if args.out:
-                objfolder = args.out
-            elif util.IsString(self.default_build_folder):
+            if util.IsString(self.default_build_folder):
                 objfolder = self.default_build_folder
             else:
                 objfolder = self.default_build_folder(self)
@@ -139,6 +141,11 @@ class Preparer(object):
                              util.ConsoleNormal)
                 os.mkdir(new_buildpath)
             self.buildPath = new_buildpath
+        else:
+            self.buildPath = build_abspath
+
+        if args.out and not os.path.exists(self.buildPath):
+            os.makedirs(self.buildPath)
 
         from ambuild2.frontend.v2_2.context_manager import ContextManager
 
