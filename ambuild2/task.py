@@ -143,7 +143,7 @@ class TaskWorker(process_manager.MessageReceiver):
         try:
             self.channel.send(message)
         except OSError as e:
-            if getattr(e, 'winerror', 0) == 232:
+            if getattr(e, 'winerror', 0) == 232 or e.errno == errno.EPIPE:
                 # Parent is dead, so ignore the error.
                 return
             raise
