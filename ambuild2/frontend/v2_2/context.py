@@ -162,6 +162,9 @@ class BuildContext(BaseContext):
     def DetectCxx(self, **kwargs):
         return self.generator_.detectCompilers(**kwargs)
 
+    def DetectProtoc(self, **kwargs):
+        return tools.protoc.DetectProtoc(**kwargs)
+
     @property
     def ALWAYS_DIRTY(self):
         return self.cm.ALWAYS_DIRTY
