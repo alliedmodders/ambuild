@@ -41,18 +41,15 @@ def export_fp(cm, node, fp):
     # Starting from VS2017, schema link is no longer required.
     # Tools version is obsolete in VS2019 and later.
     if version >= 'msvc-1920':
-        scope = xml.block('Project',
-                        DefaultTargets = 'Build')
+        scope = xml.block('Project', DefaultTargets = 'Build')
     elif version >= 'msvc-1910':
-        scope = xml.block('Project',
-                        DefaultTargets = 'Build',
-                        ToolsVersion = toolsVersion)
+        scope = xml.block('Project', DefaultTargets = 'Build', ToolsVersion = toolsVersion)
     else:
         scope = xml.block('Project',
-                        DefaultTargets = 'Build',
-                        ToolsVersion = toolsVersion,
-                        xmlns = 'http://schemas.microsoft.com/developer/msbuild/2003')
-    
+                          DefaultTargets = 'Build',
+                          ToolsVersion = toolsVersion,
+                          xmlns = 'http://schemas.microsoft.com/developer/msbuild/2003')
+
     with scope:
         export_body(cm, node, xml)
 
@@ -68,8 +65,7 @@ def export_body(cm, node, xml):
         if version >= 'msvc-1910':
             win_sdk_version = os.getenv('WindowsSDKVersion', None)
             if win_sdk_version:
-                xml.tag('WindowsTargetPlatformVersion',
-                        win_sdk_version.rstrip('\\'))
+                xml.tag('WindowsTargetPlatformVersion', win_sdk_version.rstrip('\\'))
 
     xml.tag('Import', Project = '$(VCTargetsPath)\Microsoft.Cpp.Default.props')
     export_configuration_properties(node, xml)

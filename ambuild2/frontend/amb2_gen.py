@@ -699,8 +699,7 @@ class Generator(BaseGenerator):
                 data['deps'] = ('md', dep_file)
 
         if dep_type != 'md' and dep_file:
-            util.con_err(util.ConsoleRed,
-                         'dep_file can only be specified with "md" dep_type',
+            util.con_err(util.ConsoleRed, 'dep_file can only be specified with "md" dep_type',
                          util.ConsoleNormal)
             raise Exception('dep_file can only be specified with "md" dep_type')
 

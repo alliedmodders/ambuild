@@ -57,10 +57,10 @@ class Preparer(object):
             dest = "symbol_files",
             default = False,
             help = "Split debugging symbols from binaries into separate symbol files.")
-        self.options.add_argument(
-            "-o", "--out",
-            default = None,
-            help = "Specify the out/build directory.")
+        self.options.add_argument("-o",
+                                  "--out",
+                                  default = None,
+                                  help = "Specify the out/build directory.")
 
         # Generator specific options.
         self.options.add_argument("--vs-version", type = str, dest = "vs_version", default = "14")
@@ -109,9 +109,9 @@ class Preparer(object):
             util.DisableConsoleColors()
 
         if args.out:
-           build_abspath = os.path.normpath(os.path.abspath(args.out))
+            build_abspath = os.path.normpath(os.path.abspath(args.out))
         else:
-           build_abspath = os.path.normpath(os.path.abspath(self.buildPath))
+            build_abspath = os.path.normpath(os.path.abspath(self.buildPath))
         source_abspath = os.path.normpath(os.path.abspath(self.sourcePath))
 
         if source_abspath == build_abspath:
