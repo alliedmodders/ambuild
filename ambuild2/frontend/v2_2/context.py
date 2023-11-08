@@ -196,7 +196,8 @@ class BuildContext(BaseContext):
                    dep_type = None,
                    weak_inputs = [],
                    shared_outputs = [],
-                   env_data = None):
+                   env_data = None,
+                   dep_file = None):
         _, entries = self.generator_.addShellCommand(self,
                                                      inputs,
                                                      argv,
@@ -205,7 +206,8 @@ class BuildContext(BaseContext):
                                                      dep_type = dep_type,
                                                      weak_inputs = weak_inputs,
                                                      shared_outputs = shared_outputs,
-                                                     env_data = env_data)
+                                                     env_data = env_data,
+                                                     dep_file = dep_file)
         return entries
 
     def Context(self, name):

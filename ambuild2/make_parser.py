@@ -40,9 +40,16 @@ class Parser(object):
         self.pos_ = 0
 
     def parse(self):
-        tok = self.lex(':')
-        if tok is None or self.peek() != ':':
+        while True:
+            tok = self.lex(':')
+            if tok is None or tok == ':':
+                break
+            if tok == '\n' or tok == '\r':
+                raise Exception('Unexpected newline in make dependency rules')
+
+        if tok is None:
             raise Exception('No Makefile dependency rules found')
+
         self.pos_ += 1
 
         items = []
