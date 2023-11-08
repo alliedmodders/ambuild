@@ -69,7 +69,9 @@ class ProtocRunner(object):
             if language == 'python':
                 if '.' in proto_name:
                     # This is not supported since it complicates folder entry tracking.
-                    raise Exception('Python proto files cannot contain extra "." characters: {}'.format(proto_name))
+                    raise Exception(
+                        'Python proto files cannot contain extra "." characters: {}'.format(
+                            proto_name))
                 gen_source_names += ['{}_pb2.py'.format(proto_name)]
             elif language == 'cpp':
                 gen_source_names += ['{}.pb.cc'.format(proto_name)]
@@ -99,10 +101,10 @@ class ProtocRunner(object):
         cursor = 0
         for language in self.languages:
             gen_info = gen_file_map[language]
-            gen_sources = gen_entries[cursor : cursor + len(gen_info['sources'])]
+            gen_sources = gen_entries[cursor:cursor + len(gen_info['sources'])]
             cursor += len(gen_sources)
 
-            gen_headers = gen_entries[cursor : cursor + len(gen_info['headers'])]
+            gen_headers = gen_entries[cursor:cursor + len(gen_info['headers'])]
             cursor += len(gen_headers)
 
             self.gen_map[language].setdefault('sources', []).extend(gen_sources)
@@ -110,7 +112,7 @@ class ProtocRunner(object):
                 self.gen_map[language].setdefault('headers', []).extend(gen_headers)
 
         # Should be one entry remaining, for the .d file.
-        assert(cursor == len(gen_entries) - 1)
+        assert (cursor == len(gen_entries) - 1)
 
 class Protoc(object):
     def __init__(self, path, name, version):
