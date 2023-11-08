@@ -669,7 +669,8 @@ class Generator(BaseGenerator):
                         dep_type = None,
                         weak_inputs = None,
                         shared_outputs = None,
-                        env_data = None):
+                        env_data = None,
+                        dep_file = None):
         if folder == -1:
             folder = context.localFolder
 
@@ -681,7 +682,12 @@ class Generator(BaseGenerator):
             data = argv
         else:
             node_type = nodetypes.Cxx
-            if dep_type not in ['gcc', 'msvc', 'sun', 'fxc']:
+            if dep_type == 'md':
+                if not dep_file:
+                    util.con_err(util.ConsoleRed, 'Dependency spew type "md" needs a dep_file',
+                                 util.ConsoleNormal)
+                    raise Exception('Dependency spew type "md" needs a dep_file')
+            elif dep_type not in ['gcc', 'msvc', 'sun', 'fxc']:
                 util.con_err(util.ConsoleRed, 'Invalid dependency spew type: ', util.ConsoleBlue,
                              dep_type, util.ConsoleNormal)
                 raise Exception('Invalid dependency spew type')
@@ -689,6 +695,14 @@ class Generator(BaseGenerator):
                 'type': dep_type,
                 'argv': argv,
             }
+            if dep_type == 'md':
+                data['deps'] = ('md', dep_file)
+
+        if dep_type != 'md' and dep_file:
+            util.con_err(util.ConsoleRed,
+                         'dep_file can only be specified with "md" dep_type',
+                         util.ConsoleNormal)
+            raise Exception('dep_file can only be specified with "md" dep_type')
 
         if argv is None:
             raise Exception('argv cannot be None')
