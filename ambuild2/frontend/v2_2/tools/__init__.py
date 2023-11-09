@@ -2,3 +2,4 @@
 
 from ambuild2.frontend.v2_2.tools.fxc import FxcJob as FXC
 from ambuild2.frontend.v2_2.tools.protoc import DetectProtoc as DetectProtoc
+from ambuild2.frontend.v2_2.tools.protoc import ProtocJob as Protoc
