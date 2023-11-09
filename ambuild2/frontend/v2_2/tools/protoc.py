@@ -20,7 +20,9 @@ import re
 import subprocess
 from ambuild2 import util
 from ambuild2.frontend.version import Version
+from ambuild2.frontend import paths
 
+# Helper for building AddCommand() invocations for protoc.
 class ProtocRunner(object):
     def __init__(self, protoc, builder, includes):
         self.protoc = protoc
@@ -46,8 +48,12 @@ class ProtocRunner(object):
         }
         self.gen_map[language] = {}
 
-        out_build_path = os.path.relpath(folder.path, self.builder.buildFolder)
-        self.argv += ['--{}_out={}'.format(language, out_build_path)]
+        if folder is None:
+            folder_path = '.'
+        else:
+            folder_path = folder.path
+
+        self.argv += ['--{}_out={}'.format(language, folder_path)]
 
     def AddSource(self, source_path):
         source_name = os.path.basename(source_path)
@@ -59,9 +65,11 @@ class ProtocRunner(object):
         gen_file_list = []
         gen_file_map = {}
         for language in self.languages:
+            folder = self.languages[language]['folder']
+
             gen_info = gen_file_map.setdefault(language, {
-                'sources': [],
-                'headers': [],
+                'sources': 0,
+                'headers': 0,
             })
             gen_source_names = []
             gen_header_names = []
@@ -79,13 +87,13 @@ class ProtocRunner(object):
             else:
                 raise Exception('Language not supported yet: {}'.format(language))
 
-            gen_file_list += gen_source_names
-            gen_file_list += gen_header_names
+            for file in gen_source_names + gen_header_names:
+                gen_file_list += [paths.Join(folder, file)]
 
-            gen_info['sources'] += gen_source_names
-            gen_info['headers'] += gen_header_names
+            gen_info['sources'] += len(gen_source_names)
+            gen_info['headers'] += len(gen_header_names)
 
-        dep_file = '{}.d'.format(source_name)
+        dep_file = paths.Join(folder, '{}.d'.format(source_name))
         argv = self.argv + [
             '--dependency_out={}'.format(dep_file),
             source_path,
@@ -96,16 +104,17 @@ class ProtocRunner(object):
                                               outputs = gen_file_list,
                                               dep_type = 'md',
                                               dep_file = dep_file,
-                                              shared_outputs = [dep_file])
+                                              shared_outputs = [dep_file],
+                                              folder = None)
 
         # Translate the list of generated output entries.
         cursor = 0
         for language in self.languages:
             gen_info = gen_file_map[language]
-            gen_sources = gen_entries[cursor:cursor + len(gen_info['sources'])]
+            gen_sources = gen_entries[cursor:cursor + gen_info['sources']]
             cursor += len(gen_sources)
 
-            gen_headers = gen_entries[cursor:cursor + len(gen_info['headers'])]
+            gen_headers = gen_entries[cursor:cursor + gen_info['headers']]
             cursor += len(gen_headers)
 
             self.gen_map[language].setdefault('sources', []).extend(gen_sources)
@@ -115,11 +124,13 @@ class ProtocRunner(object):
         # Should be one entry remaining, for the .d file.
         assert (cursor == len(gen_entries))
 
+# Named tuple for protoc.StaticLibrary() results.
 class ProtocCppNode(object):
     def __init__(self, lib, headers):
         self.lib = lib
         self.headers = headers
 
+# Like cpp.Compiler, but for protobufs.
 class Protoc(object):
     def __init__(self, path, name, version):
         super(Protoc, self).__init__()
@@ -168,6 +179,8 @@ class Protoc(object):
         out = builder.Add(binary)
         return ProtocCppNode(out, gen_map['cpp']['headers'])
 
+FoundProtocMap = set()
+
 def DetectProtoc(**kwargs):
     path = kwargs.pop('path', None)
     if len(kwargs):
@@ -188,6 +201,30 @@ def DetectProtoc(**kwargs):
     name = parts[0]
     version = Version(parts[1])
 
-    util.con_out(util.ConsoleHeader, 'found protoc {}-{}'.format(name, version))
+    if path not in FoundProtocMap:
+        util.con_out(util.ConsoleHeader, 'found protoc {}-{}'.format(name, version))
+        FoundProtocMap.add(path)
 
     return Protoc(path, name, version)
+
+class ProtocTool(object):
+    def __init__(self):
+        pass
+
+    def evaluate(self, cmd):
+        gen_map = cmd.data.protoc.Generate(builder = cmd.context,
+                                           sources = cmd.data.sources,
+                                           outputs = [('cpp', cmd.localFolderNode)])
+        cmd.sourcedeps += gen_map['cpp']['sources']
+        cmd.sourcedeps += gen_map['cpp']['headers']
+        for source in gen_map['cpp']['sources']:
+            cmd.sources += [os.path.join(cmd.context.buildPath, source.path)]
+
+class ProtocJob(object):
+    def __init__(self, protoc = None, sources = []):
+        if protoc is None:
+            self.protoc = DetectProtoc()
+        else:
+            self.protoc = protoc.clone()
+        self.sources = sources[:]
+        self.tool = ProtocTool()
