@@ -40,13 +40,13 @@ class IsSubPathTests(unittest.TestCase):
             'arch': 'x86_64',
         })
         self.assertIn('CFLAGS', props)
-        self.assertEquals(props['CFLAGS'], ['-m64'])
+        self.assertEqual(props['CFLAGS'], ['-m64'])
 
         props = rp.parse({
             'family': 'msvc',
             'arch': 'x86_64',
         })
-        self.assertEquals(props, {})
+        self.assertEqual(props, {})
 
         props = rp.parse({
             'family': 'gcc',
@@ -54,4 +54,4 @@ class IsSubPathTests(unittest.TestCase):
             'platform': 'mac',
         })
         self.assertIn('CFLAGS', props)
-        self.assertEquals(props['CFLAGS'], ['-m32', '-arch', 'i386'])
+        self.assertEqual(props['CFLAGS'], ['-m32', '-arch', 'i386'])
