@@ -85,9 +85,9 @@ class ProtocRunner(object):
             gen_info['sources'] += gen_source_names
             gen_info['headers'] += gen_header_names
 
-        gen_file_list += ['{}.d'.format(source_name)]
+        dep_file = '{}.d'.format(source_name)
         argv = self.argv + [
-            '--dependency_out={}'.format(gen_file_list[-1]),
+            '--dependency_out={}'.format(dep_file),
             source_path,
         ]
 
@@ -95,7 +95,8 @@ class ProtocRunner(object):
                                               argv = argv,
                                               outputs = gen_file_list,
                                               dep_type = 'md',
-                                              dep_file = gen_file_list[-1])
+                                              dep_file = dep_file,
+                                              shared_outputs = [dep_file])
 
         # Translate the list of generated output entries.
         cursor = 0
@@ -112,7 +113,12 @@ class ProtocRunner(object):
                 self.gen_map[language].setdefault('headers', []).extend(gen_headers)
 
         # Should be one entry remaining, for the .d file.
-        assert (cursor == len(gen_entries) - 1)
+        assert (cursor == len(gen_entries))
+
+class ProtocCppNode(object):
+    def __init__(self, lib, headers):
+        self.lib = lib
+        self.headers = headers
 
 class Protoc(object):
     def __init__(self, path, name, version):
@@ -131,7 +137,7 @@ class Protoc(object):
 
     # Each output entry is either a language, or a tuple of (language, folder_entry).
     def Generate(self, builder, sources, outputs, includes = []):
-        runner = ProtocRunner(self, builder, includes)
+        runner = ProtocRunner(self, builder, includes + ['.'])
 
         if not outputs:
             raise Exception('No output languages were specified')
@@ -151,6 +157,16 @@ class Protoc(object):
             runner.AddSource(source)
 
         return runner.gen_map
+
+    def StaticLibrary(self, name, builder, cxx, sources, includes = []):
+        gen_map = self.Generate(builder, sources, ['cpp'], includes)
+        binary = cxx.StaticLibrary(name)
+        binary.compiler.sourcedeps += gen_map['cpp']['sources']
+        binary.compiler.sourcedeps += gen_map['cpp']['headers']
+        for source in gen_map['cpp']['sources']:
+            binary.sources += [os.path.join(builder.buildPath, source.path)]
+        out = builder.Add(binary)
+        return ProtocCppNode(out, gen_map['cpp']['headers'])
 
 def DetectProtoc(**kwargs):
     path = kwargs.pop('path', None)
