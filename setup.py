@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# vim: set ts=2 sw=2 tw=99 et:
+# vim: set ts=4 sw=4 tw=99 et:
 
 import sys
 
@@ -21,27 +21,29 @@ if __name__ == '__main__':
     import os
     import multiprocessing as mp
 
-    mp.freeze_support()
-    proc = mp.Process(target = detect_distutils)
-    proc.start()
-    proc.join()
+    # Python 3.10+ appears to not be able to pickle detect_distutils for some reason.
+    if sys.version_info.major == 3 and sys.version_info.minor < 10:
+        mp.freeze_support()
+        proc = mp.Process(target = detect_distutils)
+        proc.start()
+        proc.join()
 
-    if proc.exitcode != 0:
-        sys.stderr.write("You have an older installation of AMBuild. AMBuild must\n")
-        sys.stderr.write("now be installed using pip (see README.md). To prevent\n")
-        sys.stderr.write("conflicts, please remove the old distutils version. You can\n")
-        sys.stderr.write("do this by inspecting the following paths and removing\n")
-        sys.stderr.write("any ambuild folders:\n")
+        if proc.exitcode != 0:
+            sys.stderr.write("You have an older installation of AMBuild. AMBuild must\n")
+            sys.stderr.write("now be installed using pip (see README.md). To prevent\n")
+            sys.stderr.write("conflicts, please remove the old distutils version. You can\n")
+            sys.stderr.write("do this by inspecting the following paths and removing\n")
+            sys.stderr.write("any ambuild folders:\n")
 
-        for path in sys.path[1:]:
-            for subdir in ['ambuild', 'ambuild2']:
-                subpath = os.path.join(path, subdir)
-                if os.path.exists(subpath):
-                    sys.stderr.write('\t{}\n'.format(subpath))
+            for path in sys.path[1:]:
+                for subdir in ['ambuild', 'ambuild2']:
+                    subpath = os.path.join(path, subdir)
+                    if os.path.exists(subpath):
+                        sys.stderr.write('\t{}\n'.format(subpath))
 
-        sys.stderr.write('Aborting installation.\n')
-        sys.stderr.flush()
-        sys.exit(1)
+            sys.stderr.write('Aborting installation.\n')
+            sys.stderr.flush()
+            sys.exit(1)
 
     from setuptools import setup, find_packages
     try:
