@@ -202,7 +202,8 @@ def DetectProtoc(**kwargs):
     version = Version(parts[1])
 
     if path not in FoundProtocMap:
-        util.con_out(util.ConsoleHeader, 'found protoc {}-{}'.format(name, version))
+        util.con_out(util.ConsoleHeader, 'found protoc {}-{}'.format(name, version),
+                     util.ConsoleNormal)
         FoundProtocMap.add(path)
 
     return Protoc(path, name, version)
