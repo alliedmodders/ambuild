@@ -204,7 +204,7 @@ def run_batch(contents):
     try:
         fp.write(contents.encode('ascii'))
         fp.close()
-        return subprocess.check_output([fp.name]).decode('utf-8')
+        return subprocess.check_output([fp.name]).decode(GetCodePage())
     finally:
         os.unlink(fp.name)
 
@@ -251,3 +251,11 @@ def DetectInclusionPattern(text):
         return re.escape(phrase) + r'\s+([A-Za-z]:\\.*)$'
 
     raise Exception('Could not find compiler inclusion pattern')
+
+def GetCodePage():
+    stdout = subprocess.run(
+        "chcp", shell=True,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL
+    ).stdout
+    return re.match(b".+: (\d+)\s*$", stdout).group(1).decode()
