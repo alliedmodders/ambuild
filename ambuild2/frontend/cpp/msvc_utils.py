@@ -22,6 +22,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import codecs
 from ambuild2 import util
 from ambuild2.frontend.version import Version
 try:
@@ -253,9 +254,15 @@ def DetectInclusionPattern(text):
     raise Exception('Could not find compiler inclusion pattern')
 
 def GetCodePage():
-    stdout = subprocess.run(
-        "chcp", shell=True,
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL
-    ).stdout
-    return re.match(b".+: (\d+)\s*$", stdout).group(1).decode()
+    try:
+        stdout = subprocess.run(
+            "chcp", shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL
+        ).stdout
+        codec = 'cp'+re.match(b".+: (\d+)\s*$", stdout).group(1).decode()
+        codecs.lookup(codec)
+        return codec
+    except LookupError:
+        print("Warning: Codec lookup failed, falling back to utf-8.")
+        return 'utf-8'
