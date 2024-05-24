@@ -767,4 +767,4 @@ def BuildDictFromTuple(tup):
 
 # Replace anything from a filename that doesn't convert to an identifier.
 def MakeLexicalFilename(file):
-    return re.sub('[^a-zA-Z0-9_]+', '_', os.path.splitext(file)[0])
+    return re.sub('[^a-zA-Z0-9_]+', '_', file)
