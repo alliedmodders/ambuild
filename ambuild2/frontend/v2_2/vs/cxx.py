@@ -37,7 +37,7 @@ def GetProjectFileSuffix(version):
 class Project(object):
     def __init__(self, ctor, name):
         self.ctor_ = ctor
-        self.name_ = name
+        self.name = name
         self.sources = []
         self.include_hotlist = []
         self.builders_ = []
@@ -53,7 +53,7 @@ class Project(object):
         # Attach finish/generate methods to this builder, so it generates a
         # projeet file. This is a wrapper around the older API which does not
         # wrap binaries in projects.
-        builder = self.Configure(compiler, self.name_, 'Default')
+        builder = self.Configure(compiler, self.name, 'Default')
         builder.finish = self.finish
         builder.generate = lambda generator, cx: self.generate(generator, cx)[0]
         return builder
@@ -78,7 +78,7 @@ class Project(object):
     def generate_combined(self, generator, cx):
         outputs = []
         proj_path = paths.Join(cx.localFolder,
-                               self.name_ + GetProjectFileSuffix(generator.vs_vendor.version))
+                               self.name + GetProjectFileSuffix(generator.vs_vendor.version))
         node = nodes.ProjectNode(cx, proj_path, self)
         for builder in self.builders_:
             tag_folder = generator.addFolder(cx, builder.localFolder)
