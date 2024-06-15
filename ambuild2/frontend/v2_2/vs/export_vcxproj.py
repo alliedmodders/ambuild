@@ -224,7 +224,7 @@ def export_configuration_options(node, xml, builder):
         elif '/Ot' in flags:
             xml.tag('FavorSizeOrSpeed', 'Speed')
 
-        xml.tag('MinimalRebuild', 'true')
+        xml.tag('MinimalRebuild', 'false')
 
         if '/RTC1' in flags or '/RTCsu' in flags:
             xml.tag('BasicRuntimeChecks', 'EnableFastChecks')
