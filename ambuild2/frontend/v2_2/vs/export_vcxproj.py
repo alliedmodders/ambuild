@@ -60,7 +60,7 @@ def export_body(cm, node, xml):
     version = cm.generator.vs_vendor.version
     with xml.block('PropertyGroup', Label = 'Globals'):
         xml.tag('ProjectGuid', '{{{0}}}'.format(node.uuid))
-        xml.tag('RootNamespace', node.project.name_)
+        xml.tag('RootNamespace', node.project.name)
         xml.tag('Keyword', 'Win32Proj')
         if version >= 'msvc-1910':
             win_sdk_version = os.getenv('WindowsSDKVersion', None)
