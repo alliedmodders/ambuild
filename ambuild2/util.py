@@ -439,10 +439,10 @@ def ParseGCCDeps(text):
     new_text = ''
 
     state = sReadIncludes
-    for line in re.split('\n+', text):
+    for line in re.split(r'\n+', text):
         line = line.replace('\r', '')
         if state == sReadIncludes:
-            m = re.match('[\.!x]\.*\s+(.+)\s*$', line)
+            m = re.match(r'[\.!x]\.*\s+(.+)\s*$', line)
             if m == None:
                 state = sLookForIncludeGuard
             else:
@@ -494,13 +494,13 @@ def ParseFXCDeps(out):
     new_text = ''
     for line in out.split('\n'):
         # The inclusion pattern is probably translated, but for now we ignore this possibilty.
-        m = re.match('Opening file \[.*\], stack top \[.*\]', line)
+        m = re.match(r'Opening file \[.*\], stack top \[.*\]', line)
         if m is not None:
             continue
-        m = re.match('Current working dir \[.*\]', line)
+        m = re.match(r'Current working dir \[.*\]', line)
         if m is not None:
             continue
-        m = re.match('Resolved to \[(.+)\]', line)
+        m = re.match(r'Resolved to \[(.+)\]', line)
         if m is not None:
             deps.append(m.group(1).strip())
             continue
@@ -512,7 +512,7 @@ def ParseSunDeps(text):
     deps = set()
     new_text = ''
 
-    for line in re.split('\n+', text):
+    for line in re.split(r'\n+', text):
         name = line.lstrip()
         if os.path.isfile(name):
             deps.add(name)
@@ -767,4 +767,4 @@ def BuildDictFromTuple(tup):
 
 # Replace anything from a filename that doesn't convert to an identifier.
 def MakeLexicalFilename(file):
-    return re.sub('[^a-zA-Z0-9_]+', '_', file)
+    return re.sub(r'[^a-zA-Z0-9_]+', '_', file)

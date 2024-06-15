@@ -67,10 +67,10 @@ def export_body(cm, node, xml):
             if win_sdk_version:
                 xml.tag('WindowsTargetPlatformVersion', win_sdk_version.rstrip('\\'))
 
-    xml.tag('Import', Project = '$(VCTargetsPath)\Microsoft.Cpp.Default.props')
+    xml.tag('Import', Project = '$(VCTargetsPath)\\Microsoft.Cpp.Default.props')
     export_configuration_properties(node, xml)
 
-    xml.tag('Import', Project = '$(VCTargetsPath)\Microsoft.Cpp.props')
+    xml.tag('Import', Project = '$(VCTargetsPath)\\Microsoft.Cpp.props')
     with xml.block('ImportGroup', Label = 'ExtensionSettings'):
         pass
     export_configuration_user_props(node, xml)
@@ -87,7 +87,7 @@ def export_body(cm, node, xml):
 
     export_source_files(node, xml)
 
-    xml.tag('Import', Project = '$(VCTargetsPath)\Microsoft.cpp.targets')
+    xml.tag('Import', Project = '$(VCTargetsPath)\\Microsoft.cpp.targets')
     with xml.block('ImportGroup', Label = 'ExtensionTargets'):
         pass
 
@@ -137,8 +137,8 @@ def export_configuration_user_props(node, xml):
         condition = condition_for(builder)
         with xml.block('ImportGroup', Condition = condition, Label = 'PropertySheets'):
             xml.tag('Import',
-                    Project = "$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props",
-                    Condition = "exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')",
+                    Project = "$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props",
+                    Condition = "exists('$(UserRootDir)\\Microsoft.Cpp.$(Platform).user.props')",
                     Label = "LocalAppDataPlatform")
 
 def export_configuration_paths(node, xml):
