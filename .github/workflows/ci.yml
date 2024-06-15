@@ -7,23 +7,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ['3.3', '3.12']
+        python-version: ['3.12']
         os: [ubuntu-20.04, macos-latest, windows-2019]
-        exclude:
-         - os: macos-latest
-           python-version: '3.3'
-         - os: ubuntu-20.04
-           python-version: '3.3'
 
     steps:
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install Pip
-      if: runner.os == 'Windows' && matrix.python-version == '3.3'
-      shell: cmd
-      run: curl https://bootstrap.pypa.io/pip/3.3/get-pip.py | python
     - name: Install Deps
       if: runner.os == 'Linux'
       run: |
