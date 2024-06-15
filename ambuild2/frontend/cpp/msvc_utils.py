@@ -255,12 +255,12 @@ def DetectInclusionPattern(text):
 
 def GetCodePage():
     try:
-        stdout = subprocess.run(
-            "chcp", shell=True,
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL
-        ).stdout
-        codec = 'cp'+re.match(b".+: (\d+)\s*$", stdout).group(1).decode()
+        stdout = subprocess.run("chcp",
+                                shell = True,
+                                stdout = subprocess.PIPE,
+                                stderr = subprocess.DEVNULL,
+                                stdin = subprocess.DEVNULL).stdout
+        codec = 'cp' + re.match(b".+: (\d+)\s*$", stdout).group(1).decode()
         codecs.lookup(codec)
         return codec
     except LookupError:
