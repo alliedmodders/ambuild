@@ -142,6 +142,7 @@ class ContextManager(context_manager.ContextManager):
 
         # Copy vars so changes don't get inherited.
         scriptGlobals = copy.copy(context.vars_)
+        scriptGlobals['__file__'] = context.script_
 
         self.pushContext(context)
         try:
