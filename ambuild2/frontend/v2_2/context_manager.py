@@ -70,13 +70,10 @@ class ContextManager(context_manager.ContextManager):
     def importScriptImpl(self, parent, path, vars):
         assert isinstance(path, util.StringType())
 
-        sourceFolder, _ = self.computeScriptPaths(parent, path)
+        sourceFolder, _, scriptFile = self.computeScriptPaths(parent, path)
 
         # Get the absolute script path.
-        if os.path.isabs(path):
-            scriptPath = path
-        else:
-            scriptPath = os.path.join(self.sourcePath, path)
+        scriptPath = os.path.join(self.sourcePath, scriptFile)
         self.generator.addConfigureFile(parent, scriptPath)
 
         # Make the new context.
@@ -96,13 +93,10 @@ class ContextManager(context_manager.ContextManager):
         if parent is not self.contextStack_[-1]:
             raise Exception('Can only create child build contexts of the currently active context')
 
-        sourceFolder, buildFolder = self.computeScriptPaths(parent, path)
+        sourceFolder, buildFolder, scriptFile = self.computeScriptPaths(parent, path)
 
         # Get the absolute script path.
-        if os.path.isabs(path):
-            scriptPath = path
-        else:
-            scriptPath = os.path.join(self.sourcePath, path)
+        scriptPath = os.path.join(self.sourcePath, scriptFile)
         self.generator.addConfigureFile(parent, scriptPath)
 
         # Make the new context. We allow top-level contexts in the root build
@@ -182,7 +176,7 @@ class ContextManager(context_manager.ContextManager):
             sourceFolder = ''
             buildFolder = ''
 
-        return sourceFolder, buildFolder
+        return sourceFolder, buildFolder, os.path.join(sourceFolder, name)
 
     def getLocalFolder(self, context):
         return context.buildFolder
