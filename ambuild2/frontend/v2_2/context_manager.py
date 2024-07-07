@@ -175,7 +175,7 @@ class ContextManager(context_manager.ContextManager):
         else:
             sourceFolder = ''
             buildFolder = ''
-        
+
         if os.path.isabs(target):
             full_script_path = target
         else:
