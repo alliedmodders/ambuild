@@ -176,7 +176,7 @@ class ContextManager(context_manager.ContextManager):
             sourceFolder = ''
             buildFolder = ''
 
-        return sourceFolder, buildFolder, os.path.join(sourceFolder, name)
+        return sourceFolder, buildFolder, target if os.path.isabs(target) else os.path.join(sourceFolder, name)
 
     def getLocalFolder(self, context):
         return context.buildFolder
