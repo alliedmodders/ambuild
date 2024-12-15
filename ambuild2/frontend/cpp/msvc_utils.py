@@ -260,7 +260,10 @@ def GetCodePage():
                                 stdout = subprocess.PIPE,
                                 stderr = subprocess.DEVNULL,
                                 stdin = subprocess.DEVNULL).stdout
-        codec = 'cp' + re.match(b".+: (\d+)\s*$", stdout).group(1).decode()
+        code_page = re.match(br".+: (\d+)\.?\s*$", stdout)
+        if code_page is None:
+            raise LookupError("Could not determine code page")
+        codec = 'cp' + code_page.group(1).decode()
         codecs.lookup(codec)
         return codec
     except LookupError:
