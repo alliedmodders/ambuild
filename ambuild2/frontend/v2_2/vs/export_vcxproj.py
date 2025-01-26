@@ -234,7 +234,7 @@ def export_configuration_options(node, xml, builder):
             xml.tag('BasicRuntimeChecks', 'UninitVariables')
 
         if '/Oy-' in flags:
-            xml.tag('OmitFramePointer', 'true')
+            xml.tag('OmitFramePointer', 'false')
         if '/EHsc' in flags:
             xml.tag('ExceptionHandling', 'Sync')
 
