@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
 import os
+import json
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2 import database
@@ -34,6 +35,7 @@ class Generator(BaseGenerator):
         self.had_symlink_fallback = False
         self.db = cm.db
         self.is_bootstrap = not self.db
+        self.compdb = []
 
     @property
     def backend(self):
@@ -131,6 +133,12 @@ class Generator(BaseGenerator):
         self.cleanup()
         self.db.commit()
         self.db.vacuum()
+
+        if self.cm.options.generate_compdb:
+            compile_commands = os.path.join(self.cm.buildPath, 'compile_commands.json')
+            with open(compile_commands, 'w') as fp:
+                json.dump(self.compdb, fp, indent=2)
+
         if self.is_bootstrap:
             self.saveVars()
             self.db.close()
@@ -751,6 +759,14 @@ class Generator(BaseGenerator):
         }
         if obj.dep_info:
             cxxData['deps'] = obj.dep_info
+
+        if self.cm.options.generate_compdb:
+            self.compdb.append({
+                "directory": obj.folderNode.path,
+                "arguments": obj.argv,
+                "file": obj.inputObj,
+                "output": obj.outputs[0]
+            })
 
         _, output_nodes = self.addCommand(context = cx,
                                           weak_inputs = obj.sourcedeps,
