@@ -762,11 +762,11 @@ class Generator(BaseGenerator):
 
         if getattr(self.cm.options, 'generate_compdb', False):
             self.compdb.append({
-                "directory": obj.folderNode.path,
-                "arguments": obj.argv,
-                "file": obj.inputObj,
-                "output": obj.outputs[0]
-            })
+            "directory": obj.folderNode.path,
+            "arguments": obj.argv,
+            "file": str(obj.inputObj),
+            "output": str(obj.outputs[0])
+        })
 
         _, output_nodes = self.addCommand(context = cx,
                                           weak_inputs = obj.sourcedeps,
