@@ -471,7 +471,7 @@ def ParseMSVCDeps(out, inclusion_pattern = None):
     if inclusion_pattern is not None:
         pattern = inclusion_pattern
     else:
-        pattern = 'Note: including file:\s+(.+)$'
+        pattern = r'Note: including file:\s+(.+)$'
 
     deps = []
     new_text = ''
