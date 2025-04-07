@@ -137,7 +137,7 @@ class Generator(BaseGenerator):
         if getattr(self.cm.options, 'generate_compdb', False):
             compile_commands = os.path.join(self.cm.buildPath, 'compile_commands.json')
             with open(compile_commands, 'w') as fp:
-                json.dump(self.compdb, fp, indent=2)
+                json.dump(self.compdb, fp, indent = 2)
 
         if self.is_bootstrap:
             self.saveVars()
@@ -762,11 +762,11 @@ class Generator(BaseGenerator):
 
         if getattr(self.cm.options, 'generate_compdb', False):
             self.compdb.append({
-            "directory": obj.folderNode.path,
-            "arguments": obj.argv,
-            "file": str(obj.inputObj),
-            "output": str(obj.outputs[0])
-        })
+                "directory": obj.folderNode.path,
+                "arguments": obj.argv,
+                "file": str(obj.inputObj),
+                "output": str(obj.outputs[0])
+            })
 
         _, output_nodes = self.addCommand(context = cx,
                                           weak_inputs = obj.sourcedeps,

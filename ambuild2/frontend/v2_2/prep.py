@@ -40,12 +40,11 @@ class Preparer(object):
                                   dest = "list_gen",
                                   default = False,
                                   help = "List available build system generators, then exit.")
-        self.options.add_argument(
-            "--generate-compile-commands",
-            action = "store_true",
-            dest = "generate_compdb",
-            default = True,
-            help = "Generate a JSON Compilation Database for Clangd.")
+        self.options.add_argument("--generate-compile-commands",
+                                  action = "store_true",
+                                  dest = "generate_compdb",
+                                  default = True,
+                                  help = "Generate a JSON Compilation Database for Clangd.")
         self.options.add_argument(
             "--make-scripts",
             action = "store_true",
