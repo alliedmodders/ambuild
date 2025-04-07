@@ -134,7 +134,7 @@ class Generator(BaseGenerator):
         self.db.commit()
         self.db.vacuum()
 
-        if self.cm.options.generate_compdb:
+        if getattr(self.cm.options, 'generate_compdb', False):
             compile_commands = os.path.join(self.cm.buildPath, 'compile_commands.json')
             with open(compile_commands, 'w') as fp:
                 json.dump(self.compdb, fp, indent=2)
@@ -760,7 +760,7 @@ class Generator(BaseGenerator):
         if obj.dep_info:
             cxxData['deps'] = obj.dep_info
 
-        if self.cm.options.generate_compdb:
+        if getattr(self.cm.options, 'generate_compdb', False):
             self.compdb.append({
                 "directory": obj.folderNode.path,
                 "arguments": obj.argv,
