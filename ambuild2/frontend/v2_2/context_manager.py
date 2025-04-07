@@ -37,6 +37,7 @@ class ContextManager(context_manager.ContextManager):
 
         # Detect the target architecture.
         self.host = System.Host
+        self.options.generate_compdb = getattr(self.options, 'generate_compdb', False)
 
     @property
     def apiVersion(self):
