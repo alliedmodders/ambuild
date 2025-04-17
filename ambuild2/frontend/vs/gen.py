@@ -155,7 +155,7 @@ class Generator(BaseGenerator):
 
     # Overridden.
     def addOutputFile(self, context, path, contents):
-        return None
+        return nodes.Node(context, path)
 
     # Overridden.
     def addShellCommand(self,
