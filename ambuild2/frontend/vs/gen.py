@@ -154,6 +154,10 @@ class Generator(BaseGenerator):
         return (None, (None,))
 
     # Overridden.
+    def addOutputFile(self, context, path, contents):
+        return None
+
+    # Overridden.
     def addShellCommand(self,
                         context,
                         inputs,
