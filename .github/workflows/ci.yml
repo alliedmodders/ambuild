@@ -19,7 +19,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo dpkg --add-architecture i386
-        sudo apt-get install lib32stdc++-7-dev lib32z1-dev libc6-dev-i386
+        sudo apt-get install lib32stdc++-14-dev lib32z1-dev libc6-dev-i386
         sudo apt-get install g++-multilib
     - uses: actions/checkout@v3
     - name: Unit Tests
