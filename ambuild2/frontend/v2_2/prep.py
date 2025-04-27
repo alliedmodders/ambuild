@@ -43,7 +43,7 @@ class Preparer(object):
         self.options.add_argument("--generate-compile-commands",
                                   action = "store_true",
                                   dest = "generate_compdb",
-                                  default = True,
+                                  default = False,
                                   help = "Generate a JSON Compilation Database for Clangd.")
         self.options.add_argument(
             "--make-scripts",
