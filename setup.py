@@ -21,8 +21,8 @@ if __name__ == '__main__':
     import os
     import multiprocessing as mp
 
-    # Python 3.10+ appears to not be able to pickle detect_distutils for some reason.
-    if sys.version_info.major == 3 and sys.version_info.minor < 10:
+    # Python 3.9+ appears to not be able to pickle detect_distutils for some reason.
+    if sys.version_info.major == 3 and sys.version_info.minor < 9:
         mp.freeze_support()
         proc = mp.Process(target = detect_distutils)
         proc.start()
