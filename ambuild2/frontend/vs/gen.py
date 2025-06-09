@@ -116,23 +116,22 @@ class Generator(BaseGenerator):
 
     # Overridden.
     def getLocalFolder(self, context):
-        if type(context.localFolder_) is nodes.FolderNode or context.localFolder_ is None:
+        if self.cm.apiVersion < '2.1':
+            if type(context.localFolder_) is nodetypes.Entry or context.localFolder_ is None:
+                return context.localFolder_
+
+            if len(context.buildFolder):
+                context.localFolder_ = self.generateFolder(None, context.buildFolder)
+            else:
+                context.localFolder_ = None
             return context.localFolder_
 
-        if not len(context.buildFolder):
-            context.localFolder_ = None
-        else:
-            context.localFolder_ = self.addFolder(context.parent, context.buildFolder)
+        if len(context.buildFolder):
+            return self.generateFolder(None, context.buildFolder)
+        return None
 
-        return context.localFolder_
-
-    # Overridden.
-    def addFolder(self, cx, folder):
-        parentFolderNode = None
-        if cx is not None:
-            parentFolderNode = cx.localFolder
-
-        _, path = paths.ResolveFolder(parentFolderNode, folder)
+    def generateFolder(self, parent, folder):
+        _, path = paths.ResolveFolder(parent, folder)
         if path in self.files_:
             entry = self.files_[path]
             if type(entry) is not nodes.FolderNode:
@@ -148,6 +147,14 @@ class Generator(BaseGenerator):
         obj = nodes.FolderNode(path)
         self.files_[path] = obj
         return obj
+
+    # Overridden.
+    def addFolder(self, cx, folder):
+        parentFolderNode = None
+        if cx is not None:
+            parentFolderNode = cx.localFolder
+
+        return self.generateFolder(parentFolderNode, folder)
 
     # Overridden.
     def addCopy(self, context, source, output_path):
