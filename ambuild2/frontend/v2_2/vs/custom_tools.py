@@ -116,7 +116,7 @@ def add_custom_tool_prebuild_events(xml, node, builder, custom_tools):
                 for include in protoc_data.protoc.includes + ['.']:
                     if not os.path.isabs(include):
                         include = os.path.join(node.context.currentSourcePath, include)
-                    include_args.append('--proto_path="{0}"'.format(include))
+                    include_args.append('-I="{0}"'.format(include))
 
                 output_folder = os.path.join(builder.localFolder)
 
