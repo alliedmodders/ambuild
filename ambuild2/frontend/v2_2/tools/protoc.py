@@ -99,6 +99,8 @@ class ProtocRunner(object):
             source_path,
         ]
 
+        argv.insert(1, '--proto_path={}'.format(os.path.dirname(source_path)))
+
         gen_entries = self.builder.AddCommand(inputs = [source_path],
                                               argv = argv,
                                               outputs = gen_file_list,
