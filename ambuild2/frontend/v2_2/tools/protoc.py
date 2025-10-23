@@ -34,7 +34,7 @@ class ProtocRunner(object):
         for include in self.protoc.includes + includes:
             if not os.path.isabs(include):
                 include = os.path.join(builder.currentSourcePath, include)
-            self.argv += ['--proto_path={}'.format(include)]
+            self.argv += ['-I={}'.format(include)]
 
         self.languages = collections.OrderedDict()
         self.gen_map = {}
@@ -98,6 +98,8 @@ class ProtocRunner(object):
             '--dependency_out={}'.format(dep_file),
             source_path,
         ]
+
+        argv.insert(1, '--proto_path={}'.format(os.path.dirname(source_path)))
 
         gen_entries = self.builder.AddCommand(inputs = [source_path],
                                               argv = argv,
