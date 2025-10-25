@@ -153,6 +153,8 @@ def export_configuration_paths(node, xml):
         if '/INCREMENTAL:NO' not in builder.compiler.linkflags and '/INCREMENTAL:NO' not in builder.compiler.postlink:
             xml.tag('LinkIncremental', 'true', Condition = condition)
         xml.tag('TargetName', builder.name_, Condition = condition)
+        if hasattr(builder, 'custom') and len(builder.custom) >= 1:
+            xml.tag('CustomBuildBeforeTargets', "PreBuildEvent", Condition = condition)
 
 def sanitize_val_defines(defines):
     new_defines = []

@@ -60,6 +60,8 @@ def add_custom_tool_prebuild_events(xml, node, builder, custom_tools):
         return False
 
     commands = []
+    source_paths = []
+    output_paths = []
     for tool_type, tool_data in custom_tools:
         if tool_type == 'fxc':
             if isinstance(tool_data, FxcJob):
@@ -76,6 +78,9 @@ def add_custom_tool_prebuild_events(xml, node, builder, custom_tools):
                 sourceFile = os.path.join(node.context.currentSourcePath, source)
                 output_file = '{0}.{1}.{2}.h'.format(
                     os.path.basename(source).rsplit('.', 1)[0], var_prefix, entrypoint)
+
+                source_paths.append(sourceFile)
+                output_paths.append(output_file)
 
                 fxc_cmd = 'fxc /T {0} /E {1} /Fh "$(ProjectDir){2}" /Vn {3}_Bytes_Impl /Vi /nologo "{4}"'.format(
                     profile, entrypoint, output_file, var_prefix, sourceFile)
@@ -124,13 +129,19 @@ def add_custom_tool_prebuild_events(xml, node, builder, custom_tools):
                     protoc_path, ' '.join(include_args), output_folder, source)
 
                 dep_file = os.path.join(output_folder, '{0}.d'.format(os.path.basename(source)))
-                protoc_cmd += ' --dependency_out="$(ProjectDir){0}"'.format(dep_file)
+                dependency_output = "$(ProjectDir){0}".format(dep_file)
+                protoc_cmd += ' --dependency_out="{0}"'.format(dependency_output)
+
+                source_paths.append(source)
+                output_paths.append(dependency_output)
 
                 commands.append(protoc_cmd)
 
     if commands:
-        with xml.block('PreBuildEvent'):
+        with xml.block('CustomBuildStep'):
             xml.tag('Command', '\n'.join(commands))
+            xml.tag('Inputs', ';'.join(source_paths))
+            xml.tag('Outputs', ';'.join(output_paths))
         return True
 
     return False
