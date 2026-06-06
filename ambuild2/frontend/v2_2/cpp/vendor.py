@@ -26,14 +26,15 @@ class Vendor(object):
         self.version = Version('{0}-{1}'.format(self.name, version))
         self.extra_props = {}
 
-    def nameForExecutable(self, name):
-        return name + util.ExecutableSuffix
+    def nameForExecutable(self, name, target):
+        return name + util.ExecutableSuffixForPlatform(target.platform)
 
-    def nameForSharedLibrary(self, name):
-        return name + util.SharedLibSuffix
+    def nameForSharedLibrary(self, name, target):
+        return name + util.SharedLibSuffixForPlatform(target.platform)
 
-    def nameForStaticLibrary(self, name):
-        return util.StaticLibPrefix + name + util.StaticLibSuffix
+    def nameForStaticLibrary(self, name, target):
+        return util.StaticLibPrefixForPlatform(
+            target.platform) + name + util.StaticLibSuffixForPlatform(target.platform)
 
     def equals(self, other):
         return self.name == other.name and \

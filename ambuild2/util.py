@@ -156,6 +156,22 @@ if IsWindows():
 else:
     StaticLibPrefix = 'lib'
 
+def ExecutableSuffixForPlatform(platform):
+    return '.exe' if platform == 'windows' else ''
+
+def SharedLibSuffixForPlatform(platform):
+    if platform == 'windows':
+        return '.dll'
+    if platform == 'mac':
+        return '.dylib'
+    return '.so'
+
+def StaticLibSuffixForPlatform(platform):
+    return '.lib' if platform == 'windows' else '.a'
+
+def StaticLibPrefixForPlatform(platform):
+    return '' if platform == 'windows' else 'lib'
+
 if IsWindows():
     import ctypes
     from ctypes import wintypes

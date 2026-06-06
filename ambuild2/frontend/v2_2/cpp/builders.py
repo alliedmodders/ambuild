@@ -244,6 +244,19 @@ class ObjectArgvBuilder(object):
         return task
 
     def buildRcItem(self, inputObj, sourceFile, encodedName):
+        if self.vendor.behavior == 'gcc':
+            objectFile = encodedName + '.o'
+            rc_argv = self.compiler.rc_argv[:]
+            defines = self.compiler.defines + self.compiler.cxxdefines + self.compiler.rcdefines
+            for define in defines:
+                rc_argv += ['-D', define]
+            for include in (self.compiler.includes + self.compiler.cxxincludes):
+                if isinstance(include, PchNodes):
+                    continue
+                rc_argv += ['-I', os.path.normpath(include)]
+            rc_argv += ['-i', sourceFile, '-o', objectFile, '-O', 'coff']
+            return ObjectFileTask(self, inputObj, [objectFile], rc_argv)
+
         objectFile = encodedName + '.res'
 
         defines = self.compiler.defines + self.compiler.cxxdefines + self.compiler.rcdefines
@@ -258,7 +271,10 @@ class ObjectArgvBuilder(object):
         # Don't need this, yet, since Windows doesn't use this.
         assert not self.vendor.emits_dependency_file
 
-        rc_argv = ['rc', '/nologo']
+        if self.compiler.rc_argv:
+            rc_argv = self.compiler.rc_argv + ['/nologo']
+        else:
+            rc_argv = ['rc', '/nologo']
         for define in defines:
             rc_argv += ['/d', define]
         for include in (self.compiler.includes + self.compiler.cxxincludes):
@@ -428,7 +444,7 @@ class BinaryBuilder(BinaryBuilderBase):
         for obj in self.objects:
             if obj.type == 'object':
                 cxx_nodes = generator.addCxxObjTask(cx, self.shared_cc_outputs, obj)
-                if self.compiler.vendor.emits_dependency_file:
+                if self.compiler.vendor.emits_dependency_file and obj.dep_info:
                     assert len(cxx_nodes) == 2
                 else:
                     assert len(cxx_nodes) == 1
@@ -646,11 +662,11 @@ class BinaryBuilder(BinaryBuilderBase):
 
     def computeLinkerOutputFile(self, name, link_type):
         if link_type == 'program':
-            return self.compiler.vendor.nameForExecutable(name)
+            return self.compiler.vendor.nameForExecutable(name, self.compiler.target)
         elif link_type == 'library':
-            return self.compiler.vendor.nameForSharedLibrary(name)
+            return self.compiler.vendor.nameForSharedLibrary(name, self.compiler.target)
         elif link_type == 'static':
-            return self.compiler.vendor.nameForStaticLibrary(name)
+            return self.compiler.vendor.nameForStaticLibrary(name, self.compiler.target)
         raise Exception('Unknown link type: {}'.format(link_type))
 
     def computeLinkerArgv(self, cx, files, name, link_type):

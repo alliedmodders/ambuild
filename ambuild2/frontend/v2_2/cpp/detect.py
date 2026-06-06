@@ -123,7 +123,7 @@ class CompilerLocator(object):
         self.rules_config_['arch'] = arch
         self.rules_config_['subarch'] = subarch
         self.rules_config_['abi'] = abi
-        self.target_ = System(self.host_.platform, arch, subarch, abi)
+        self.target_ = System(platform or self.host_.platform, arch, subarch, abi)
         self.cross_compile_ = IsCrossCompile(self.host_, self.target_)
 
         # Allow specifying the environment file via the environment.
@@ -190,6 +190,10 @@ class CompilerLocator(object):
             raise CompilerNotFoundException('Unable to find LINK.EXE')
         cli.linker_argv = [tools['link.exe']]
         cli.archiver_argv = [tools['lib.exe']]
+        if 'rc.exe' in tools:
+            cli.rc_argv = [tools['rc.exe']]
+        else:
+            cli.rc_argv = ['rc.exe']
 
     def detect_gcc_tools(self, cli):
         cli.linker = GccLinker()
@@ -203,18 +207,32 @@ class CompilerLocator(object):
         cli.archiver = GccArchiver()
         cli.archiver_argv = self.detect_gcc_tool('ar', 'AR', ['ar'], ar_argv)
 
+        if cli.target.platform == 'windows':
+            try:
+                cli.rc_argv = self.detect_gcc_tool('windres', 'RC', ['windres'], ['--version'])
+            except CompilerNotFoundException:
+                cli.rc_argv = None
+
     def detect_gcc_tool(self, tool_name, env_name, commands, check_argv):
         candidates = []
         if env_name in os.environ:
             candidates += [os.environ[env_name]]
         elif self.cross_compile_ and self.host_.platform == 'linux':
-            if self.target_.abi:
-                abi = self.target_.abi
-            else:
-                abi = 'gnu'
-            arch = kGnuArchMap.get(self.target_.arch, self.target_.arch)
-            for command in commands:
-                candidates += ['{}-linux-{}-{}'.format(arch, abi, tool_name)]
+            if self.target_.platform == 'linux':
+                if self.target_.abi:
+                    abi = self.target_.abi
+                else:
+                    abi = 'gnu'
+                arch = kGnuArchMap.get(self.target_.arch, self.target_.arch)
+                for command in commands:
+                    candidates += ['{}-linux-{}-{}'.format(arch, abi, tool_name)]
+            elif self.target_.platform == 'windows':
+                if self.target_.arch == 'x86':
+                    arch = 'i686'
+                else:
+                    arch = 'x86_64'
+                for command in commands:
+                    candidates += ['{}-w64-mingw32-{}'.format(arch, tool_name)]
             candidates += commands
         else:
             candidates += commands
@@ -264,7 +282,7 @@ class CompilerLocator(object):
             env_data = util.BuildTupleFromDict(env_data)
 
         return compiler.CliCompiler(cxx.vendor,
-                                    System(self.host_.platform, cxx.arch, cxx.subarch,
+                                    System(self.target_.platform, cxx.arch, cxx.subarch,
                                            self.target_.abi),
                                     cc.argv,
                                     cxx.argv,
@@ -354,13 +372,23 @@ class CompilerLocator(object):
             candidates.append(kMsvcTuple)
 
         if self.cross_compile_ and self.host_.platform == 'linux':
-            if self.target_.abi:
-                abi = self.target_.abi
-            else:
-                abi = 'gnu'
-            arch = kGnuArchMap.get(self.target_.arch, self.target_.arch)
-            cmd_prefix = '{}-linux-{}'.format(arch, abi)
-            candidates += [(cmd_prefix + '-gcc', cmd_prefix + '-g++', 'gcc')]
+            if self.target_.platform == 'linux':
+                if self.target_.abi:
+                    abi = self.target_.abi
+                else:
+                    abi = 'gnu'
+                arch = kGnuArchMap.get(self.target_.arch, self.target_.arch)
+                cmd_prefix = '{}-linux-{}'.format(arch, abi)
+                candidates += [(cmd_prefix + '-clang', cmd_prefix + '-clang++', 'gcc')]
+                candidates += [(cmd_prefix + '-gcc', cmd_prefix + '-g++', 'gcc')]
+            elif self.target_.platform == 'windows':
+                if self.target_.arch == 'x86':
+                    arch = 'i686'
+                else:
+                    arch = 'x86_64'
+                cmd_prefix = '{}-w64-mingw32'.format(arch)
+                candidates += [(cmd_prefix + '-clang', cmd_prefix + '-clang++', 'gcc')]
+                candidates += [(cmd_prefix + '-gcc', cmd_prefix + '-g++', 'gcc')]
 
         candidates.extend([kClangTuple, kGccTuple, kIntelTuple])
 

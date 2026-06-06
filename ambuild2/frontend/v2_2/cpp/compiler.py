@@ -153,6 +153,7 @@ class CliCompiler(Compiler):
         self.env_data = env_data
         self.linker_argv = None
         self.archiver_argv = None
+        self.rc_argv = None
 
     def clone(self):
         cc = CliCompiler(self.vendor, self.target, self.cc_argv, self.cxx_argv)
@@ -163,6 +164,7 @@ class CliCompiler(Compiler):
         super(CliCompiler, self).inherit(other)
         self.linker_argv = other.linker_argv
         self.archiver_argv = other.archiver_argv
+        self.rc_argv = other.rc_argv
         self.env_data = other.env_data
 
     def __deepcopy__(self, memo):

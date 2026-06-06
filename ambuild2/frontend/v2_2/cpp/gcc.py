@@ -147,13 +147,13 @@ class Emscripten(Clang):
         # Set this first, since the constructor will need it.
         super(Emscripten, self).__init__(version, 'emscripten')
 
-    def nameForExecutable(self, name):
+    def nameForExecutable(self, name, target):
         return name + '.js'
 
-    def nameForSharedLibrary(self, name):
+    def nameForSharedLibrary(self, name, target):
         return name + '.bc'
 
-    def nameForStaticLibrary(self, name):
+    def nameForStaticLibrary(self, name, target):
         return util.StaticLibPrefix + name + '.a'
 
     @property
