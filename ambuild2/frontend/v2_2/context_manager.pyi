@@ -1,0 +1,49 @@
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
+#
+# This file is part of AMBuild.
+#
+# AMBuild is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# at your option any later version.
+#
+# AMBuild is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+
+import argparse
+from collections.abc import Callable, Hashable
+from typing import Any
+
+from ambuild2.frontend import context_manager
+from ambuild2.frontend.system import System
+from ambuild2.frontend.v2_2.context import BaseContext, RootBuildContext, TopLevelBuildContext
+from ambuild2.frontend.v2_2.cpp.compiler import CliCompiler
+from ambuild2.frontend.version import Version
+from ambuild2.util import Expando
+
+class ConfigureException(Exception):
+    def __init__(self, *args: object, **kwargs: object) -> None: ...
+
+class ContextManager(context_manager.ContextManager):
+    host: System
+
+    def __init__(self, sourcePath: str, buildPath: str, originalCwd: str, options: Expando, args: argparse.Namespace) -> None: ...
+    @property
+    def apiVersion(self) -> Version: ...
+    def parseBuildScripts(self) -> None: ...
+    def importScript(self, context: RootBuildContext | TopLevelBuildContext, path: str, vars: dict[str, Any] | None = None) -> Expando | None: ...
+    def evalScript(self, context: RootBuildContext | TopLevelBuildContext, path: str, vars: dict[str, Any] | None = None) -> Any | None: ...
+    def runBuildScript(self, context: RootBuildContext | TopLevelBuildContext, path: str, vars: dict[str, Hashable] | None = None) -> Any | None: ...
+    def importScriptImpl(self, parent: RootBuildContext | TopLevelBuildContext, path: str, vars: dict[str, str]) -> Expando | None: ...
+    def runBuildScriptImpl(self, parent: RootBuildContext | TopLevelBuildContext, path: str, vars: dict[str, Any]) -> Any | None: ...
+    def callBuilder(self, parent: RootBuildContext | TopLevelBuildContext, fun: Callable[..., Any]) -> Any: ...
+    def execContext(self, context: BaseContext) -> Any: ...
+    def computeScriptPaths(self, parent: RootBuildContext | TopLevelBuildContext, target: str) -> tuple[str, ...]: ...
+    def getLocalFolder(self, context: RootBuildContext | TopLevelBuildContext) -> str: ...
+    def copyCompilerVars(self, vars: dict[str, str], compiler: CliCompiler) -> None: ...
+    def createGenerator(self, name: str) -> None: ...

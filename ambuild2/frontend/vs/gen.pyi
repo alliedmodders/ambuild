@@ -1,0 +1,66 @@
+# vim: set ts=8 sts=4 sw=4 tw=99 et:
+#
+# This file is part of AMBuild.
+#
+# AMBuild is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# at your option any later version.
+#
+# AMBuild is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+
+from abc import abstractmethod
+from typing import Final, Literal
+
+from ambuild2.frontend.base_generator import BaseGenerator
+from ambuild2.frontend.v2_2.context import BuildContext, RootBuildContext, TopLevelBuildContext
+from ambuild2.frontend.v2_2.context_manager import ContextManager
+from ambuild2.frontend.v2_2.vs.nodes import FolderNode, OutputNode, ProjectNode
+from ambuild2.frontend.vs import nodes
+from ambuild2.nodetypes import DirtyState, Entry, EnvDataTuple
+
+SupportedVersions: Final[list[str]] = ...
+YearMap: Final[dict[str, int]] = ...
+
+class Generator(BaseGenerator):
+    compiler: None = None
+    vs_version: int | None = None
+    files_: dict[str, ProjectNode | FolderNode | OutputNode]
+    projects_: set[ProjectNode]
+    def __init__(self, cm: ContextManager) -> None: ...
+    @property
+    def backend(self) -> Literal['vs']: ...
+    def preGenerate(self) -> None: ...
+    def postGenerate(self) -> None: ...
+    def generateProjects(self) -> None: ...
+    def addConfigureFile(self, context: RootBuildContext | TopLevelBuildContext | None, path: str) -> None: ...
+    @abstractmethod
+    def detectCompilers(self) -> object: ...
+    def enterContext(self, cx: RootBuildContext | TopLevelBuildContext) -> None: ...
+    def leaveContext(self, cx: RootBuildContext | TopLevelBuildContext) -> None: ...
+    def ensureUnique(self, path: str) -> None: ...
+    def getLocalFolder(self, context: RootBuildContext | TopLevelBuildContext) -> Entry | FolderNode | None: ...
+    def generateFolder(self, parent: FolderNode | None, folder: str) -> FolderNode: ...
+    def addFolder(self, context: BuildContext, folder: str) -> FolderNode: ...
+    def addCopy(self, context: RootBuildContext | TopLevelBuildContext, source: Entry | str, output_path: Entry | str) -> tuple[None, tuple[None]]: ...
+    def addOutputFile(self, context: RootBuildContext | TopLevelBuildContext, path: Entry | str, contents: str | bytes) -> nodes.Node: ...
+    def addShellCommand(
+        self,
+        context: RootBuildContext | TopLevelBuildContext,
+        inputs: list[Entry],
+        argv: list[str],
+        outputs: list[str],
+        folder: Entry | Literal[-1] | None = ...,
+        dep_type: DirtyState | None = ...,
+        weak_inputs: list[Entry] | None = ...,
+        shared_outputs: list[Entry] | None = ...,
+        env_data: EnvDataTuple | None = ...,
+    ) -> tuple[Entry, list[Entry]]: ...
+    def addOutput(self, context: RootBuildContext | TopLevelBuildContext, path: Entry | str, parent: ProjectNode) -> OutputNode: ...
+    def addProjectNode(self, context: BuildContext, project: ProjectNode) -> None: ...
