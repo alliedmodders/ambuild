@@ -761,8 +761,12 @@ class Generator(BaseGenerator):
             cxxData['deps'] = obj.dep_info
 
         if getattr(self.cm.options, 'generate_compdb', False):
+            directory = obj.folderNode.path
+            if not os.path.isabs(directory):
+                directory = os.path.join(self.cm.buildPath, directory)
+            directory = os.path.normpath(directory)
             self.compdb.append({
-                "directory": obj.folderNode.path,
+                "directory": directory,
                 "arguments": obj.argv,
                 "file": str(obj.inputObj),
                 "output": str(obj.outputs[0])
