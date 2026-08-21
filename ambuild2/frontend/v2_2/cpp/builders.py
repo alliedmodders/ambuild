@@ -70,6 +70,7 @@ class Project(object):
     def generate(self, generator, cx):
         outputs = []
         for builder in self.builders_:
+            generator.addGeneratorTarget(builder)
             outputs += [builder.generate(generator, cx)]
         return outputs
 
@@ -805,3 +806,5 @@ class PrecompiledHeaders(BinaryBuilderBase):
             obj_entry = nodes[0]
 
         return PchNodes(local_folder_node, unified_header, pch_entry, obj_entry, self.source_type)
+
+

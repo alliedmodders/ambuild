@@ -45,6 +45,11 @@ class Preparer(object):
                                   dest = "generate_compdb",
                                   default = False,
                                   help = "Generate a JSON Compilation Database for Clangd.")
+        self.options.add_argument("--generate-cmake",
+                                  action = "store_true",
+                                  dest = "generate_cmake",
+                                  default = False,
+                                  help = "Generate a CMakeLists.txt describing C/C++ targets.")
         self.options.add_argument(
             "--make-scripts",
             action = "store_true",
@@ -108,6 +113,7 @@ class Preparer(object):
             print(
                 '  --vs-split            Visual Studio: generate one project file per configuration'
             )
+            print('  --generate-cmake      AMBuild 2: generate a CMakeLists.txt for C/C++ targets')
             sys.exit(0)
 
         if options.no_color:

@@ -46,6 +46,9 @@ class BaseGenerator(object):
     def addConfigureFile(self, context, path):
         raise Exception('Must be implemented!')
 
+    def addGeneratorTarget(self, target):
+        pass
+
     # The following methods are only needed to implement v2.2 generators.
     def newProgramProject(self, context, name):
         raise NotImplementedError()
@@ -55,3 +58,4 @@ class BaseGenerator(object):
 
     def newStaticLibraryProject(self, context, name):
         raise NotImplementedError()
+
