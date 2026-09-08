@@ -466,13 +466,16 @@ class BinaryBuilder(BinaryBuilderBase):
         return self.linker_
 
     def linkFlags(self, cx):
+        behavior = self.linker_.behavior
+
         def resolve(item):
             if hasattr(item, 'path'):
                 if os.path.isabs(item.path):
-                    return item.path
+                    return cpp_utils.LinkerInputPath(item.path, behavior)
 
                 local_path = os.path.join(cx.buildFolder, self.localFolder)
-                return os.path.relpath(item.path, local_path)
+                rel_path = os.path.relpath(item.path, local_path)
+                return cpp_utils.LinkerInputPath(rel_path, behavior)
 
             return item
 
