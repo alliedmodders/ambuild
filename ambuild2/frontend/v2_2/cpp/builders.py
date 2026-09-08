@@ -469,10 +469,16 @@ class BinaryBuilder(BinaryBuilderBase):
         def resolve(item):
             if hasattr(item, 'path'):
                 if os.path.isabs(item.path):
-                    return item.path
+                    path = item.path
+                else:
+                    local_path = os.path.join(cx.buildFolder, self.localFolder)
+                    path = os.path.relpath(item.path, local_path)
 
-                local_path = os.path.join(cx.buildFolder, self.localFolder)
-                return os.path.relpath(item.path, local_path)
+                # MSVC links against the import library produced alongside a
+                # shared library, not the DLL itself.
+                if self.linker_.behavior == 'msvc' and path.lower().endswith('.dll'):
+                    path = path[:-4] + '.lib'
+                return path
 
             return item
 
