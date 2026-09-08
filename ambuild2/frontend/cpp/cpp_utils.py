@@ -14,7 +14,18 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with AMBuild. If not, see <http://www.gnu.org/licenses/>.
+import os
 import uuid
+
+def LinkerInputPath(path, behavior):
+    # Newer MSVC link.exe versions (14.50+) refuse .dll files passed directly
+    # as linker inputs (LNK1107 "invalid or corrupt file"). Historically, the
+    # linker would import from a DLL by reading the import library embedded in
+    # the image, but that is no longer supported. Whenever a shared library is
+    # passed to the linker, use its sibling import library instead.
+    if behavior == 'msvc' and path.lower().endswith('.dll'):
+        return os.path.splitext(path)[0] + '.lib'
+    return path
 
 def CreateUnifiedHeader(header_guard, sources):
     text = ""
