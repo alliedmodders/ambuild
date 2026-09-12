@@ -21,6 +21,7 @@ from ambuild2 import nodetypes
 from ambuild2 import database
 from ambuild2.frontend import paths
 from ambuild2.frontend.base_generator import BaseGenerator
+from ambuild2.frontend.cmake import export as cmake_export
 
 class Generator(BaseGenerator):
     def __init__(self, cm):
@@ -36,6 +37,12 @@ class Generator(BaseGenerator):
         self.db = cm.db
         self.is_bootstrap = not self.db
         self.compdb = []
+        self.cmake = None
+        self.cmake_file_ops = {}
+        self.cmake_generated_files = {}
+
+        if getattr(self.cm.options, 'generate_cmake', False):
+            self.cmake = cmake_export.Exporter(cm)
 
     @property
     def backend(self):
@@ -138,6 +145,9 @@ class Generator(BaseGenerator):
             compile_commands = os.path.join(self.cm.buildPath, 'compile_commands.json')
             with open(compile_commands, 'w') as fp:
                 json.dump(self.compdb, fp, indent = 2)
+
+        if self.cmake is not None:
+            self.cmake.write()
 
         if self.is_bootstrap:
             self.saveVars()
@@ -651,22 +661,57 @@ class Generator(BaseGenerator):
         return self.graph.addSource(source_path)
 
     def addCopy(self, context, source, output_path):
-        return self.addFileOp(nodetypes.Copy, context, source, output_path)
+        result = self.addFileOp(nodetypes.Copy, context, source, output_path)
+        self._record_file_op(context, source, result[1][0], 'copy')
+        return result
 
     def addSymlink(self, context, source, output_path):
         if util.IsWindows():
             # Windows pre-Vista does not support symlinks. Windows Vista+ supports
             # symlinks via mklink, but it's Administrator-only by default.
-            return self.addFileOp(nodetypes.Copy, context, source, output_path)
+            result = self.addFileOp(nodetypes.Copy, context, source, output_path)
+            self._record_file_op(context, source, result[1][0], 'copy')
+            return result
 
         if not self.symlink_support:
             self.had_symlink_fallback = True
-            return self.addFileOp(nodetypes.Copy, context, source, output_path)
+            result = self.addFileOp(nodetypes.Copy, context, source, output_path)
+            self._record_file_op(context, source, result[1][0], 'copy')
+            return result
 
-        return self.addFileOp(nodetypes.Symlink, context, source, output_path)
+        result = self.addFileOp(nodetypes.Symlink, context, source, output_path)
+        self._record_file_op(context, source, result[1][0], 'symlink')
+        return result
 
     def addFolder(self, context, folder):
         return self.generateFolder(context.localFolder, folder)
+
+    def addGeneratorTarget(self, target):
+        if self.cmake is not None:
+            self.cmake.add_target(target)
+
+    def _record_file_op(self, context, source, output_entry, kind):
+        if self.cmake is None:
+            return
+
+        source_path = self._resolve_file_op_path(context, source)
+        output_path = self._resolve_file_op_path(None, output_entry)
+        self.cmake_file_ops[output_path] = {
+            'kind': kind,
+            'source': source_path,
+            'output': output_path,
+        }
+
+    def _resolve_file_op_path(self, context, value):
+        if hasattr(value, 'path'):
+            path = value.path
+            if not os.path.isabs(path):
+                path = os.path.join(self.cm.buildPath, path)
+            return os.path.normpath(path)
+
+        if not os.path.isabs(value) and context is not None:
+            value = os.path.join(context.currentSourcePath, value)
+        return os.path.normpath(value)
 
     def addShellCommand(self,
                         context,
@@ -741,7 +786,25 @@ class Generator(BaseGenerator):
                                      data = data,
                                      inputs = [],
                                      outputs = [filename])
+        self._record_generated_file(outputs[0], contents)
         return outputs[0]
+
+    def _record_generated_file(self, output_entry, contents):
+        if self.cmake is None or not hasattr(output_entry, 'path'):
+            return
+
+        path = output_entry.path
+        if not os.path.isabs(path):
+            path = os.path.join(self.cm.buildPath, path)
+        path = os.path.normpath(path)
+
+        if isinstance(contents, bytes):
+            try:
+                contents = contents.decode('utf-8')
+            except UnicodeDecodeError:
+                return
+
+        self.cmake_generated_files[path] = contents
 
     def addConfigureFile(self, context, path):
         if not os.path.isabs(path) and context is not None:
@@ -797,3 +860,9 @@ class Generator(BaseGenerator):
                                          data = rcData,
                                          env_data = obj.env_data)
         return rcNode
+
+
+
+
+
+

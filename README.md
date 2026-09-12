@@ -13,7 +13,7 @@ pip install ./ambuild
 
 # AMBuild 2
 
-AMBuild 2 is a highly efficient build system designed to replace ["Alpha"-generation tools][1], such as SCons or Make. It is not a replacement for IDE project files, nor is it a front-end tool for generating other build system files, such as CMake. AMBuild is designed with three features in mind:
+AMBuild 2 is a highly efficient build system designed to replace ["Alpha"-generation tools][1], such as SCons or Make. Its primary output is its own fast incremental build graph, but it can also emit helper files for editor and IDE workflows, including `compile_commands.json`, generated `CMakeLists.txt`, and Visual Studio project files. These exports are conveniences for tooling integration rather than AMBuild's main build backend. AMBuild is designed with three features in mind:
 
 * Accuracy. AMBuild guarantees that you never need to "clean" a build. Incremental builds should always produce the same exact result as a clean build; anything less is asking for trouble, and rebuilds are a waste of developer time.
 * Speed. Many build systems need to traverse the entire dependency graph. AMBuild only needs to find which files have changed. In addition, AMBuild will parallelize any independent tasks.
@@ -23,6 +23,7 @@ Build scripts for AMBuild are parsed once upon configuration, and are responsibl
 * C/C++ compilation, linking, .rc compilation, and producing symbol files for symstore/breakpad.
 * File copying or symlinking for packaging.
 * Arbitrary shell commands.
+* Optional export of IDE/editor helper files such as compile_commands.json, CMakeLists.txt, and Visual Studio projects.
 
 # AMBuild 1
 
@@ -43,3 +44,4 @@ AlliedModders developers can often be found in IRC (irc.gamesurge.net, #smdevs) 
 # References
 
 [1]: <http://gittup.org/tup/build_system_rules_and_algorithms.pdf> "Build System Rules and Algorithms by Mike Shal"
+
