@@ -97,6 +97,7 @@ class ObjectFileTask(ObjectFileTaskBase):
     def __init__(self, parent, inputObj, outputs, argv):
         super(ObjectFileTask, self).__init__(parent, inputObj, outputs)
         self.argv = argv
+        self.launcher = []
         self.behavior = parent.compiler.vendor.behavior
 
     @property
@@ -224,10 +225,12 @@ class ObjectArgvBuilder(object):
             if self.has_cxx_pch_:
                 raise Exception('C source file depends on a C++ precompiled header')
             task.argv += self.cc_argv
+            task.launcher = self.compiler.cc_launcher
         else:
             if self.has_c_pch_:
                 raise Exception('C++ source file depends on a C precompiled header')
             task.argv += self.cxx_argv
+            task.launcher = self.compiler.cxx_launcher
             self.used_cxx = True
 
         objectFile = encodedName + self.vendor.objSuffix
@@ -290,8 +293,10 @@ class ObjectArgvBuilder(object):
 
         if self.parent.source_type == 'c':
             task.argv += self.cc_argv
+            task.launcher = self.compiler.cc_launcher
         elif self.parent.source_type == 'c++':
             task.argv += self.cxx_argv
+            task.launcher = self.compiler.cxx_launcher
             self.used_cxx = True
 
         _, filename = os.path.split(source_file)

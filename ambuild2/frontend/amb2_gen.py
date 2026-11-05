@@ -759,6 +759,8 @@ class Generator(BaseGenerator):
         }
         if obj.dep_info:
             cxxData['deps'] = obj.dep_info
+        if obj.launcher:
+            cxxData['launcher'] = obj.launcher
 
         if getattr(self.cm.options, 'generate_compdb', False):
             directory = obj.folderNode.path

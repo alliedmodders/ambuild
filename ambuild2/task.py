@@ -271,8 +271,9 @@ class TaskWorker(process_manager.MessageReceiver):
         if tools_env is not None:
             if tools_env.env_cmds is not None:
                 env = util.BuildEnv(tools_env.env_cmds)
-            if 'cl' in tools_env.tools:
-                argv[0] = tools_env.tools['cl']
+            if argv[0] in tools_env.tools:
+                argv[0] = tools_env.tools[argv[0]]
+        argv = task_data.get('launcher', []) + argv
 
         with util.FolderChanger(task_folder):
             p, out, err = util.Execute(argv, env = env)
@@ -322,10 +323,10 @@ class TaskWorker(process_manager.MessageReceiver):
         if tools_env is not None:
             if tools_env.env_cmds is not None:
                 env = util.BuildEnv(tools_env.env_cmds)
-            if 'cl' in tools_env.tools:
-                cl_argv[0] = tools_env.tools['cl']
-            if 'rc' in tools_env.tools:
-                rc_argv[0] = tools_env.tools['rc']
+            if cl_argv[0] in tools_env.tools:
+                cl_argv[0] = tools_env.tools[cl_argv[0]]
+            if rc_argv[0] in tools_env.tools:
+                rc_argv[0] = tools_env.tools[rc_argv[0]]
 
         with util.FolderChanger(task_folder):
             # Includes go to stderr when we preprocess to stdout.
@@ -352,7 +353,7 @@ class TaskWorker(process_manager.MessageReceiver):
             rc_argv = task_data['rc_argv']
             return ' '.join([arg for arg in cl_argv]) + ' && ' + ' '.join([arg for arg in rc_argv])
         elif message['task_type'] == 'cxx':
-            return ' '.join([arg for arg in task_data['argv']])
+            return ' '.join([arg for arg in task_data.get('launcher', []) + task_data['argv']])
         elif message['task_type'] == 'cmd':
             return ' '.join([arg for arg in task_data])
         elif message['task_type'] in ['cp', 'ln']:
