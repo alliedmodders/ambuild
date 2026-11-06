@@ -1,0 +1,9 @@
+# vim: set ts=8 sts=2 tw=99 et ft=python:
+import os
+
+program = cxx.Program('main')
+program.sources = ['main.cpp']
+program.compiler.postlink += [os.path.join(builder.buildPath, Libs['helper'].binary.path)]
+program.compiler.linkdeps += [Libs['helper'].binary]
+program.compiler.linkflags += [Libs['other'].binary]
+builder.Add(program)

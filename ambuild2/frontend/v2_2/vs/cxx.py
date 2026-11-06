@@ -79,16 +79,47 @@ class Project(object):
         outputs = []
         proj_path = paths.Join(cx.localFolder,
                                self.name + GetProjectFileSuffix(generator.vs_vendor.version))
-        node = nodes.ProjectNode(cx, proj_path, self)
+        # A project of this name may already be in this folder: a script run once per
+        # architecture, like hl2sdk-manifests does with an SDK's libraries, makes one each
+        # time. Its configurations go into the same project file.
+        node = generator.findProjectNode(proj_path)
+        if node is None:
+            node = nodes.ProjectNode(cx, proj_path, self)
+            generator.addProjectNode(cx, node)
+        else:
+            node.project.mergeFrom(cx, node, self)
         for builder in self.builders_:
             tag_folder = generator.addFolder(cx, builder.localFolder)
             objFile = paths.Join(tag_folder, builder.outputFile)
             pdbFile = paths.Join(tag_folder, builder.name_ + '.pdb')
             objNode = generator.addOutput(cx, objFile, node)
+            # The solution maps a binary a project links back to the builder making it.
+            objNode.builder = builder
             pdbNode = generator.addOutput(cx, pdbFile, node)
             outputs.append(CppNodes(objNode, pdbNode, builder.type, builder.compiler.target))
-        generator.addProjectNode(cx, node)
         return outputs
+
+    def mergeFrom(self, cx, node, other):
+        if cx.currentSourcePath != node.context.currentSourcePath:
+            raise Exception('Project {0} already exists for {1}'.format(
+                node.path, node.context.currentSourcePath))
+        for builder in other.builders_:
+            for existing in self.builders_:
+                if existing.tag_ == builder.tag_ and \
+                   existing.compiler.target.arch == builder.compiler.target.arch:
+                    raise Exception('Project {0} already has configuration {1} ({2})'.format(
+                        node.path, builder.tag_, builder.compiler.target.arch))
+            # One-off binaries of the same name and tag share a folder, so the one
+            # merged in gets its architecture in the folder name.
+            if any(existing.localFolder == builder.localFolder for existing in self.builders_):
+                builder.localFolderSuffix_ = builder.compiler.target.arch
+                if any(existing.localFolder == builder.localFolder for existing in self.builders_):
+                    raise Exception('Project {0} already has folder {1}'.format(
+                        node.path, builder.localFolder))
+        self.builders_ += other.builders_
+        for header in other.include_hotlist:
+            if header not in self.include_hotlist:
+                self.include_hotlist.append(header)
 
     def export(self, cm, node):
         export_vcxproj.export(cm, node)
@@ -155,16 +186,20 @@ class BinaryBuilder(object):
         self.include_hotlist = []
         self.name_ = name
         self.tag_ = tag
+        self.localFolderSuffix_ = None
 
     @property
     def localFolder(self):
         # If this is a one-off binary, we need to make sure its folder name won't
         # create conflicts.
         if hasattr(self, 'generate'):
-            return '{0} - {1}'.format(self.name_, self.tag_)
-
-        # Otherwise - we basically expect one project per context.
-        return self.tag_
+            folder = '{0} - {1}'.format(self.name_, self.tag_)
+        else:
+            # Otherwise - we basically expect one project per context.
+            folder = self.tag_
+        if self.localFolderSuffix_:
+            folder = '{0} - {1}'.format(folder, self.localFolderSuffix_)
+        return folder
 
     @property
     def outputFile(self):

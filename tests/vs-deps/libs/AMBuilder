@@ -1,0 +1,13 @@
+# vim: set ts=8 sts=2 tw=99 et ft=python:
+helper = builder.StaticLibraryProject('helper')
+helper.sources = ['helper.cpp']
+helper.Configure(cxx, 'helper', 'Helper - {0}'.format(cxx.target.arch))
+
+other = builder.StaticLibraryProject('other')
+other.sources = ['other.cpp']
+other.Configure(cxx, 'other', 'Release - {0}'.format(cxx.target.arch))
+
+rvalue = {
+  'helper': builder.Add(helper)[0],
+  'other': builder.Add(other)[0],
+}

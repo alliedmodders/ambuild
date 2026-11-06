@@ -148,8 +148,12 @@ def export_configuration_user_props(node, xml):
 def export_configuration_paths(node, xml):
     for builder in node.project.builders_:
         condition = condition_for(builder)
-        xml.tag('OutDir', "$(ProjectName) - $(Configuration)\\", Condition = condition)
-        xml.tag('IntDir', "$(ProjectName) - $(Configuration)\\", Condition = condition)
+        # The folder the generator put the output node in, which is what other
+        # projects link against; for builders of a multi-binary project it isn't
+        # "$(ProjectName) - $(Configuration)".
+        out_dir = builder.localFolder + '\\'
+        xml.tag('OutDir', out_dir, Condition = condition)
+        xml.tag('IntDir', out_dir, Condition = condition)
         if '/INCREMENTAL:NO' not in builder.compiler.linkflags and '/INCREMENTAL:NO' not in builder.compiler.postlink:
             xml.tag('LinkIncremental', 'true', Condition = condition)
         xml.tag('TargetName', builder.name_, Condition = condition)
@@ -258,6 +262,10 @@ def export_configuration_options(node, xml, builder):
             xml.tag('RuntimeLibrary', 'MultiThreadedDLL')
         elif '/MDd' in flags:
             xml.tag('RuntimeLibrary', 'MultiThreadedDebugDLL')
+        else:
+            # cl.exe's default without one of the flags; MSBuild's would be
+            # MultiThreadedDLL, so the project wouldn't build what ambuild does.
+            xml.tag('RuntimeLibrary', 'MultiThreaded')
 
         if '/W0' in flags:
             xml.tag('WarningLevel', 'Level0')
@@ -324,8 +332,8 @@ def export_configuration_options(node, xml, builder):
                 if m is not None:
                     machine = m.group(1)
             else:
-                local_path = os.path.join(node.context.buildFolder, builder.localFolder)
-                local_path = os.path.relpath(flag.path, local_path)
+                # MSBuild resolves it from the project's folder, not the binary's.
+                local_path = os.path.relpath(flag.path, node.context.buildFolder or '.')
                 libs.append(local_path)
 
         if '/WX' in link_flags:

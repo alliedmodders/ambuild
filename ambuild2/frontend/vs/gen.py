@@ -183,6 +183,12 @@ class Generator(BaseGenerator):
         self.files_[path] = node
         return node
 
+    def findProjectNode(self, path):
+        entry = self.files_.get(path)
+        if entry is None or entry.kind != 'project':
+            return None
+        return entry
+
     def addProjectNode(self, context, project):
         self.ensureUnique(project.path)
         self.projects_.add(project)
