@@ -137,7 +137,7 @@ def fxc_helper_tool():
     var_prefixes = []
 
     for source_file in args.sources:
-        m = re.match('([^.]+)\.([^.]+)\.([^.]+)\.h', source_file)
+        m = re.match(r'([^.]+)\.([^.]+)\.([^.]+)\.h', source_file)
         var_prefix = m.group(2)
         if m is None:
             raise Exception('Sources must be in objname.varprefix.entrypoint.h form')

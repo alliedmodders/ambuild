@@ -117,7 +117,7 @@ def DetectEmscripten(env, var):
     # Map the definitions into a dictionary.
     defs = {}
     for line in lines:
-        m = re.match('#define\s+([A-Za-z_][A-Za-z0-9_]*)\s*(.*)', line)
+        m = re.match(r'#define\s+([A-Za-z_][A-Za-z0-9_]*)\s*(.*)', line)
         if m is None:
             continue
         macro = m.group(1)
