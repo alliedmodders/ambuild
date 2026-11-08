@@ -164,7 +164,7 @@ class Entry(object):
                                                                       self.blob[1]))
         if self.type == Cxx:
             return '[' + self.blob['type'] + ']' + ' -> ' + (' '.join(
-                [arg for arg in self.blob['argv']]))
+                [arg for arg in self.blob.get('launcher', []) + self.blob['argv']]))
         if self.type == Rc:
             return ' '.join([arg for arg in self.blob['cl_argv']]) + ' && ' + ' '.join(
                 [arg for arg in self.blob['rc_argv']])

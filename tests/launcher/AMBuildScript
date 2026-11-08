@@ -1,0 +1,9 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+builder.cxx = builder.DetectCxx()
+
+program = builder.cxx.Program('sample')
+program.sources += [
+  'egg.c',
+  'main.cpp',
+]
+builder.Add(program)

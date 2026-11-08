@@ -48,3 +48,7 @@ jobs:
         cd ../objdir4/
         python ../tests/precompiled-headers/configure.py
         ambuild
+        mkdir ../objdir5/
+        cd ../objdir5/
+        python ../tests/launcher/configure.py
+        ambuild

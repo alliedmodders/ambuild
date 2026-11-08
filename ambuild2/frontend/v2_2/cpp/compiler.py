@@ -149,6 +149,10 @@ class CliCompiler(Compiler):
         super(CliCompiler, self).__init__(vendor, target, options)
         self.cc_argv = cc_argv
         self.cxx_argv = cxx_argv
+        # Commands (such as ccache or sccache) that compiles are run through,
+        # like CMake's <LANG>_COMPILER_LAUNCHER.
+        self.cc_launcher = []
+        self.cxx_launcher = []
         self.found_pkg_config_ = False
         self.env_data = env_data
         self.linker_argv = None
@@ -166,6 +170,8 @@ class CliCompiler(Compiler):
         self.archiver_argv = other.archiver_argv
         self.rc_argv = other.rc_argv
         self.env_data = other.env_data
+        self.cc_launcher = other.cc_launcher
+        self.cxx_launcher = other.cxx_launcher
 
     def __deepcopy__(self, memo):
         return self.clone()
