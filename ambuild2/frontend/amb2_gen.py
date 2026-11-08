@@ -19,6 +19,7 @@ import json
 from ambuild2 import util
 from ambuild2 import nodetypes
 from ambuild2 import database
+from ambuild2.nodetypes import Entry
 from ambuild2.frontend import paths
 from ambuild2.frontend.base_generator import BaseGenerator
 
@@ -765,10 +766,17 @@ class Generator(BaseGenerator):
             if not os.path.isabs(directory):
                 directory = os.path.join(self.cm.buildPath, directory)
             directory = os.path.normpath(directory)
+            file = obj.inputObj
+            if isinstance(file, Entry):
+                if os.path.isabs(file.path):
+                    file = file.path
+                else:
+                    file = os.path.join(self.cm.buildPath, file.path)
+            file = os.path.normpath(str(file))
             self.compdb.append({
                 "directory": directory,
                 "arguments": obj.argv,
-                "file": str(obj.inputObj),
+                "file": file,
                 "output": str(obj.outputs[0])
             })
 
