@@ -48,3 +48,25 @@ jobs:
         cd ../objdir4/
         python ../tests/precompiled-headers/configure.py
         ambuild
+        mkdir ../objdir5/
+        cd ../objdir5/
+        python ../tests/vs-deps/configure.py
+        ambuild
+    - name: Set up MSBuild
+      if: runner.os == 'Windows'
+      uses: microsoft/setup-msbuild@v2
+    - name: Visual Studio Solution
+      if: runner.os == 'Windows'
+      run: |
+        python -m pip install .
+        mkdir objdir6
+        cd objdir6
+        python ../tests/vs-deps/configure.py --gen=vs --vs-version=2022
+        msbuild vs-deps.sln -p:Configuration=Default -p:Platform=Win32 -m
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        & ".\program\main - Default\main.exe"
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        msbuild vs-deps.sln -p:Configuration=Default -p:Platform=x64 -m
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        & ".\program\main - Default - x86_64\main.exe"
+        if ($LASTEXITCODE -ne 0) { exit 1 }
