@@ -318,7 +318,7 @@ class CompileCommand(command.Command):
 		#Messy logic to get dependencies and strip output from stderr
 		for i in lines:
 			if check == 0:
-				m = re.match('\.+\s+(.+)\s*$', i)
+				m = re.match(r'\.+\s+(.+)\s*$', i)
 				if m == None:
 					check = 1
 				else:
@@ -350,7 +350,7 @@ class CompileCommand(command.Command):
 		lines = re.split('\n+', self.stdout)
 		deps = []
 		for i in lines:
-			m = re.match('Note: including file:\s+(.+)$', i)
+			m = re.match(r'Note: including file:\s+(.+)$', i)
 			if m != None:
 				file = m.groups()[0].strip()
 				deps.append(file)
