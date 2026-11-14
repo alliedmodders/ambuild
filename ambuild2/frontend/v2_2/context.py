@@ -218,6 +218,8 @@ class BuildContext(BaseContext):
 
     def Add(self, taskbuilder):
         taskbuilder.finish(self)
+        if hasattr(taskbuilder, 'outputFile') and hasattr(taskbuilder, 'type'):
+            self.generator_.addGeneratorTarget(taskbuilder)
         return taskbuilder.generate(self.generator_, self)
 
     def SetBuildFolder(self, folder):
@@ -257,3 +259,4 @@ class RootBuildContext(BuildContext):
                                                script = script,
                                                sourceFolder = '',
                                                buildFolder = '')
+

@@ -1,4 +1,5 @@
 # Ignore build directories
+AMBuild.egg-info/
 build/
 tests/*/obj-*/
 *.pyc
